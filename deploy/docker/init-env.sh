@@ -23,11 +23,9 @@ MPESA_CALLBACK_SECRET=$(openssl rand -hex 32)
 MPESA_MODE=disabled
 MPESA_BASE_URL=https://api.safaricom.co.ke
 ETIMS_MODE=disabled
-MAIL_MODE=smtp
-# REQUIRED for real email (password resets/invitations/alerts): verified-TLS
-# relay (smtps://...:465 or smtp://...:587 with STARTTLS). go-live.sh flips
-# MAIL_MODE=outbox for a first boot without a relay; sending then stays
-# database-queued until this is a real relay and mail is verified.
+# REQUIRED for production boot (the API hard-fails without safe password
+# reset delivery): verified-TLS relay (smtps://...:465 or smtp://...:587 with
+# STARTTLS). go-live.sh refuses to start the app while this is empty.
 SMTP_URL=
 MAIL_FROM=no-reply@$host
 # Only for the optional Cloudflare Tunnel override; never expose this token in logs.

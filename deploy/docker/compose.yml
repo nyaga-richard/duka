@@ -8,10 +8,10 @@ x-app-env: &app-env
   COOKIE_SECURE: "true"
   TRUST_PROXY: "1"
   MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?Generate and protect the stable MFA key}
-  MAIL_MODE: ${MAIL_MODE:-smtp}
-  # smtp requires a real verified-TLS relay; outbox first boots keep the
-  # queue database-only until SMTP_URL is configured and mail is verified.
-  SMTP_URL: ${SMTP_URL:-}
+  MAIL_MODE: smtp
+  # Production REQUIRES a real verified-TLS relay — the API refuses to boot
+  # without safe password-reset delivery (smtps://...:465 or STARTTLS :587).
+  SMTP_URL: ${SMTP_URL:?Configure a verified-TLS SMTP relay before go-live}
   MAIL_FROM: ${MAIL_FROM}
   MPESA_MODE: ${MPESA_MODE:-disabled}
   MPESA_BASE_URL: ${MPESA_BASE_URL:-https://api.safaricom.co.ke}

@@ -16,10 +16,10 @@
 #      the first business, then starts web + api + loopback Caddy + the Tunnel.
 #   5. Waits for readiness and prints the post-boot verification checklist.
 #
-# Email delivery: password resets invitations and alerts need a real SMTP
-# relay. Set SMTP_URL (smtps://user:pass@host:465) + MAIL_FROM in the env
-# BEFORE running, or interactively when asked, otherwise first boot starts in
-# the app's outbox mode and live sending stays unavailable until configured.
+# Email delivery: password resets, invitations and alerts REQUIRE a real
+# SMTP relay (smtps://user:pass@host:465 or smtp://...:587 STARTTLS). The API
+# refuses to boot in production without one — this script enforces it up
+# front; there is deliberately no outbox bypass in the production lane.
 #
 # Optional env overrides: TUNNEL_TOKEN, SETUP_COMPANY, SETUP_EMAIL,
 # SETUP_PASSWORD, SMTP_URL, MAIL_FROM, PUBLIC_HOST. Interactive piped runs can
@@ -72,23 +72,27 @@ read_var() { # read_var NAME "prompt" default
 }
 read_var TUNNEL_TOKEN "Cloudflare Tunnel token (from the zero-trust dashboard; stored only in 0600 $ENV_FILE)"
 [[ ${#TUNNEL_TOKEN} -ge 20 ]] || die "The tunnel token looks too short; create a Cloudflare Tunnel named for $PUBLIC_HOST and copy its token."
+[[ "$TUNNEL_TOKEN" =~ ^eyJ[A-Za-z0-9_-]+=*\.[A-Za-z0-9_-]+=*\.[A-Za-z0-9_-]+$ ]] ||
+  die "The tunnel token does not look like a Cloudflare tunnel JWT (expected 'eyJ...' with three segments). Copy ONLY the token value from the dashboard — no 'cloudflared tunnel run --token' prefix, no quotes or spaces. If it is a raw token log: 'docker compose logs tunnel'."
 read_var SETUP_COMPANY "First business/company name"
 read_var SETUP_EMAIL "Owner login email"
 read_var SETUP_PASSWORD "Strong owner password (12+ chars, letters and digits)"
 [[ ${#SETUP_PASSWORD} -ge 12 && "$SETUP_PASSWORD" =~ [a-zA-Z] && "$SETUP_PASSWORD" =~ [0-9] ]] ||
   die "The owner password must be at least 12 characters and mix letters with digits."
-if [[ -z "${SMTP_URL:-}" ]]; then
-  read_var SMTP_URL "SMTP relay URL (smtps://user:pass@host:465) or leave empty for outbox-only first boot"
-fi
+# Production REQUIRES real SMTP for safe password-reset delivery — there is
+# deliberately NO outbox bypass in the production lane.
+while [[ -z "${SMTP_URL:-}" ]]; do
+  read_var SMTP_URL "REQUIRED: SMTP relay URL (smtps://user:pass@host:465 or smtp://...:587 STARTTLS)"
+done
+smtp_proto=${SMTP_URL%%:*}
+[[ "$smtp_proto" == smtp || "$smtp_proto" == smtps ]] ||
+  die "SMTP_URL must be an smtp:// or smtps:// URL (production requires verified TLS)."
 if [[ -n "${MAIL_FROM:-}" ]]; then
   sed -i -E "s|^MAIL_FROM=.*|MAIL_FROM=$MAIL_FROM|" "$ENV_FILE"
 fi
-if [[ -n "$SMTP_URL" ]]; then
-  sed -i -E "s|^SMTP_URL=.*|SMTP_URL=$SMTP_URL|" "$ENV_FILE"
-else
-  echo "NOTE: starting without SMTP (outbox mode). Add SMTP_URL to $ENV_FILE and re-run 'docker compose ... up -d api' when the relay is ready. Password resets will queue in the DB outbox."
-  sed -i -E "s|^MAIL_MODE=smtp|MAIL_MODE=outbox|" "$ENV_FILE" 2>/dev/null || true
-fi
+sed -i -E "s|^SMTP_URL=.*|SMTP_URL=$SMTP_URL|" "$ENV_FILE"
+grep -q "^MAIL_MODE=" "$ENV_FILE" &&
+  sed -i -E "s|^MAIL_MODE=.*|MAIL_MODE=smtp|" "$ENV_FILE"
 # Persist the tunnel token in the 0600-only file (never command arguments/logs).
 if grep -q "^TUNNEL_TOKEN=" "$ENV_FILE"; then
   sed -i -E "s|^TUNNEL_TOKEN=.*|TUNNEL_TOKEN=$TUNNEL_TOKEN|" "$ENV_FILE"
@@ -143,7 +147,13 @@ attempts=0
 until docker inspect --format '{{.State.Health.Status}}' duka-api-1 2>/dev/null | grep -q '^healthy$'; do
   sleep 3
   attempts=$((attempts + 1))
-  ((attempts < 40)) || die "API did not become ready; inspect 'docker compose logs api' (common first boots: pending migration or missing env)."
+  if ((attempts >= 40)); then
+    echo "go-live: API did not become ready — sanitized recent API/tunnel log tail:" >&2
+    PUBLIC_HOST="$PUBLIC_HOST" dc logs --tail=40 api 2>&1 |
+      sed -E 's/(password|secret|token|key|smtp_url|passkey)([^ ]{0,8})["'"'']?[^ ,"'"'']+/\1***REDACTED***/gi' | tail -20 >&2
+    PUBLIC_HOST="$PUBLIC_HOST" dc logs --tail=10 tunnel 2>&1 | tail -8 >&2
+    die "Resolve the API error above (common first boots: SMTP_URL empty/invalid, insecure origin, migration mismatch), then re-run — the script resumes safely at the failed step."
+  fi
 done
 
 step "Verifying end-to-end readiness"
