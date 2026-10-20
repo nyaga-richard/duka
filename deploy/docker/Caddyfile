@@ -1,0 +1,29 @@
+{
+	admin off
+	log default {
+		format filter {
+			wrap json
+			fields {
+				request>uri delete
+				request>headers delete
+			}
+		}
+	}
+}
+
+{$PUBLIC_HOST} {
+	# API first; private uploads never have a static route.
+	@api path /api/* /health/*
+	handle @api {
+		reverse_proxy api:4000
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+	request_body {
+		max_size 10MB
+	}
+	header -Server
+	# Access logging deliberately off: callback/reset URLs contain bearer material.
+	# Application JSON logs carry request IDs and redact callback tokens.
+}

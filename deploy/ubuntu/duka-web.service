@@ -1,0 +1,30 @@
+[Unit]
+Description=Duka Business OS frontend
+After=network-online.target duka-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=duka-web
+Group=duka-web
+WorkingDirectory=/srv/duka/current
+Environment=NODE_ENV=production
+Environment=HOSTNAME=0.0.0.0
+Environment=PORT=3000
+ExecStart=/usr/bin/node /srv/duka/current/artifacts/web/apps/web/server.js
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/duka/current/artifacts/web/apps/web/.next/cache
+CapabilityBoundingSet=
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <meta name="viewport" content="width=device-width,initial-scale=1" /><title>
+    Duka · Offline</title
+  ><style>
+    body {
+      font: 16px system-ui;
+      background: #f5f7f5;
+      color: #173e33;
+      display: grid;
+      place-items: center;
+      min-height: 100dvh;
+      margin: 0;
+    }
+    main {
+      max-width: 420px;
+      padding: 32px;
+      background: white;
+      border: 1px solid #dae5df;
+      border-radius: 20px;
+    }
+    button,
+    a {
+      color: #173e33;
+    }
+    h1 {
+      font-size: 32px;
+    }
+    p {
+      line-height: 1.6;
+    }
+  </style>
+  <main>
+    <img src="/icon.svg" width="56" height="56" alt="Duka" />
+    <h1>You’re offline.</h1>
+    <p>
+      Existing open POS tabs retain local carts. New browser sessions cannot
+      authenticate or post sales offline. No payment or fiscal confirmation has
+      occurred.
+    </p>
+    <p>
+      Reconnect, then reopen the POS to review and synchronize authorized cash
+      captures.
+    </p>
+    <a href="/pos">Try again →</a>
+  </main>
+</html>

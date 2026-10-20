@@ -1,0 +1,4 @@
+CREATE TABLE offline_devices (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),company_id uuid NOT NULL,user_id uuid NOT NULL,register_id uuid NOT NULL,label text NOT NULL,max_sale_amount numeric(20,2) NOT NULL DEFAULT 20000 CHECK(max_sale_amount>0),active boolean NOT NULL DEFAULT true,created_at timestamptz NOT NULL DEFAULT now(),UNIQUE(company_id,id),FOREIGN KEY(company_id,user_id) REFERENCES identities(company_id,id),FOREIGN KEY(company_id,register_id) REFERENCES registers(company_id,id));
+ALTER TABLE offline_devices ENABLE ROW LEVEL SECURITY;ALTER TABLE offline_devices FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON offline_devices USING(company_id=nullif(current_setting('app.company_id',true),'')::uuid) WITH CHECK(company_id=nullif(current_setting('app.company_id',true),'')::uuid);
+ALTER TABLE sync_records ADD COLUMN request_hash text;

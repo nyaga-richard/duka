@@ -1,0 +1,32 @@
+{
+	admin off
+	log default {
+		format filter {
+			wrap json
+			fields {
+				request>uri delete
+				request>headers delete
+			}
+		}
+	}
+}
+
+:8080 {
+	@api path /api/* /health/*
+	handle @api {
+		reverse_proxy api:4000 {
+			header_up X-Forwarded-Proto https
+			# Trust this only on the private, Tunnel-only origin.
+			header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+		}
+	}
+	handle {
+		reverse_proxy web:3000 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+	request_body {
+		max_size 10MB
+	}
+	header -Server
+}

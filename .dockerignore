@@ -1,0 +1,32 @@
+# Deny by default: this repository can live in a home directory. Never send
+# unrelated home files, credentials or runtime data into a Docker build context.
+**
+!package.json
+!package-lock.json
+!tsconfig.json
+!apps/
+!apps/**
+!packages/
+!packages/**
+!scripts/
+!scripts/**
+!tests/
+!tests/**
+!database/
+!database/**
+# Re-exclude generated/private material under the explicitly allowed sources.
+**/node_modules
+**/.next
+**/.cache
+**/.git
+**/uploads
+**/backups
+**/secrets
+**/.env
+**/.env.*
+**/*.key
+**/*.pem
+**/*.enc
+**/*.dump
+**/*.log
+**/*.tsbuildinfo

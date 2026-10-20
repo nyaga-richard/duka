@@ -1,0 +1,146 @@
+name: duka
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: postgresql://duka_app:${DB_PASSWORD:?Run init-env.sh}@db:5432/duka
+  PORT: "4000"
+  WEB_ORIGIN: https://${PUBLIC_HOST:?Set the public domain}
+  ALLOWED_ORIGINS: https://${PUBLIC_HOST}
+  COOKIE_SECURE: "true"
+  TRUST_PROXY: "1"
+  MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?Generate and protect the stable MFA key}
+  MAIL_MODE: ${MAIL_MODE:-smtp}
+  # smtp requires a real verified-TLS relay; outbox first boots keep the
+  # queue database-only until SMTP_URL is configured and mail is verified.
+  SMTP_URL: ${SMTP_URL:-}
+  MAIL_FROM: ${MAIL_FROM}
+  MPESA_MODE: ${MPESA_MODE:-disabled}
+  MPESA_BASE_URL: ${MPESA_BASE_URL:-https://api.safaricom.co.ke}
+  MPESA_CALLBACK_BASE_URL: https://${PUBLIC_HOST}
+  MPESA_CALLBACK_SECRET: ${MPESA_CALLBACK_SECRET}
+  MPESA_CONSUMER_KEY: ${MPESA_CONSUMER_KEY:-}
+  MPESA_CONSUMER_SECRET: ${MPESA_CONSUMER_SECRET:-}
+  MPESA_SHORTCODE: ${MPESA_SHORTCODE:-}
+  MPESA_PASSKEY: ${MPESA_PASSKEY:-}
+  ETIMS_MODE: ${ETIMS_MODE:-disabled}
+  ETIMS_ADAPTER_URL: ${ETIMS_ADAPTER_URL:-}
+  ETIMS_ADAPTER_TOKEN: ${ETIMS_ADAPTER_TOKEN:-}
+  UPLOAD_DIR: /app/uploads
+  DEMO_MODE: "false"
+  LOG_LEVEL: info
+services:
+  db:
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: duka
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate a private administrator password}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD}
+      BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD}
+      RESTORE_DB_PASSWORD: ${RESTORE_DB_PASSWORD}
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/10-duka-roles.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d duka]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [data]
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "5"}}
+  api:
+    build: {context: ../.., dockerfile: deploy/docker/Dockerfile, target: api}
+    image: duka-api:${RELEASE:-local}
+    restart: unless-stopped
+    init: true
+    environment: *app-env
+    depends_on: {db: {condition: service_healthy}}
+    volumes: [uploads:/app/uploads]
+    networks: [data, edge]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp:mode=1777]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "5"}}
+  web:
+    build: {context: ../.., dockerfile: deploy/docker/Dockerfile, target: web}
+    image: duka-web:${RELEASE:-local}
+    restart: unless-stopped
+    init: true
+    environment: {NODE_ENV: production, HOSTNAME: 0.0.0.0, PORT: "3000", FRAME_ANCESTORS: "'self'"}
+    networks: [edge]
+    read_only: true
+    tmpfs: ["/tmp:mode=1777", "/app/apps/web/.next/cache:uid=1000,gid=1000,mode=0700"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "5"}}
+  proxy:
+    image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    restart: unless-stopped
+    environment: {PUBLIC_HOST: "${PUBLIC_HOST}"}
+    ports: [80:80, 443:443, 443:443/udp]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api, web]
+    networks: [edge]
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "5"}}
+  migrate:
+    profiles: [ops]
+    image: duka-ops:${RELEASE:-local}
+    build: {context: ../.., dockerfile: deploy/docker/Dockerfile, target: ops}
+    command: [artifacts/server/migrate.mjs]
+    environment:
+      DATABASE_URL: postgresql://duka_migrator:${MIGRATION_DB_PASSWORD}@db:5432/duka
+      RUNTIME_DB_ROLE: duka_app
+      BACKUP_DB_ROLE: duka_backup
+    read_only: true
+    tmpfs: [/tmp:mode=1777]
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [data]
+    depends_on: {db: {condition: service_healthy}}
+  ops:
+    profiles: [ops]
+    build: {context: ../.., dockerfile: deploy/docker/Dockerfile, target: ops}
+    image: duka-ops:${RELEASE:-local}
+    # Deliberate filesystem-read authority for 0600 uploads/key; never mounted
+    # into the API. DB backup credentials have SELECT only + explicit BYPASSRLS.
+    user: "0:0"
+    read_only: true
+    tmpfs: [/tmp:mode=1777]
+    cap_drop: [ALL]
+    cap_add: [DAC_READ_SEARCH]
+    security_opt: [no-new-privileges:true]
+    environment:
+      DATABASE_URL: postgresql://duka_backup:${BACKUP_DB_PASSWORD}@db:5432/duka
+      BACKUP_DATABASE_URL: postgresql://duka_backup:${BACKUP_DB_PASSWORD}@db:5432/duka
+      RESTORE_ADMIN_DATABASE_URL: postgresql://duka_restore:${RESTORE_DB_PASSWORD}@db:5432/postgres
+      BACKUP_PASSPHRASE_FILE: /run/secrets/backup_key
+      BACKUP_DIR: /backups
+      TMPDIR: /backups
+      UPLOAD_DIR: /app/uploads
+    secrets: [backup_key]
+    volumes: [uploads:/app/uploads:ro, backups:/backups]
+    networks: [data]
+    depends_on: {db: {condition: service_healthy}}
+volumes:
+  database:
+  uploads:
+  backups:
+  caddy_data:
+  caddy_config:
+secrets:
+  backup_key: {file: ./secrets/backup.key}
+networks:
+  edge:
+  data: {internal: true}

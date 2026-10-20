@@ -1,0 +1,10 @@
+export { CatalogPage } from "./catalog";
+export { ContactsPage } from "./contacts";
+export { SalesPage } from "./sales";
+export { InventoryPage } from "./inventory";
+export { PurchasingPage } from "./purchasing";
+export { DocumentsPage, ExpensesPage, ShiftsPage } from "./business";
+export { AccountingPage, ReportsPage } from "./accounting";
+export { TeamPage, SettingsPage, AuditPage } from "./admin";
+export { IntegrationsPage, OfflinePage } from "./integrations";
+export { SetupPage } from "./setup";

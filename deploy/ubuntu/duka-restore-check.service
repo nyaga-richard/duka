@@ -1,0 +1,22 @@
+[Unit]
+Description=Duka disposable restore verification
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/duka/current
+EnvironmentFile=/etc/duka/backup.env
+Environment=PATH=/usr/lib/postgresql/17/bin:/usr/local/bin:/usr/bin:/bin
+Environment=RESTORE_REPORT_FILE=/var/backups/duka/restore-latest.json
+ExecStart=/usr/bin/bash /srv/duka/current/deploy/ubuntu/verify-latest-native.sh
+TimeoutStartSec=2h
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/duka
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

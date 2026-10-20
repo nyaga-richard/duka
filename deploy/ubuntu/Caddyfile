@@ -1,0 +1,26 @@
+{
+	admin off
+	log default {
+		format filter {
+			wrap json
+			fields {
+				request>uri delete
+				request>headers delete
+			}
+		}
+	}
+}
+
+{$PUBLIC_HOST} {
+	@api path /api/* /health/*
+	handle @api {
+		reverse_proxy 127.0.0.1:4000
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+	request_body {
+		max_size 10MB
+	}
+	header -Server
+}

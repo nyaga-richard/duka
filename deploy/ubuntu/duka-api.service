@@ -1,0 +1,29 @@
+[Unit]
+Description=Duka Business OS API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=duka
+Group=duka
+WorkingDirectory=/srv/duka/current
+EnvironmentFile=/etc/duka/api.env
+ExecStart=/usr/bin/node /srv/duka/current/artifacts/server/api.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=25
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/duka/uploads
+CapabilityBoundingSet=
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

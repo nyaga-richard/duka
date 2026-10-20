@@ -1,0 +1,33 @@
+node_modules/
+.next/
+artifacts/
+.env
+.env.*.local
+*.log
+playwright-report/
+test-results/
+backups/
+uploads/
+*.tsbuildinfo
+release/*.zip
+
+.cache/
+.npm/
+.local/
+.sudo_as_admin_successful
+.config/
+
+# Operator-only configuration, encrypted backups and private runtime storage
+backups/
+.env.*
+!.env.example
+deploy/**/secrets/
+deploy/**/.env.production
+**/*.tsbuildinfo
+release/
+# Unrelated home/tool credentials are never project source.
+/.arena/
+/.ssh/
+/.netrc
+/.npmrc
+/.git-credentials

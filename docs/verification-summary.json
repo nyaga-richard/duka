@@ -1,0 +1,117 @@
+{
+  "recorded_at": "2026-10-18T15:24:48.084353+00:00",
+  "node_verified": "24.22.0",
+  "npm_verified": "10.8.2",
+  "migrations": 21,
+  "unit_integration": {
+    "tests": 58,
+    "passed": 58,
+    "failed": 0,
+    "skipped": 0,
+    "duration_ms": 15482.366828
+  },
+  "browser": {
+    "workflows": 14,
+    "passed": 14,
+    "failed": 0,
+    "frontend": "production standalone",
+    "api": "isolated development / fake providers",
+    "cross_tab_csp_checks": true,
+    "transient_toast_assertion_replaced_by_durable_queue_verification": true
+  },
+  "npm_production_vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "production_config_smoke": {
+    "verified": true,
+    "verified_at": "2026-10-18T15:17:13.060Z",
+    "node": "v24.22.0",
+    "mode": "production",
+    "runtime_role_non_owning": true,
+    "workspace_preview_mode_rejected": true,
+    "schema_create_rejected": true,
+    "mock_mode_rejected": true,
+    "migration_mismatch_rejected": true,
+    "https_secure_http_only_cookie": true,
+    "csrf_rejected": true,
+    "nonce_csp_hydration": true,
+    "csp_violations": 0,
+    "local_verified_tls_smtp_reset": true,
+    "reset_revokes_old_session": true,
+    "live_email_delivery": false,
+    "live_mpesa": false,
+    "live_etims": false,
+    "public_deployment": false,
+    "malformed_config_credentials_not_logged": true
+  },
+  "test_dataset_restore": {
+    "verified": true,
+    "verified_at": "2026-10-18T15:20:30.271Z",
+    "backup_created_at": "2026-10-18T15:20:24.100Z",
+    "temporary_database": "duka_restore_1792336825834_e1d8879836c9",
+    "tables": 91,
+    "attachments": 9,
+    "companies": 362,
+    "row_fingerprints_match": true,
+    "attachment_hashes_match": true,
+    "subledgers_and_inventory_match": true,
+    "temporary_database_removed": true
+  },
+  "preview_dataset_restore": {
+    "verified": true,
+    "verified_at": "2026-10-18T15:20:23.454Z",
+    "backup_created_at": "2026-10-18T15:20:20.951Z",
+    "temporary_database": "duka_restore_1792336822230_70b96ee38ca7",
+    "tables": 91,
+    "attachments": 2,
+    "companies": 27,
+    "row_fingerprints_match": true,
+    "attachment_hashes_match": true,
+    "subledgers_and_inventory_match": true,
+    "temporary_database_removed": true
+  },
+  "static_deployment_validation": {
+    "caddy": true,
+    "compose": true,
+    "systemd": true,
+    "image_manifest_availability": true,
+    "docker_build_run": false,
+    "public_deployment": false
+  },
+  "overall_production_approval": false,
+  "workspace_iframe_login": {
+    "verified": true,
+    "node": "v24.22.0",
+    "cross_site_iframe": true,
+    "real_browser_network": true,
+    "http_only": true,
+    "secure": true,
+    "same_site": "None (explicit isolated preview only)",
+    "partitioned": true,
+    "reload_retains_session": true,
+    "logout_clears_partitioned_cookie": true,
+    "no_password_changed": true,
+    "no_financial_posting": true,
+    "production_policy_changed": false
+  },
+  "workspace_recovery": {
+    "saved_preview_database_restored": true,
+    "overwrote_existing_database": false,
+    "passwords_reset": false,
+    "demo_reseeded": false
+  },
+  "opening_balances": {
+    "positive_legacy_ar_ap": true,
+    "fake_operational_sales_purchase_tax_stock_cash": false,
+    "reviewed_fixed_cutover": true,
+    "actual_settlement_and_booked_credit_integration": true,
+    "unused_original_effective_date_reversal": true,
+    "legacy_negative_credit_advance_import": false,
+    "settled_batch_correction": false
+  }
+}

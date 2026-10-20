@@ -1,0 +1,24 @@
+[Unit]
+Description=Duka encrypted snapshot backup
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Root deliberately reads 0600 API-owned files, but receives ONLY a read-only
+# BYPASSRLS backup URL and the separate encryption-key file, never API credentials.
+User=root
+WorkingDirectory=/srv/duka/current
+EnvironmentFile=/etc/duka/backup.env
+Environment=PATH=/usr/lib/postgresql/17/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/node /srv/duka/current/artifacts/server/backup.mjs
+TimeoutStartSec=2h
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/duka
+ReadOnlyPaths=/var/lib/duka/uploads /etc/duka/backup.key
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

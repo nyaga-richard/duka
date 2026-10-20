@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly Duka disposable restore check (not an off-site DR drill)
+
+[Timer]
+OnCalendar=Sun *-*-* 04:30:00
+RandomizedDelaySec=10m
+Persistent=true
+Unit=duka-restore-check.service
+
+[Install]
+WantedBy=timers.target

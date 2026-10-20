@@ -1,0 +1,10 @@
+**/node_modules/
+**/.next/
+**/.cache/
+**/next-env.d.ts
+**/*.tsbuildinfo
+artifacts/
+backups/
+uploads/
+release/
+package-lock.json
