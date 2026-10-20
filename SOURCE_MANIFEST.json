@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
-  "git_commit": "301e235bf76e476782526999982fbc7e0ba23a17",
+  "git_commit": "066b5117b2a2fd56f58f80177d9fb35c58d41bdf",
   "dirty": false,
-  "created_at": "2026-10-20T15:38:59.778828+00:00",
+  "created_at": "2026-10-20T15:54:48.894146+00:00",
   "files": {
     ".dockerignore": "024c933ae4575f3c1b259e08a1534b77b308cba3e746b1c8de183373fd12d12d",
     ".env.example": "3d79133c217d779c09495c1aa7cf13f0170cb9ae5a03838b59f40cae3c680245",
@@ -103,7 +103,7 @@
     "deploy/docker/compose.yml": "c47aa1416a62298689441b44d0bce3e1e8e41cac5a946efa7545cf5dce4c1843",
     "deploy/docker/init-db.sh": "3bb7d1ecef7d00a2937aa8988c013589cf101667ffaa762320a87a1a2b69601a",
     "deploy/docker/init-env.sh": "74cd10eb53f72944992c7745b57b2c62534b9d1112a6d4a1aa8c6efd5e4305b6",
-    "deploy/go-live.sh": "af592f532e92ba6c577ff168beba8c4f77ed2b325653366e743c3acc643a72f2",
+    "deploy/go-live.sh": "63c5a6027c23b7683cc020d67ab24fead4443aff89de5524a898eef86201dd5e",
     "deploy/ubuntu/Caddyfile": "6431b8463c79217ccfd66a9574c97b240b97f2f147c1c3025767da3281253b44",
     "deploy/ubuntu/duka-api.service": "271227815700142cf35d967e1e0c75c42d9b7eab6617047e62e363d105d8aa7e",
     "deploy/ubuntu/duka-backup.service": "4ae1a545fdbdb19e5493cb43fa30f2c7ab61d431fb27c0923052e8941e30851c",
@@ -122,7 +122,7 @@
     "docs/OPENING_BALANCES.md": "b8e0fa1890886fa501862549128bf97b9ed2c5d7b386c2c9fb6d299d5bea93e1",
     "docs/OPERATOR_GUIDE.md": "a52b1728cff1e915ed7208f610a9125e621b4a6ba996408f97b35ede7b2c33af",
     "docs/SECURITY.md": "8eb8d59b787adc8cf2c3e131ec486c27e41a173c015d4069fad3fa83a6810b81",
-    "docs/SESSION_LOG.md": "ca43e7fca63d997107eec10c384c36596b7eec164f718d619edd070b8676dc24",
+    "docs/SESSION_LOG.md": "b49e63fb70050ffaf1ddc65ce69688fe74de8feaff16932105957bfaf1a54b5d",
     "docs/TESTING.md": "c55ef25148be42fb4fb46831982ae5e816d4def5e35746417e547bdc5a9ca10a",
     "docs/USER_GUIDE.md": "0065266587165a858b3f245012cfd78cdc5c0b04e73869eeabc964d5dc643d1c",
     "docs/VERIFICATION.md": "df75737e60a1c23ffd2bb922174d22415878bc3609d3ac573e8a77c011eda996",

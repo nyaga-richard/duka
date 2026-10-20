@@ -72,8 +72,10 @@ read_var() { # read_var NAME "prompt" default
 }
 read_var TUNNEL_TOKEN "Cloudflare Tunnel token (from the zero-trust dashboard; stored only in 0600 $ENV_FILE)"
 [[ ${#TUNNEL_TOKEN} -ge 20 ]] || die "The tunnel token looks too short; create a Cloudflare Tunnel named for $PUBLIC_HOST and copy its token."
-[[ "$TUNNEL_TOKEN" =~ ^eyJ[A-Za-z0-9_-]+=*\.[A-Za-z0-9_-]+=*\.[A-Za-z0-9_-]+$ ]] ||
-  die "The tunnel token does not look like a Cloudflare tunnel JWT (expected 'eyJ...' with three segments). Copy ONLY the token value from the dashboard — no 'cloudflared tunnel run --token' prefix, no quotes or spaces. If it is a raw token log: 'docker compose logs tunnel'."
+if [[ "${TUNNEL_TOKEN_SKIP_CHECK:-0}" != "1" ]]; then
+  [[ "$TUNNEL_TOKEN" =~ ^eyJ[A-Za-z0-9_-]{80,}={0,2}$ ]] ||
+    die "The tunnel token should be ONE long base64 value from the Cloudflare dashboard (it starts with 'eyJ', contains no spaces/quotes/'.' separators and no 'cloudflared tunnel run --token' prefix). Copy ONLY the token value. Genuine tokens that ever fail this shape check can bypass it with TUNNEL_TOKEN_SKIP_CHECK=1 at your own risk."
+fi
 read_var SETUP_COMPANY "First business/company name"
 read_var SETUP_EMAIL "Owner login email"
 read_var SETUP_PASSWORD "Strong owner password (12+ chars, letters and digits)"
