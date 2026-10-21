@@ -44,6 +44,12 @@ import { useList, useAction } from "./common";
 export function IntegrationsPage() {
   const { meta } = useWorkspace();
   const status = useQuery<any>("/integrations/status");
+  const config = useQuery<any>("/integrations/config");
+  const [setupProvider, setSetupProvider] = useState<
+    "mpesa" | "etims" | null
+  >(null);
+  const [setupValues, setSetupValues] = useState<any>({});
+  const [setupEnable, setSetupEnable] = useState(false);
   const [tab, setTab] = useState("mpesa"),
     [refund, setRefund] = useState<any>(null),
     [form, setForm] = useState<any>({});
@@ -123,6 +129,63 @@ export function IntegrationsPage() {
             current schema acceptance must be completed externally.
           </small>
         </section>
+      </div>
+      <div className="integration-config-bar">
+        {(["mpesa", "etims"] as const).map((pv) => {
+          const c = config.data?.[pv];
+          return (
+            <div className="card integration-config" key={pv}>
+              <div>
+                <h3>{pv === "mpesa" ? "M-Pesa credentials" : "eTIMS gateway"}</h3>
+                <p>
+                  {c?.configured
+                    ? `Configured by ${c.updated_by} · values are never shown back.`
+                    : "Not configured yet; the deployment environment stays the default."}
+                </p>
+              </div>
+              <Badge status={c?.enabled ? "active" : "neutral"}>
+                {c?.enabled ? "Enabled" : "Disabled"}
+              </Badge>
+              <div className="form-actions compact">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSetupProvider(pv);
+                    setSetupValues({});
+                    setSetupEnable(!!c?.enabled);
+                    action.setError(null);
+                  }}
+                >
+                  {c?.configured ? "Reconfigure" : "Set up"}
+                </Button>
+                {c?.configured && (
+                  <Button
+                    variant={c.enabled ? "secondary" : "primary"}
+                    busy={action.busy}
+                    onClick={() =>
+                      action.run(
+                        () =>
+                          api("/integrations/config", {
+                            method: "PUT",
+                            body: { provider: pv, enabled: !c.enabled },
+                          }).then((r) => {
+                            config.refresh();
+                            status.refresh();
+                            return r;
+                          }),
+                        c.enabled
+                          ? "Integration disabled."
+                          : "Integration enabled.",
+                      )
+                    }
+                  >
+                    {c.enabled ? "Disable" : "Enable"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
       <div className="warning-box">
         <AlertTriangle size={20} />
@@ -331,9 +394,169 @@ export function IntegrationsPage() {
           </div>
         </form>
       </Dialog>
+      <Dialog
+        open={!!setupProvider}
+        onClose={() => setSetupProvider(null)}
+        title={
+          setupProvider === "mpesa"
+            ? "Configure M-Pesa / Daraja"
+            : "Configure KRA eTIMS gateway"
+        }
+        description="Credentials encrypt at rest and are never shown back. Leave every field blank to toggle enablement only."
+            >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const pv = setupProvider as "mpesa" | "etims";
+            const body: any = {
+              provider: pv,
+              enabled: setupEnable,
+            };
+            const draft: any = {};
+            for (const [k, v] of Object.entries(setupValues)) {
+              const s = String(v ?? "").trim();
+              if (s) draft[k] = s;
+            }
+            if (Object.keys(draft).length) body.config = draft;
+            const already = config.data?.[pv]?.configured;
+            if (
+              Object.keys(draft).length &&
+              !already &&
+              ((pv === "mpesa" &&
+                ![
+                  "consumer_key",
+                  "consumer_secret",
+                  "shortcode",
+                  "passkey",
+                  "callback_secret",
+                ].every((k) => draft[k])) ||
+                (pv === "etims" &&
+                  !["adapter_url", "adapter_token"].every((k) => draft[k])))
+            ) {
+              action.setError({
+                message:
+                  "A first-time configuration needs every required field; leave all blank to keep the deployment default.",
+              });
+              return;
+            }
+            if (Object.keys(draft).length && already) {
+              const required =
+                pv === "mpesa"
+                  ? [
+                      "consumer_key",
+                      "consumer_secret",
+                      "shortcode",
+                      "passkey",
+                      "callback_secret",
+                    ]
+                  : ["adapter_url", "adapter_token"];
+              if (!required.every((k) => draft[k])) {
+                action.setError({
+                  message:
+                    "Re-enter the complete credential set to rotate; values are stored write-only and cannot be merged.",
+                });
+                return;
+              }
+            }
+            await action.run(
+              () =>
+                api("/integrations/config", {
+                  method: "PUT",
+                  body,
+                }).then((r) => {
+                  config.refresh();
+                  status.refresh();
+                  setSetupProvider(null);
+                  return r;
+                }),
+              "Integration settings saved.",
+            );
+          }}
+        >
+          {action.error && <ErrorCard error={action.error} />}
+          <Fields
+            fields={
+              (setupProvider === "mpesa"
+                ? [
+                    { key: "consumer_key", label: "Consumer key", required: true },
+                    {
+                      key: "consumer_secret",
+                      label: "Consumer secret",
+                      type: "password",
+                      required: true,
+                    },
+                    { key: "shortcode", label: "Shortcode", required: true },
+                    {
+                      key: "passkey",
+                      label: "Passkey (Lipa Na M-Pesa)",
+                      type: "password",
+                      required: true,
+                    },
+                    {
+                      key: "callback_secret",
+                      label: "Callback secret (32+ characters)",
+                      type: "password",
+                      required: true,
+                    },
+                    {
+                      key: "transaction_type",
+                      label: "Transaction type",
+                      type: "select",
+                      options: [
+                        {
+                          id: "CustomerPayBillOnline",
+                          name: "Pay Bill (CustomerPayBillOnline)",
+                        },
+                        {
+                          id: "CustomerBuyGoodsOnline",
+                          name: "Buy Goods (CustomerBuyGoodsOnline)",
+                        },
+                      ],
+                    },
+                    {
+                      key: "base_url",
+                      label: "Base URL (production: https://api.safaricom.co.ke)",
+                    },
+                  ]
+                : [
+                    {
+                      key: "adapter_url",
+                      label: "Certified gateway URL (https)",
+                      required: true,
+                    },
+                    {
+                      key: "adapter_token",
+                      label: "Gateway bearer token",
+                      type: "password",
+                      required: true,
+                    },
+                  ]) as any
+            }
+            value={setupValues}
+            onChange={setSetupValues}
+          />
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={setupEnable}
+              onChange={(e) => setSetupEnable(e.target.checked)}
+            />
+            <span>
+              Enable for this business (overrides the deployment default)
+            </span>
+          </label>
+          <div className="form-actions">
+            <Button type="submit" busy={action.busy}>
+              Save configuration <Check size={16} />
+            </Button>
+          </div>
+        </form>
+            </Dialog>
     </>
   );
 }
+
+
 export function OfflinePage() {
   const { meta, actor, online, notify } = useWorkspace();
   const devices = useQuery<any>("/offline/devices");
@@ -720,6 +943,7 @@ export function OfflinePage() {
           </div>
         </form>
       </Dialog>
+      
     </>
   );
 }

@@ -80,6 +80,11 @@ import {
   setupStatus,
 } from "../services/admin.ts";
 import {
+  integrationConfigStatus,
+  saveIntegrationConfig,
+  setIntegrationEnabled,
+} from "../services/integrations-config.ts";
+import {
   createProduct,
   updateProduct,
   listProducts,
@@ -2550,6 +2555,32 @@ endpoint(
       [ctx.companyId, ctx.actor.branch_ids, ctx.actor.warehouse_ids],
       q,
     ),
+);
+endpoint(
+  "get",
+  "/integrations/config",
+  "integrations.manage",
+  undefined,
+  "Masked per-company integration configuration state (values never returned)",
+  (ctx) => integrationConfigStatus(ctx),
+);
+endpoint(
+  "put",
+  "/integrations/config",
+  "integrations.manage",
+  z
+    .object({
+      provider: z.enum(["mpesa", "etims"]),
+      enabled: z.boolean(),
+      config: z.record(z.string(), z.string()).optional(),
+    })
+    .strict(),
+  "Configure provider credentials or toggle enablement; secrets write-only",
+  async (ctx, i) => {
+    if (i.config)
+      return saveIntegrationConfig(ctx, i.provider, i.config, i.enabled);
+    return setIntegrationEnabled(ctx, i.provider, i.enabled);
+  },
 );
 endpoint(
   "get",

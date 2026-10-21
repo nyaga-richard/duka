@@ -1,5 +1,6 @@
 import { D, money } from "@duka/shared";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { effectiveMpesa } from "../services/integrations-config.ts";
 import {
   pool,
   transaction,
@@ -47,11 +48,26 @@ export class MockMpesa implements MpesaProvider {
       : { status: "pending" as const, error: "Unknown mock request" };
   }
 }
+export type MpesaRuntimeCfg = {
+  base_url: string;
+  consumer_key: string;
+  consumer_secret: string;
+  shortcode: string;
+  passkey: string;
+  transaction_type: "CustomerPayBillOnline" | "CustomerBuyGoodsOnline";
+  callback_secret: string;
+};
+// Company-scoped config (from encrypted integration_settings) overrides the
+// deployment-wide environment; validation already happened at save time.
 export class DarajaMpesa implements MpesaProvider {
   private token = "";
   private expiry = 0;
+  constructor(private cfg: MpesaRuntimeCfg | null = null) {}
   private base() {
-    const url = process.env.MPESA_BASE_URL ?? "https://sandbox.safaricom.co.ke";
+    const url =
+      this.cfg?.base_url ??
+      process.env.MPESA_BASE_URL ??
+      "https://sandbox.safaricom.co.ke";
     if (
       ![
         "https://sandbox.safaricom.co.ke",
@@ -63,8 +79,9 @@ export class DarajaMpesa implements MpesaProvider {
   }
   private async request(path: string, body?: unknown) {
     if (!this.token || this.expiry < Date.now()) {
-      const key = process.env.MPESA_CONSUMER_KEY,
-        secret = process.env.MPESA_CONSUMER_SECRET;
+      const key = this.cfg?.consumer_key ?? process.env.MPESA_CONSUMER_KEY,
+        secret =
+          this.cfg?.consumer_secret ?? process.env.MPESA_CONSUMER_SECRET;
       if (!key || !secret) throw new Error("M-Pesa OAuth credentials missing");
       const response = await fetch(
         this.base() + "/oauth/v1/generate?grant_type=client_credentials",
@@ -98,8 +115,8 @@ export class DarajaMpesa implements MpesaProvider {
     return data;
   }
   private credentials() {
-    const shortcode = process.env.MPESA_SHORTCODE,
-      passkey = process.env.MPESA_PASSKEY;
+    const shortcode = this.cfg?.shortcode ?? process.env.MPESA_SHORTCODE,
+      passkey = this.cfg?.passkey ?? process.env.MPESA_PASSKEY;
     if (!shortcode || !passkey)
       throw new Error("M-Pesa shortcode/passkey missing");
     const timestamp = new Intl.DateTimeFormat("sv-SE", {
@@ -132,7 +149,9 @@ export class DarajaMpesa implements MpesaProvider {
     const r = await this.request("/mpesa/stkpush/v1/processrequest", {
       ...credentials,
       TransactionType:
-        process.env.MPESA_TRANSACTION_TYPE ?? "CustomerPayBillOnline",
+        this.cfg?.transaction_type ??
+        process.env.MPESA_TRANSACTION_TYPE ??
+        "CustomerPayBillOnline",
       Amount: input.amount,
       PartyA: input.phone,
       PartyB: credentials.BusinessShortCode,
@@ -168,13 +187,17 @@ export class DarajaMpesa implements MpesaProvider {
 }
 const mock = new MockMpesa(),
   daraja = new DarajaMpesa();
-export const provider = (mode = process.env.MPESA_MODE): MpesaProvider => {
-  if (mode === "daraja") return daraja;
+export const provider = (
+  mode = process.env.MPESA_MODE,
+  cfg: MpesaRuntimeCfg | null = null,
+): MpesaProvider => {
+  if (mode === "daraja") return cfg ? new DarajaMpesa(cfg) : daraja;
   if (mode === "mock" && process.env.NODE_ENV !== "production") return mock;
   throw new Error("The recorded payment provider is disabled or unavailable");
 };
-export function callbackToken(id: string) {
+export function callbackToken(id: string, configuredSecret?: string) {
   const secret =
+    configuredSecret ??
     process.env.MPESA_CALLBACK_SECRET ??
     (process.env.NODE_ENV !== "production"
       ? process.env.DATABASE_URL
@@ -187,7 +210,8 @@ export async function createIntent(
   input: { branch_id: string; amount: string; phone: string },
 ) {
   requirePermission(ctx, "sales.create");
-  const mode = process.env.MPESA_MODE ?? "disabled";
+  const eff = await effectiveMpesa(ctx.companyId);
+  const mode = eff.mode;
   if (
     !["mock", "daraja"].includes(mode) ||
     (mode === "mock" && process.env.NODE_ENV === "production")
@@ -210,7 +234,7 @@ export async function createIntent(
   if (c.currency.trim() !== "KES")
     fail(422, "MPESA_CURRENCY", "M-Pesa provider supports KES only");
   const id = randomUUID(),
-    token = callbackToken(id);
+    token = callbackToken(id, eff.cfg?.callback_secret);
   await ctx.db.query(
     "INSERT INTO payment_intents(id,company_id,branch_id,created_by,amount,phone,provider,callback_token_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
     [
@@ -254,11 +278,22 @@ export async function dispatchIntent(actor: Actor, id: string) {
       "http://localhost:3000";
     if (input.provider === "daraja" && !base.startsWith("https://"))
       throw new Error("M-Pesa callback requires HTTPS");
-    const result = await provider(input.provider).initiate({
+    const effDispatch =
+      input.provider === "daraja"
+        ? await effectiveMpesa(actor.company_id)
+        : {
+            mode: input.provider,
+            cfg: null as any,
+          };
+    if (input.provider === "daraja" && effDispatch.mode !== "daraja")
+      throw new Error(
+        "The company M-Pesa integration was disabled or re-keyed after this intent was created",
+      );
+    const result = await provider(input.provider, effDispatch.cfg).initiate({
       amount: input.amount,
       phone: input.phone,
       reference: id.replaceAll("-", "").slice(0, 12),
-      callbackUrl: `${base}/api/v1/integrations/mpesa/callback/${callbackToken(id)}`,
+      callbackUrl: `${base}/api/v1/integrations/mpesa/callback/${callbackToken(id, (effDispatch.cfg as MpesaRuntimeCfg | null)?.callback_secret)}`,
     });
     await transaction(actor, async (ctx) => {
       await ctx.db.query(
@@ -383,7 +418,13 @@ export async function processMpesaEvent(
       [ctx.companyId, map.intent_id],
     ),
   );
-  const query = await (customProvider ?? provider(providerName.provider)).query(
+  const effEvent =
+    !customProvider && providerName.provider === "daraja"
+      ? await effectiveMpesa(actor.company_id)
+      : null;
+  const query = await (
+    customProvider ?? provider(providerName.provider, effEvent?.cfg ?? null)
+  ).query(
     map.checkout_id,
   );
   return transaction(actor, async (ctx) => {

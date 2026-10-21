@@ -1017,7 +1017,7 @@ export default function POS() {
                 disabled={!!pending}
               >
                 <div className="product-tile-art">
-                  <ProductAvatar name={p.name} />
+                  <ProductAvatar name={p.name} imageAttachmentId={p.image_attachment_id} />
                   <span className="add-product">
                     <Plus size={17} />
                   </span>
@@ -1123,7 +1123,7 @@ export default function POS() {
           {lines.length ? (
             lines.map((l, i) => (
               <div className="cart-line" key={i}>
-                <ProductAvatar name={l.product.name} small />
+                <ProductAvatar name={l.product.name} small imageAttachmentId={l.product.image_attachment_id} />
                 <div className="cart-line-info">
                   <strong>{l.product.name}</strong>
                   <small>

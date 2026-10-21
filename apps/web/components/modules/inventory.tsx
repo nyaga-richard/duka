@@ -201,7 +201,7 @@ export function InventoryPage() {
             title: "Product",
             render: (r: any) => (
               <div className="product-cell">
-                <ProductAvatar name={r.name} small />
+                <ProductAvatar name={r.name} small imageAttachmentId={r.image_attachment_id} />
                 <div>
                   <strong>{r.name}</strong>
                   <small>{r.sku}</small>

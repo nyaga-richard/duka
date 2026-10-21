@@ -1,5 +1,11 @@
 # Payments, fiscal boundary and mail
 
+## Per-company self-service configuration
+
+Operators with the `integrations.manage` permission (owner/admin by default) can configure and enable M-Pesa/Daraja and the eTIMS gateway directly from **Settings → Integrations** — no server restart and no environment redeploy is required. Provider secrets are write-only: the page and `GET /integrations/config` only report `configured`, `enabled`, `updated_at` and the configuring operator's name, never the values. Credentials are stored per company in `integration_settings` as AES-256-GCM ciphertext keyed by the deployment `MFA_ENCRYPTION_KEY` (the same key that protects MFA material), under FORCE row-level security — a connection without the tenant context sees zero rows.
+
+Rotation is by entering the full credential set again (each save replaces the envelope wholesale). Enabling verifies the stored envelope decrypts under the current key, so a deployment that rotated `MFA_ENCRYPTION_KEY` after secrets were saved cannot half-enable: reads fail closed with `INTEGRATION_KEY_MISMATCH` until fresh credentials are saved under the new key. Disabling takes effect immediately, including for in-flight dispatches and queued fiscal jobs (both fail rather than acting on stale authority). An enabled company configuration overrides the environment defaults below for that company only.
+
 ## M-Pesa
 
 Modes: `disabled` (safe default), `mock` (explicit isolated development/demo only), `daraja` (merchant credentials required). Production rejects mocks and a sandbox base URL; live posting requires `https://api.safaricom.co.ke`. Development sandbox endpoints are not real-money confirmation for a live company.

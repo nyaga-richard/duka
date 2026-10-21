@@ -140,6 +140,7 @@ export async function listProducts(ctx: Context, query: any) {
   const r = await ctx.db.query(
     `SELECT p.*,c.name AS category,u.symbol AS unit,u.fractional,t.rate AS tax_rate,t.kind AS tax_kind,
  coalesce(b.quantity,0)::text AS stock,coalesce(b.reserved,0)::text AS reserved,coalesce(b.value,0)::text AS stock_value,
+ (SELECT a.id FROM attachments a WHERE a.company_id=p.company_id AND a.entity='product' AND a.record_id=p.id AND a.mime_type LIKE 'image/%' ORDER BY a.created_at LIMIT 1) AS image_attachment_id,
  CASE WHEN b.quantity>0 THEN b.value/b.quantity ELSE p.purchase_cost END::numeric(24,6)::text AS average_cost,count(*) OVER()::int AS _count
  FROM products p JOIN units u ON u.company_id=p.company_id AND u.id=p.unit_id JOIN tax_rules t ON t.company_id=p.company_id AND t.id=p.tax_rule_id
  LEFT JOIN categories c ON c.company_id=p.company_id AND c.id=p.category_id LEFT JOIN LATERAL (SELECT sum(sb.quantity) AS quantity,sum(sb.reserved) AS reserved,sum(sb.value) AS value FROM stock_balances sb WHERE sb.company_id=p.company_id AND sb.product_id=p.id AND sb.warehouse_id=ANY($2::uuid[])) b ON true

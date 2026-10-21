@@ -591,11 +591,22 @@ export function ProductAvatar({
   name,
   category,
   small = false,
+  imageAttachmentId,
 }: {
   name: string;
   category?: string;
   small?: boolean;
+  imageAttachmentId?: string | null;
 }) {
+  if (imageAttachmentId)
+    return (
+      <img
+        className={`product-avatar photo ${small ? "small" : ""}`}
+        src={`/api/v1/attachments/${imageAttachmentId}`}
+        alt=""
+        loading="lazy"
+      />
+    );
   const colors = ["sage", "ochre", "blue", "rose", "lavender"];
   const n = [...name].reduce((a, c) => a + c.charCodeAt(0), 0);
   return (

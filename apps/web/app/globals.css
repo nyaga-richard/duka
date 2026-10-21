@@ -1322,6 +1322,15 @@ hr {
   box-shadow: inset 0 0 0 1px #6b795208;
   position: relative;
 }
+.product-avatar.photo {
+  object-fit: cover;
+  background: #f2efe7;
+  border: 1px solid rgba(21, 62, 53, 0.08);
+  display: inline-block;
+}
+.product-avatar.photo::after {
+  display: none;
+}
 .product-avatar::after {
   content: "";
   position: absolute;
@@ -3106,40 +3115,59 @@ hr {
   margin-top: 7px;
 }
 .receipt-preview {
-  border: 1px dashed var(--line);
-  border-radius: 5px;
-  padding: 24px;
-  font-family: "SFMono-Regular", Consolas, monospace;
-  background: var(--surface-2);
-  font-size: 10px;
+  border: 1px solid var(--line);
+  border-top: 3px solid #153e35;
+  border-radius: 8px;
+  padding: 26px 30px 20px;
+  font-family: inherit;
+  background: #fcfdfb;
+  font-size: 11.5px;
+  box-shadow: 0 1px 2px rgba(21, 62, 53, 0.06);
 }
 .receipt-preview h3 {
   text-align: center;
   font-size: 15px;
-  margin-bottom: 10px;
+  font-weight: 700;
+  color: #153e35;
+  letter-spacing: 0.01em;
+  margin-bottom: 2px;
 }
 .receipt-preview > p {
   text-align: center;
-  font-size: 9px;
+  font-size: 9.5px;
   color: var(--muted);
+  margin-top: 0;
+}
+.receipt-preview::after {
+  content: "";
+  display: block;
+  margin-top: 14px;
+  border-top: 1px dashed #c9d2c3;
 }
 .receipt-item {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  margin: 12px 0;
-  line-height: 1.6;
+  padding: 7px 0;
+  border-bottom: 1px solid #eef2ea;
+  line-height: 1.5;
+}
+.receipt-item:last-of-type {
+  border-bottom: 2px solid #153e35;
+  padding-top: 10px;
 }
 .receipt-item b {
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .receipt-item > span {
   max-width: 70%;
 }
 .fiscal-notice {
-  padding: 13px 0 0 !important;
-  font-size: 8px !important;
+  padding: 10px 0 0 !important;
+  font-size: 9px !important;
   line-height: 1.7;
+  color: var(--muted);
 }
 .command-list {
   margin-top: 18px;
@@ -5412,4 +5440,33 @@ hr {
 .setup-banner p {
   margin: 0;
   font-size: 14px;
+}
+
+/* Integration configuration bar */
+.integration-config-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.integration-config {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-content: space-between;
+}
+.integration-config h3 {
+  font-size: 15px;
+  font-weight: 650;
+  color: #153e35;
+  margin: 0 0 2px;
+}
+.integration-config p {
+  font-size: 12.5px;
+  color: #5d6f67;
+  margin: 0;
+}
+.integration-config .form-actions.compact {
+  margin: 0;
+  gap: 8px;
 }

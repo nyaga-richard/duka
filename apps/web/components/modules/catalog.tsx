@@ -266,7 +266,7 @@ export function CatalogPage() {
                   className="cell-button product-cell"
                   onClick={() => setDetail(p)}
                 >
-                  <ProductAvatar name={p.name} small />
+                  <ProductAvatar name={p.name} small imageAttachmentId={p.image_attachment_id} />
                   <span>
                     <strong>{p.name}</strong>
                     <small>

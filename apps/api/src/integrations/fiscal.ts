@@ -9,12 +9,14 @@ import {
   type Context,
 } from "../db.ts";
 import { integrationActor } from "./mpesa.ts";
+import { effectiveEtims, type EtimsCfg } from "../services/integrations-config.ts";
 export async function enqueueFiscal(
   ctx: Context,
   sourceType: string,
   sourceId: string,
 ) {
-  const status = process.env.ETIMS_MODE === "adapter" ? "pending" : "disabled";
+  const eff = await effectiveEtims(ctx.companyId);
+  const status = eff.mode === "adapter" ? "pending" : "disabled";
   const row = (
     await ctx.db.query(
       "INSERT INTO fiscal_submissions(company_id,source_type,source_id,status) VALUES($1,$2,$3,$4) RETURNING id",
@@ -35,9 +37,10 @@ export interface FiscalAdapter {
   ): Promise<{ status: "successful"; fiscal_id: string; receipt_url?: string }>;
 }
 export class CertifiedGatewayAdapter implements FiscalAdapter {
+  constructor(private cfg: EtimsCfg | null = null) {}
   async submit(payload: unknown, key: string) {
-    const url = process.env.ETIMS_ADAPTER_URL,
-      token = process.env.ETIMS_ADAPTER_TOKEN;
+    const url = this.cfg?.url ?? process.env.ETIMS_ADAPTER_URL,
+      token = this.cfg?.token ?? process.env.ETIMS_ADAPTER_TOKEN;
     if (!url?.startsWith("https://") || !token)
       throw new Error(
         "Certified HTTPS eTIMS gateway and credentials are not configured",
@@ -73,13 +76,22 @@ export class CertifiedGatewayAdapter implements FiscalAdapter {
 }
 export async function processFiscalJob(
   jobId: string,
-  adapter: FiscalAdapter = new CertifiedGatewayAdapter(),
+  adapter?: FiscalAdapter,
 ) {
   const job = (
     await pool.query("SELECT * FROM fiscal_dispatch WHERE id=$1", [jobId])
   ).rows[0];
   if (!job || job.status === "successful") return;
   const actor = await integrationActor(job.company_id, job.actor_id);
+  if (!adapter) {
+    const eff = await effectiveEtims(job.company_id);
+    if (eff.mode !== "adapter")
+      throw new Error(
+        "The company eTIMS integration was disabled after this submission was queued",
+      );
+    // Company-configured gateway wins; otherwise fall back to the deployment env.
+    adapter = new CertifiedGatewayAdapter(eff.cfg);
+  }
   try {
     const payload = await transaction(actor, async (ctx) => {
       const s = await one(
@@ -159,7 +171,8 @@ export async function processFiscalJob(
 }
 export async function retryFiscal(ctx: Context, id: string) {
   requirePermission(ctx, "integrations.manage");
-  if (process.env.ETIMS_MODE !== "adapter")
+  const effRetry = await effectiveEtims(ctx.companyId);
+  if (effRetry.mode !== "adapter")
     fail(409, "FISCAL_DISABLED", "Configure a certified adapter first");
   const s = await one(
     ctx,

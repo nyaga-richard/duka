@@ -127,10 +127,9 @@ export const customerSchema = z
     active: z.boolean().default(true),
   })
   .strict();
-export const supplierSchema = customerSchema.omit({
-  credit_limit: true,
-  discount_percent: true,
-});
+// Suppliers now also carry trade terms (credit limit + trade discount) as
+// reviewable master data; persisted by migration024 columns.
+export const supplierSchema = customerSchema;
 export const cartLineSchema = z
   .object({
     product_id: uuid,

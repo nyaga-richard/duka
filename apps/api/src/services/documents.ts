@@ -47,37 +47,92 @@ function renderPdf(input: {
     doc.on("error", reject);
     doc.on("end", () => resolve(Buffer.concat(buffers)));
     const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-    doc
-      .fillColor("#153e35")
-      .font("Helvetica-Bold")
-      .fontSize(thermal ? 15 : 24)
-      .text(input.company.name, { align: thermal ? "center" : "left" });
-    doc
-      .fillColor("#35473f")
-      .font("Helvetica")
-      .fontSize(thermal ? 8 : 10);
-    if (input.company.address) doc.text(input.company.address);
-    if (input.company.phone) doc.text(`Tel: ${input.company.phone}`);
-    if (input.company.tax_pin) doc.text(`Tax PIN: ${input.company.tax_pin}`);
-    doc
-      .moveDown()
-      .font("Helvetica-Bold")
-      .fontSize(thermal ? 11 : 16)
-      .text(input.title);
-    doc
-      .font("Helvetica")
-      .fontSize(thermal ? 8 : 10)
-      .text(input.number);
-    if (input.date) doc.text(`Date: ${input.date}`);
-    doc.moveDown();
-    for (const l of input.lines) {
-      if (doc.y > doc.page.height - 100 && !thermal) doc.addPage();
+    const m = doc.page.margins.left;
+    const cur = input.company.currency.trim();
+    const brand = "#153e35",
+      muted = "#5d6f67",
+      rule = "#d8dcd4";
+    const hr = (weight = 0.8, color = rule) => {
+      const y = doc.y;
       doc
+        .moveTo(m, y)
+        .lineTo(m + w, y)
+        .lineWidth(weight)
+        .strokeColor(color)
+        .stroke()
+        .moveDown(0.35);
+    };
+    // ---- header -------------------------------------------------------------
+    if (!thermal)
+      doc.rect(0, 0, doc.page.width, 6).fillColor(brand).fill();
+    doc
+      .fillColor(brand)
+      .font("Helvetica-Bold")
+      .fontSize(thermal ? 15 : 20)
+      .text(input.company.name, { align: thermal ? "center" : "left" });
+    doc.fillColor(muted).font("Helvetica").fontSize(thermal ? 8 : 9.5);
+    if (input.company.address)
+      doc.text(input.company.address, { align: thermal ? "center" : "left" });
+    if (input.company.phone)
+      doc.text(`Tel: ${input.company.phone}`, {
+        align: thermal ? "center" : "left",
+      });
+    if (input.company.tax_pin)
+      doc.text(`Tax PIN: ${input.company.tax_pin}`, {
+        align: thermal ? "center" : "left",
+      });
+    doc.moveDown(0.5);
+    if (!thermal) hr(1.4, brand);
+    // ---- title + document identity block -----------------------------------
+    const titleY = doc.y;
+    doc
+      .fillColor(brand)
+      .font("Helvetica-Bold")
+      .fontSize(thermal ? 11 : 15)
+      .text(input.title, m, titleY, { width: w * 0.62 });
+    doc
+      .font("Helvetica")
+      .fontSize(thermal ? 8 : 9.5)
+      .fillColor("#263b33")
+      .text(input.number, m + w * 0.62, titleY + 2, {
+        width: w * 0.38,
+        align: "right",
+      });
+    if (input.date)
+      doc
+        .fillColor(muted)
+        .fontSize(thermal ? 8 : 9)
+        .text(input.date, m + w * 0.62, doc.y + 1, {
+          width: w * 0.38,
+          align: "right",
+        });
+    doc.y = Math.max(doc.y, titleY + (thermal ? 18 : 26));
+    hr();
+    // ---- itemized lines ------------------------------------------------------
+    const hasMoney = input.lines.some(
+      (l) =>
+        (l.total ?? l.amount ?? l.value ?? l.revenue ?? l.balance) !==
+        undefined,
+    );
+    const amountX = m + w * 0.76,
+      amountW = w * 0.24;
+    if (hasMoney && !thermal) {
+      doc
+        .fillColor(muted)
         .font("Helvetica-Bold")
-        .fontSize(thermal ? 9 : 10)
-        .text(String(l.name ?? l.description ?? l.account ?? l.code ?? "Item"));
-      doc.font("Helvetica").fontSize(thermal ? 8 : 9);
-      const details = [
+        .fontSize(8.5)
+        .text("ITEM", m, doc.y, { width: w * 0.52 });
+      const hy = doc.y - doc.currentLineHeight();
+      doc.text("AMOUNT", amountX, hy, { width: amountW, align: "right" });
+      doc.moveDown(0.1);
+      hr(0.6);
+    }
+    input.lines.forEach((l, idx) => {
+      if (doc.y > doc.page.height - 130 && !thermal) {
+        doc.addPage();
+        hr(0.6);
+      }
+      const linesMeta = [
         l.sku,
         l.quantity !== undefined
           ? `Qty ${l.quantity}${l.unit ? " " + l.unit : ""}`
@@ -90,39 +145,99 @@ function renderPdf(input: {
         l.debit !== undefined ? `Dr ${l.debit} / Cr ${l.credit}` : null,
       ]
         .filter(Boolean)
-        .join("  ·  ");
-      if (details) doc.text(details, { width: w });
+        .join("   ·   ");
+      const ly = doc.y;
+      doc
+        .fillColor("#1c2f28")
+        .font("Helvetica-Bold")
+        .fontSize(thermal ? 9 : 10)
+        .text(
+          String(l.name ?? l.description ?? l.account ?? l.code ?? "Item"),
+          m,
+          ly,
+          { width: amountX - m - 12 },
+        );
       const value = l.total ?? l.amount ?? l.value ?? l.revenue ?? l.balance;
       if (value !== undefined)
-        doc.text(`${input.company.currency.trim()} ${money(value)}`, {
-          align: "right",
-        });
+        doc
+          .fillColor("#1c2f28")
+          .fontSize(thermal ? 9 : 10)
+          .text(`${cur} ${money(value)}`, amountX, ly, {
+            width: amountW,
+            align: "right",
+          });
+      if (linesMeta)
+        doc
+          .fillColor(muted)
+          .font("Helvetica")
+          .fontSize(thermal ? 7.5 : 8.5)
+          .text(linesMeta, m, doc.y + 2, { width: amountX - m - 12 });
       if (l.tax !== undefined)
-        doc.text(`Tax: ${money(l.tax)}`, { align: "right" });
-      doc.moveDown(0.6);
-    }
-    doc.moveDown();
-    for (const [label, value] of Object.entries(input.totals ?? {})) {
-      doc
-        .font(label.toLowerCase() === "total" ? "Helvetica-Bold" : "Helvetica")
-        .fontSize(thermal ? 10 : 12)
-        .text(`${label}: ${input.company.currency.trim()} ${money(value)}`, {
+        doc
+          .fillColor(muted)
+          .fontSize(thermal ? 7.5 : 8.5)
+          .text(`Incl. tax ${cur} ${money(l.tax)}`, amountX, doc.y + 1, {
+            width: amountW,
+            align: "right",
+          });
+      doc.moveDown(0.45);
+      if (!thermal && idx < input.lines.length - 1) hr(0.4);
+    });
+    if (thermal && input.lines.length) hr(0.6);
+    doc.moveDown(0.4);
+    // ---- totals block ---------------------------------------------------------
+    const totals = Object.entries(input.totals ?? {});
+    if (totals.length) {
+      if (!thermal) hr(1, brand);
+      for (const [label, value] of totals) {
+        const isTotal = label.toLowerCase() === "total";
+        const ly = doc.y;
+        doc
+          .font(isTotal ? "Helvetica-Bold" : "Helvetica")
+          .fontSize(isTotal ? (thermal ? 11 : 13) : thermal ? 9 : 10)
+          .fillColor(isTotal ? brand : "#263b33")
+          .text(label, thermal ? m + w * 0.3 : m + w * 0.55, ly, {
+            width: thermal ? w * 0.3 : w * 0.21,
+          });
+        doc.text(`${cur} ${money(value)}`, thermal ? m + w * 0.6 : m + w * 0.76, ly, {
+          width: thermal ? w * 0.4 : w * 0.24,
           align: "right",
         });
+        doc.moveDown(0.15);
+      }
     }
-    if (input.notes)
+    if (input.notes) {
+      doc.moveDown(0.4);
+      if (!thermal) hr(0.6);
       doc
-        .moveDown()
         .font("Helvetica")
-        .fontSize(thermal ? 8 : 10)
-        .text(input.notes);
+        .fontSize(thermal ? 8 : 9)
+        .fillColor(muted)
+        .text(input.notes, { width: w });
+    }
+    doc.moveDown(0.6);
+    hr(0.6);
     doc
-      .moveDown()
       .font("Helvetica")
       .fontSize(thermal ? 8 : 9)
+      .fillColor(brand)
       .text(input.footer ?? input.company.settings?.receiptFooter ?? "", {
         align: thermal ? "center" : "left",
+        width: w,
       });
+    if (!thermal)
+      doc
+        .moveDown(0.3)
+        .fontSize(7.5)
+        .fillColor(muted)
+        .text("Generated by Duka Business OS", { align: "left" });
+    if (thermal) {
+      doc.moveDown(0.8);
+      doc
+        .fontSize(8)
+        .fillColor(rule)
+        .text("- - - - - - - - - - - - - - - - -", { align: "center" });
+    }
     doc.end();
   });
 }
