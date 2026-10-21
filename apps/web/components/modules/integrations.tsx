@@ -103,7 +103,9 @@ export function IntegrationsPage() {
           <small>
             {status.data?.mpesa_credentials_configured
               ? "Credentials configured; merchant and production acceptance testing still required."
-              : "Live merchant credentials are not configured. Test-provider results are not real money."}
+              : config.data?.mpesa?.configured
+                ? "Credentials are saved for this business; live merchant acceptance testing remains yours."
+                : "No live merchant credentials yet. Set up below with your Daraja values, or keep the deployment default. Results from the test provider are not real money."}
           </small>
         </section>
         <section className="card integration-card">
@@ -130,63 +132,76 @@ export function IntegrationsPage() {
           </small>
         </section>
       </div>
+      {config.error && <ErrorCard error={config.error} />}
+      {!config.error && (
       <div className="integration-config-bar">
         {(["mpesa", "etims"] as const).map((pv) => {
           const c = config.data?.[pv];
           return (
             <div className="card integration-config" key={pv}>
-              <div>
-                <h3>{pv === "mpesa" ? "M-Pesa credentials" : "eTIMS gateway"}</h3>
+              <div className="integration-config-text">
+                <h3>
+                  {pv === "mpesa" ? "M-Pesa credentials" : "eTIMS gateway"}
+                </h3>
                 <p>
-                  {c?.configured
-                    ? `Configured by ${c.updated_by} · values are never shown back.`
-                    : "Not configured yet; the deployment environment stays the default."}
+                  {config.loading && !config.data
+                    ? "Loading configuration…"
+                    : c?.configured
+                      ? `Configured by ${c.updated_by} · values are never shown back.`
+                      : "Not configured yet; the deployment environment stays the default."}
                 </p>
               </div>
-              <Badge status={c?.enabled ? "active" : "neutral"}>
-                {c?.enabled ? "Enabled" : "Disabled"}
-              </Badge>
-              <div className="form-actions compact">
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setSetupProvider(pv);
-                    setSetupValues({});
-                    setSetupEnable(!!c?.enabled);
-                    action.setError(null);
-                  }}
-                >
-                  {c?.configured ? "Reconfigure" : "Set up"}
-                </Button>
-                {c?.configured && (
+              <div className="integration-config-side">
+                <Badge status={c?.enabled ? "active" : "neutral"}>
+                  {c?.configured
+                    ? c.enabled
+                      ? "Enabled"
+                      : "Disabled"
+                    : "Not configured"}
+                </Badge>
+                <div className="form-actions compact">
                   <Button
-                    variant={c.enabled ? "secondary" : "primary"}
-                    busy={action.busy}
-                    onClick={() =>
-                      action.run(
-                        () =>
-                          api("/integrations/config", {
-                            method: "PUT",
-                            body: { provider: pv, enabled: !c.enabled },
-                          }).then((r) => {
-                            config.refresh();
-                            status.refresh();
-                            return r;
-                          }),
-                        c.enabled
-                          ? "Integration disabled."
-                          : "Integration enabled.",
-                      )
-                    }
+                    variant="secondary"
+                    onClick={() => {
+                      setSetupProvider(pv);
+                      setSetupValues({});
+                      setSetupEnable(!!c?.enabled);
+                      action.setError(null);
+                    }}
                   >
-                    {c.enabled ? "Disable" : "Enable"}
+                    {c?.configured ? "Reconfigure" : "Set up"}
                   </Button>
-                )}
+                  {c?.configured && (
+                    <Button
+                      variant={c.enabled ? "secondary" : "primary"}
+                      busy={action.busy}
+                      onClick={() =>
+                        action.run(
+                          () =>
+                            api("/integrations/config", {
+                              method: "PUT",
+                              body: { provider: pv, enabled: !c.enabled },
+                            }).then((r) => {
+                              config.refresh();
+                              status.refresh();
+                              return r;
+                            }),
+                          c.enabled
+                            ? "Integration disabled."
+                            : "Integration enabled.",
+                        )
+                      }
+                    >
+                      {c.enabled ? "Disable" : "Enable"}
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           );
         })}
       </div>
+      )}
       <div className="warning-box">
         <AlertTriangle size={20} />
         <p>
@@ -403,7 +418,7 @@ export function IntegrationsPage() {
             : "Configure KRA eTIMS gateway"
         }
         description="Credentials encrypt at rest and are never shown back. Leave every field blank to toggle enablement only."
-            >
+      >
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -414,8 +429,8 @@ export function IntegrationsPage() {
             };
             const draft: any = {};
             for (const [k, v] of Object.entries(setupValues)) {
-              const s = String(v ?? "").trim();
-              if (s) draft[k] = s;
+              const sv = String(v ?? "").trim();
+              if (sv) draft[k] = sv;
             }
             if (Object.keys(draft).length) body.config = draft;
             const already = config.data?.[pv]?.configured;
@@ -541,9 +556,7 @@ export function IntegrationsPage() {
               checked={setupEnable}
               onChange={(e) => setSetupEnable(e.target.checked)}
             />
-            <span>
-              Enable for this business (overrides the deployment default)
-            </span>
+            <span>Enable for this business (overrides the deployment default)</span>
           </label>
           <div className="form-actions">
             <Button type="submit" busy={action.busy}>
@@ -551,11 +564,10 @@ export function IntegrationsPage() {
             </Button>
           </div>
         </form>
-            </Dialog>
+      </Dialog>
     </>
   );
 }
-
 
 export function OfflinePage() {
   const { meta, actor, online, notify } = useWorkspace();
