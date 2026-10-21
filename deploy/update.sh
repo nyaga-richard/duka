@@ -1,55 +1,54 @@
 #!/usr/bin/env bash
-# Duka Business OS — one-command upgrade. Deployments are never rebuilt from
-# scratch: current images are tagged for instant rollback, schema moves
-# forward-only via the dedicated migrator, and a self-check gate guards go-live.
+# Duka Business OS — one-command upgrade, for checkouts you update with git pull.
+# Deployments are never rebuilt from scratch: current images are tagged for
+# instant rollback, schema moves forward-only via the dedicated migrator, and
+# a self-check gate guards the swap.
 #
-# Usage (as the operator, on the host):
+# On the deployed server (the standard operator workflow):
 #
-#   sudo bash /path/to/new-release/deploy/update.sh --src /path/to/new-release /opt/duka
-#   # or, inside a checked-out release:  sudo bash deploy/update.sh --src . /opt/duka
+#   cd /opt/duka
+#   sudo bash deploy/update.sh                 # git fetch + fast-forward pull, then upgrade
+#   sudo bash deploy/update.sh --ref v0.2.0    # or pin to a reviewed tag/commit (checkout, never reset --hard)
+#
+# Zip/offline deployments can still refresh without a remote:
+#
+#   sudo bash deploy/update.sh --src /path/to/new-release
 #
 # Behaviour, in order:
-#   1. Verifies the EXISTING deployment (env file, compose stack, healthy db).
-#   2. Copies the new release source over the target (preserving private env,
-#      secrets, and all runtime volumes; never --delete).
+#   1. Validates the EXISTING deployment (env file, compose stack, healthy db).
+#   2. Updates the source: git fetch + fast-forward pull (default on hosts
+#      with .git; refuses a dirty tree or non-fast-forward), or an rsync copy
+#      from --src that preserves the 0600 env, backup key and all runtime
+#      volumes (never --delete). RELEASE = short git sha (or UTC timestamp
+#      for gitless zip targets).
 #   3. Runs a verified encrypted backup with the existing ops role
 #      (skip with --skip-backup only if a VERY recent verified backup exists).
-#   4. Builds new images tagged RELEASE=<gitsha|timestamp>; the currently
-#      running images are tagged 'previous' first.
+#   4. Tags the running images ':previous', builds new images.
 #   5. Applies reviewed forward-only migrations, then swaps ONLY api+web
 #      containers (db, volumes, proxy and the tunnel stay untouched).
-#   6. Waits for API health; on failure it re-tags 'previous' back and
-#      restores the old containers automatically before failing loudly.
-#   7. Runs deploy/self-check.sh (public HTTPS checks against the live host)
-#      and prints image tags + rollback instructions on success.
+#   6. Health gate: on failure, re-tags ':previous' back and restores the old
+#      containers automatically before failing loudly.
+#   7. deploy/self-check.sh acceptance gate against the live HTTPS host.
 #
+# Options: --skip-backup, --no-self-check, --src PATH, --ref REF.
 # Rollback is always available after a successful update too:
-#   docker compose --env-file deploy/docker/.env.production -p duka \
-#     -f deploy/docker/compose.yml -f deploy/cloudflare/compose.tunnel.yml \
-#     up -d api web   # after: docker tag duka-api:previous duka-api:local, same for web
-#
-# Options: --skip-backup, --no-self-check. Env: RELEASE overrides the tag.
+#   docker tag duka-api:previous duka-api:local && docker tag duka-web:previous duka-web:local
+#   # set RELEASE=local in deploy/docker/.env.production, then the usual 'dc up -d api web'
 set -euo pipefail
 SRC=""
-TARGET=""
+REF=""
 RUN_BACKUP=1
 RUN_SELFCHECK=1
 while (($#)); do
   case "$1" in
-    --src) SRC=${2:?--src requires the new release path}; shift 2;;
+    --src) SRC=${2:?--src requires a release path}; shift 2;;
+    --ref) REF=${2:?--ref requires a tag/branch/commit}; shift 2;;
     --skip-backup) RUN_BACKUP=0; shift;;
     --no-self-check) RUN_SELFCHECK=0; shift;;
-    *) if [[ -z "$TARGET" && -d "$1" ]]; then TARGET=$1; shift
-       else echo "update: unknown argument '$1'" >&2; exit 2; fi;;
+    *) echo "update: unknown argument '$1'" >&2; exit 2;;
   esac
 done
-[[ -n "$TARGET" && -n "$SRC" ]] || {
-  cat <<USAGE >&2
-usage: bash deploy/update.sh --src /path/to/new-release /opt/duka [--skip-backup] [--no-self-check]
-USAGE
-  exit 2
-}
-TARGET=$(cd "$TARGET" && pwd); SRC=$(cd "$SRC" && pwd)
+TARGET=$(cd "$(dirname "$0")/.." && pwd)
 DOCKER_DIR="$TARGET/deploy/docker"
 ENV_FILE="$DOCKER_DIR/.env.production"
 die() { echo "update: $*" >&2; exit 1; }
@@ -58,7 +57,6 @@ step() { printf '\n==> %s\n' "$*"; }
 step "Validating the existing deployment"
 [[ -e "$ENV_FILE" ]] || die "no private configuration at $ENV_FILE — this is an upgrade path, use deploy/go-live.sh for first installation"
 [[ -e "$DOCKER_DIR/compose.yml" && -e "$TARGET/deploy/cloudflare/compose.tunnel.yml" ]] || die "compose assets missing under $TARGET"
-[[ -d "$SRC/apps" && -d "$SRC/packages" && -e "$SRC/package.json" ]] || die "--src '$SRC' is not a Duka release checkout (expected apps/, packages/, package.json)"
 docker ps >/dev/null 2>&1 || die "Docker is not reachable"
 docker inspect duka-db-1 >/dev/null 2>&1 || die "the running database container duka-db-1 was not found; is the right -p duka project up?"
 DB_HEALTH=$(docker inspect --format '{{.State.Health.Status}}' duka-db-1)
@@ -70,29 +68,56 @@ export PUBLIC_HOST
 dc config --quiet
 echo "target: $TARGET  host: https://$PUBLIC_HOST"
 
-step "Refreshing source onto the deployment (private config/secrets preserved)"
-if command -v rsync >/dev/null 2>&1; then
-  rsync -a --exclude 'release' --exclude 'node_modules' --exclude '.cache' --exclude 'artifacts' \
-    --exclude 'deploy/docker/.env.production' --exclude 'deploy/docker/secrets' --exclude '.git' \
-    "$SRC/" "$TARGET/"
+if [[ -z "$SRC" && -e "$TARGET/.git" ]]; then
+  step "Updating source with git (fast-forward only)"
+  git=$(command -v git) || die "git is required for the pull flow (or use --src)"
+  BEFORE=$("$git" -C "$TARGET" rev-parse --short=12 HEAD)
+  dirty=$("$git" -C "$TARGET" status --porcelain | grep -v '^??' || true)
+  [[ -z "$dirty" ]] || die "working tree has uncommitted tracked changes; commit or stash them first:\n$dirty"
+  "$git" -C "$TARGET" fetch --prune origin
+  if [[ -n "$REF" ]]; then
+    "$git" -C "$TARGET" checkout --quiet "$REF" ||
+      die "could not check out '$REF'"
+  else
+    "$git" -C "$TARGET" pull --ff-only ||
+      die "fast-forward pull failed; inspect history divergence (never overwrite production source blindly)"
+  fi
+  AFTER=$("$git" -C "$TARGET" rev-parse --short=12 HEAD)
+  RELEASE="$AFTER"
+  echo "source: $BEFORE -> $AFTER"
+  [[ "$BEFORE" == "$AFTER" && -z "$REF" ]] && echo "already up to date; still verifying and re-applying release steps (idempotent)"
+elif [[ -z "$SRC" ]]; then
+  die "the target is not a git checkout ($TARGET has no .git). Supply a new release path with --src /path/to/release"
 else
-  (cd "$SRC" && tar --exclude=release --exclude=node_modules --exclude=.cache --exclude=artifacts \
-      --exclude=deploy/docker/.env.production --exclude=deploy/docker/secrets --exclude=.git -cf - .) |
-    (cd "$TARGET" && tar -xf -)
+  step "Refreshing source from $SRC (private config/secrets preserved)"
+  [[ -d "$SRC/apps" && -d "$SRC/packages" && -e "$SRC/package.json" ]] || die "--src '$SRC' is not a Duka release checkout (expected apps/, packages/, package.json)"
+  SRC=$(cd "$SRC" && pwd)
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --exclude 'release' --exclude 'node_modules' --exclude '.cache' --exclude 'artifacts' \
+      --exclude 'deploy/docker/.env.production' --exclude 'deploy/docker/secrets' --exclude '.git' \
+      "$SRC/" "$TARGET/"
+  else
+    (cd "$SRC" && tar --exclude=release --exclude=node_modules --exclude=.cache --exclude=artifacts \
+        --exclude=deploy/docker/.env.production --exclude=deploy/docker/secrets --exclude=.git -cf - .) |
+      (cd "$TARGET" && tar -xf -)
+  fi
+  RELEASE=$(cd "$TARGET" && git rev-parse --short=12 HEAD 2>/dev/null || date -u +%Y%m%dT%H%M%SZ)
 fi
 [[ -e "$ENV_FILE" && -e "$TARGET/deploy/docker/secrets/backup.key" ]] || die "private configuration or backup key lost during refresh — stop and restore from your protected copies"
+# The NEW source may itself change compose/compose-tunnel — re-validate with
+# the operator's env before building anything.
+dc config --quiet || die "the updated source's compose stack no longer validates with the private env — stop and reconcile before any image is touched"
+echo "release: $RELEASE"
 
-RELEASE="${RELEASE:-$(cd "$TARGET" && git rev-parse --short=12 HEAD 2>/dev/null || date -u +%Y%m%dT%H%M%SZ)}"
-echo "new release tag: $RELEASE"
-
-attempt_backup() {
+if ((RUN_BACKUP)); then
   step "Encrypted backup of database + uploads (ops role, same key custody)"
   if ! dc --profile ops run --rm ops artifacts/server/backup.mjs; then
     echo "update: backup FAILED. Upgrading without a verified backup is unsafe." >&2
     die "re-run with --skip-backup only if a very recent verified backup already exists"
   fi
-}
-((RUN_BACKUP)) && attempt_backup || step "Skipping backup at operator request (--skip-backup)"
+else
+  step "Skipping backup at operator request (--skip-backup)"
+fi
 
 step "Tagging current images for instant rollback"
 for name in duka-api duka-web duka-ops; do
@@ -118,7 +143,7 @@ until [[ "$(docker inspect --format '{{.State.Health.Status}}' duka-api-1 2>/dev
   sleep 3
   attempts=$((attempts + 1))
   if ((attempts >= 40)); then
-    echo "update: new API failed health — rolling back to :previous" >&2
+    echo "update: new API failed health — rolling back to ':previous'" >&2
     for name in duka-api duka-web; do
       if docker image inspect "${name}:previous" >/dev/null 2>&1; then
         docker tag "${name}:previous" "${name}:local"
@@ -142,11 +167,11 @@ cat <<REPORT
 
  - Running images: duka-api:$RELEASE duka-web:$RELEASE
  - Rollback stash: duka-api:previous duka-web:previous
-   (instant revert: docker tag duka-api:previous duka-api:local;
-    same for web; set RELEASE=local in the env file; then
-    dc() { docker compose --env-file deploy/docker/.env.production -p duka \\
-      -f deploy/docker/compose.yml -f deploy/cloudflare/compose.tunnel.yml "\$@"; }\\
-    dc up -d api web)
- - Actual first-run setup state is visible to owners at https://$PUBLIC_HOST/setup
+   instant revert: tag ':previous' images back to ':local',
+   set RELEASE=local in $ENV_FILE, then
+   dc() { docker compose --env-file deploy/docker/.env.production -p duka \\
+     -f deploy/docker/compose.yml -f deploy/cloudflare/compose.tunnel.yml "\$@"; }
+   dc up -d api web
+ - First-run setup state is visible to owners at https://$PUBLIC_HOST/setup
 ==============================================================
 REPORT

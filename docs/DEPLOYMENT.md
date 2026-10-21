@@ -102,13 +102,15 @@ Systemd templates are not proof of host execution. Do a real non-root/read-only 
 
 ## Upgrade and rollback
 
-**One command, never from scratch** — run it from the new release against the installed target:
+**One command, never from scratch** — on the deployed host (which keeps a git checkout):
 
 ```bash
-sudo bash /path/to/new-release/deploy/update.sh --src /path/to/new-release /opt/duka
+cd /opt/duka
+sudo bash deploy/update.sh                 # fetches and fast-forwards, then upgrades
+sudo bash deploy/update.sh --ref v0.2.0    # or pin to a reviewed tag/commit
 ```
 
-It validates the healthy existing stack, rsyncs the new source in WITHOUT touching the 0600 env/backup key/volumes, runs a fresh encrypted backup (decline only with `--skip-backup` when a very recent verified one exists), tags the running images ':previous', builds the new `RELEASE=`-tagged images, applies forward-only migrations with the migrator role, swaps only api+web (db/proxy/tunnel/volumes untouched), health-gates and auto-rolls back to ':previous' if the new API fails to become healthy, and finally runs `deploy/self-check.sh` against the live HTTPS host. Every step is restartable; nothing destructs by design. A manual instant rollback afterward is: `docker tag duka-api:previous duka-api:local && docker tag duka-web:previous duka-web:local`, reset `RELEASE=local` in the env file, then the usual `dc up -d api web` — never roll back CODE across an incompatible applied migration.
+It validates the healthy existing stack, updates source by `git fetch` + fast-forward-only `pull` (refusing a dirty tree or history divergence — never a hard reset), runs a fresh encrypted backup (decline only with `--skip-backup` when a very recent verified one exists), tags the running images ':previous', builds the new `RELEASE=`-tagged images, applies forward-only migrations with the migrator role, swaps only api+web (db/proxy/tunnel/volumes untouched), health-gates and auto-rolls back to ':previous' if the new API fails to become healthy, and finally runs `deploy/self-check.sh` against the live HTTPS host. Zip/offline deployments can still refresh without a remote: `sudo bash deploy/update.sh --src /path/to/new-release` rsyncs the new tree in while preserving the 0600 env/backup key/volumes (never `--delete`). Every step is restartable; nothing destructs by design. A manual instant rollback afterward is: `docker tag duka-api:previous duka-api:local && docker tag duka-web:previous duka-web:local`, reset `RELEASE=local` in the private env file, then the usual `dc up -d api web` — never roll back CODE across an incompatible applied migration.
 
 - Keep a verified encrypted DB+files backup and matching source/image revision before upgrading.
 - Review migration SQL and dependencies; do not edit applied migration checksums. Stop/drain financial traffic for schema changes that require it; apply explicitly, then deploy the matching API/web images.
