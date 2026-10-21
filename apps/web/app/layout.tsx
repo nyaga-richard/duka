@@ -16,6 +16,14 @@ export const viewport: Viewport = {
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{document.documentElement.dataset.theme=localStorage.getItem("duka:theme")||"light"}catch(e){}',
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );

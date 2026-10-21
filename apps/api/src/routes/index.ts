@@ -1738,6 +1738,7 @@ endpoint(
       branch_id: uuid,
       amount: amount.refine((v) => D(v).gt(0) && D(v).lte(999999999)),
       phone: z.string().regex(/^254[17]\d{8}$/),
+      idempotency_key: z.string().trim().min(8).max(96).optional(),
     })
     .strict(),
   "Initiate STK Push; result remains pending",

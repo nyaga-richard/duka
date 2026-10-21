@@ -207,7 +207,12 @@ export function callbackToken(id: string, configuredSecret?: string) {
 }
 export async function createIntent(
   ctx: Context,
-  input: { branch_id: string; amount: string; phone: string },
+  input: {
+    branch_id: string;
+    amount: string;
+    phone: string;
+    idempotency_key?: string;
+  },
 ) {
   requirePermission(ctx, "sales.create");
   const eff = await effectiveMpesa(ctx.companyId);
@@ -222,6 +227,35 @@ export async function createIntent(
       "M-Pesa initiation is disabled until merchant onboarding is configured",
     );
   branchAccess(ctx, input.branch_id);
+  if (input.idempotency_key) {
+    const prior = (
+      await ctx.db.query(
+        "SELECT id,branch_id,amount,phone,provider,status FROM payment_intents WHERE company_id=$1 AND idempotency_key=$2 FOR UPDATE",
+        [ctx.companyId, input.idempotency_key],
+      )
+    ).rows[0];
+    if (prior) {
+      if (
+        prior.branch_id !== input.branch_id ||
+        !D(prior.amount.toString()).eq(D(input.amount)) ||
+        prior.phone !== input.phone
+      )
+        fail(
+          409,
+          "MPESA_IDEMPOTENCY_CONFLICT",
+          "This idempotency key was already used for a different M-Pesa request. To change the amount or phone, start a fresh M-Pesa tender.",
+        );
+      await audit(ctx, "deduplicate", "payment_intent", prior.id, null, {
+        idempotency_key: input.idempotency_key,
+      });
+      return {
+        id: prior.id,
+        status: prior.status,
+        provider: prior.provider,
+        deduplicated: true,
+      };
+    }
+  }
   if (!D(input.amount).isInteger() || D(input.amount).lte(0))
     fail(
       422,
@@ -235,19 +269,43 @@ export async function createIntent(
     fail(422, "MPESA_CURRENCY", "M-Pesa provider supports KES only");
   const id = randomUUID(),
     token = callbackToken(id, eff.cfg?.callback_secret);
-  await ctx.db.query(
-    "INSERT INTO payment_intents(id,company_id,branch_id,created_by,amount,phone,provider,callback_token_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
-    [
-      id,
-      ctx.companyId,
-      input.branch_id,
-      ctx.actor.id,
-      input.amount,
-      input.phone,
-      mode,
-      digest(token),
-    ],
-  );
+  if (input.idempotency_key) await ctx.db.query("SAVEPOINT idem_insert");
+  try {
+    await ctx.db.query(
+      "INSERT INTO payment_intents(id,company_id,branch_id,created_by,amount,phone,provider,callback_token_hash,idempotency_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+      [
+        id,
+        ctx.companyId,
+        input.branch_id,
+        ctx.actor.id,
+        input.amount,
+        input.phone,
+        mode,
+        digest(token),
+        input.idempotency_key ?? null,
+      ],
+    );
+  } catch (e: any) {
+    // Concurrent identical submissions: the unique index serialises them, the
+    // loser re-reads the winner's row and returns it instead of pushing twice.
+    if (input.idempotency_key && e.code === "23505") {
+      await ctx.db.query("ROLLBACK TO SAVEPOINT idem_insert");
+      const winner = (
+        await ctx.db.query(
+          "SELECT id,status,provider FROM payment_intents WHERE company_id=$1 AND idempotency_key=$2",
+          [ctx.companyId, input.idempotency_key],
+        )
+      ).rows[0];
+      if (winner)
+        return {
+          id: winner.id,
+          status: winner.status,
+          provider: winner.provider,
+          deduplicated: true,
+        };
+    }
+    throw e;
+  }
   await ctx.db.query(
     "INSERT INTO payment_dispatch(intent_id,company_id,actor_id,token_hash) VALUES($1,$2,$3,$4)",
     [id, ctx.companyId, ctx.actor.id, digest(token)],

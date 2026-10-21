@@ -611,10 +611,22 @@ export default function POS() {
   async function initiate(t: any) {
     setBusy(true);
     setError(null);
+    // Stable per-tender key: retries and double taps re-use it, so the server
+    // never fires a second STK push for the same request.
+    const payKey = t.pay_key ?? crypto.randomUUID();
+    if (!t.pay_key)
+      setTenders((rows) =>
+        rows.map((x) => (x.id === t.id ? { ...x, pay_key: payKey } : x)),
+      );
     try {
       const result: any = await api("/integrations/mpesa/intents", {
         method: "POST",
-        body: { branch_id: register.branch_id, amount: t.amount, phone },
+        body: {
+          branch_id: register.branch_id,
+          amount: t.amount,
+          phone,
+          idempotency_key: payKey,
+        },
       });
       setTenders((rows) =>
         rows.map((x) =>
