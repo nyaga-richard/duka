@@ -3116,19 +3116,19 @@ hr {
 }
 .receipt-preview {
   border: 1px solid var(--line);
-  border-top: 3px solid #153e35;
+  border-top: 3px solid #147d78;
   border-radius: 8px;
   padding: 26px 30px 20px;
   font-family: inherit;
-  background: #fcfdfb;
+  background: #fdfefe;
   font-size: 11.5px;
-  box-shadow: 0 1px 2px rgba(21, 62, 53, 0.06);
+  box-shadow: 0 1px 2px rgba(20, 125, 120, 0.08);
 }
 .receipt-preview h3 {
   text-align: center;
   font-size: 15px;
   font-weight: 700;
-  color: #153e35;
+  color: #172b3a;
   letter-spacing: 0.01em;
   margin-bottom: 2px;
 }
@@ -3142,7 +3142,7 @@ hr {
   content: "";
   display: block;
   margin-top: 14px;
-  border-top: 1px dashed #c9d2c3;
+  border-top: 1px dashed #c9d2d8;
 }
 .receipt-item {
   display: flex;
@@ -3153,7 +3153,7 @@ hr {
   line-height: 1.5;
 }
 .receipt-item:last-of-type {
-  border-bottom: 2px solid #153e35;
+  border-bottom: 2px solid #172b3a;
   padding-top: 10px;
 }
 .receipt-item b {
@@ -5354,6 +5354,23 @@ hr {
     background: #fff;
     color: #000;
   }
+  /* Paper is always light: re-impose the light palette when the app runs
+     dark, so browsers that drop backgrounds never print light-on-white
+     text. Screen-only dark overrides above are neutralized by @media
+     screen scoping. */
+  :root[data-theme="dark"] {
+    --bg: #f6f8f6;
+    --surface: #fff;
+    --surface-2: #f9faf8;
+    --text: #21372f;
+    --muted: #7e8a84;
+    --line: #e6ebe6;
+    --green: #204f3d;
+    --green-light: #edf5ec;
+    --accent: #d7eac0;
+    --warning: #a96e25;
+    --danger: #ba534b;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -5488,8 +5505,10 @@ hr {
    Dark-theme remediation: light surfaces and low-contrast
    accents above get theme-aware variants here. The sidebar,
    login story panel and receipt paper are intentionally
-   theme-independent.
+   theme-independent. Scoped to screens: @media print always
+   re-imposes the light palette (see the print block).
    ============================================================ */
+@media screen {
 :root[data-theme="dark"] .offline-banner { background: #3a2f1d; color: #e2b46b; }
 :root[data-theme="dark"] .stat-icon.green { background: #29422f; color: #9ccdaf; }
 :root[data-theme="dark"] .stat-icon.amber { background: #43402a; color: #e2c483; }
@@ -5544,4 +5563,6 @@ hr {
 :root[data-theme="dark"] .demo-login .btn:hover:not(:disabled) { border-color: #4a6151; }
 :root[data-theme="dark"] .success-panel { color: #8fc294; }
 :root[data-theme="dark"] .success-panel p { color: var(--muted); }
-
+:root[data-theme="dark"] .brand.dark { color: var(--text); }
+:root[data-theme="dark"] .brand.dark small { color: var(--muted); }
+}

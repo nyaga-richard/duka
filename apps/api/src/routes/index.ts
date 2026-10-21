@@ -1850,7 +1850,7 @@ endpoint(
 endpoint(
   "post",
   "/offline/devices",
-  "sales.price_override",
+  ["offline.manage", "sales.price_override"],
   z
     .object({
       user_id: uuid,
@@ -1920,7 +1920,7 @@ endpoint(
 endpoint(
   "post",
   "/offline/devices/:id/revoke",
-  "sales.price_override",
+  ["offline.manage", "sales.price_override"],
   undefined,
   "Revoke an offline device",
   async (ctx, _i, req) => {

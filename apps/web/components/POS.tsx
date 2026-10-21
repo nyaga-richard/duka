@@ -217,6 +217,15 @@ export default function POS() {
       return;
     }
     if (!online) return;
+    // Do not price-check unfinished decimal input ("5." mid-typing): the
+    // shared schema would 422 on every keystroke and flash an error toast
+    // plus console noise for a value the operator has not finished typing.
+    // Local computed totals keep rendering as the fallback meanwhile.
+    if (!checkoutSchema.safeParse(JSON.parse(quoteBody)).success) {
+      setQuote(null);
+      setError(null);
+      return;
+    }
     const controller = new AbortController();
     setQuoting(true);
     const timer = setTimeout(() => {
@@ -232,7 +241,10 @@ export default function POS() {
         .catch((e) => {
           if (e.name !== "AbortError") {
             setQuote(null);
-            setError(e);
+            // A stale-quote race can still surface VALIDATION_ERROR from a
+            // snapshot taken before a keystroke; policy errors must surface.
+            if (!(e instanceof ApiError && e.code === "VALIDATION_ERROR"))
+              setError(e);
           }
         })
         .finally(() => {

@@ -571,8 +571,10 @@ export function IntegrationsPage() {
 
 export function OfflinePage() {
   const { meta, actor, online, notify } = useWorkspace();
-  const devices = useQuery<any>("/offline/devices");
-  const syncRecords = useQuery<any>("/offline/sync?limit=100");
+  // While the browser reports itself offline these requests can only fail:
+  // issuing them just spams the console and falsifies error banners.
+  const devices = useQuery<any>(online ? "/offline/devices" : null);
+  const syncRecords = useQuery<any>(online ? "/offline/sync?limit=100" : null);
   const [active, setActive] = useState<any>(null),
     [queue, setQueue] = useState<any[]>([]),
     [deviceId, setDeviceId] = useState(""),

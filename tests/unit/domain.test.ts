@@ -108,6 +108,29 @@ test("checkout rejects client-provided totals, actor and tenant", () => {
     false,
   );
 });
+test("POS live-quote gate: empty payments quoted, unfinished decimals refused", () => {
+  const register = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+  const product = "8d0f778a-8536-41ef-a55c-f18fd2091bf8";
+  const base = {
+    register_id: register,
+    lines: [{ product_id: product, quantity: "1" }],
+    payments: [] as never[],
+  };
+  // The POS prices carts over /pos/price with no payments yet; the shared
+  // schema must keep accepting that shape or the live quote silently dies.
+  assert.equal(
+    checkoutSchema.safeParse({ ...base, discount_percent: "0" }).success,
+    true,
+  );
+  // Keystroke-transient values the operator has not finished typing must
+  // stay invalid so the client can skip the request instead of 422-spamming.
+  for (const draft of ["5.", "5..5", "-5", "5.0.0", "abc", "5e2"])
+    assert.equal(
+      checkoutSchema.safeParse({ ...base, discount_percent: draft }).success,
+      false,
+      `transient discount ${draft} must remain schema-invalid`,
+    );
+});
 test("TOTP matches RFC 6238 SHA1 vector and replay is rejected", () => {
   const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
   assert.equal(totp(secret, 1), "287082");

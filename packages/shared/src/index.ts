@@ -21,10 +21,22 @@ export const amount = z
     /^\d{1,16}(\.\d{1,2})?$/,
     "Use a positive decimal string with at most 2 decimal places",
   );
+/** Decimal predicates must never throw from a refine: zod runs every check
+ * even when an earlier one fails, and decimal.js raises on garbage input —
+ * an unwrapped D() turns a bad request into a 500 instead of a 422. */
+const decCheck =
+  (fn: (d: Decimal) => boolean) =>
+  (v: string) => {
+    try {
+      return fn(D(v));
+    } catch {
+      return false;
+    }
+  };
 export const quantity = z
   .string()
   .regex(/^\d{1,16}(\.\d{1,6})?$/)
-  .refine((v) => D(v).gt(0), "Quantity must be positive");
+  .refine(decCheck((d) => d.gt(0)), "Quantity must be positive");
 export const signedQuantity = z.string().regex(/^-?\d{1,16}(\.\d{1,6})?$/);
 export const cost = z.string().regex(/^\d{1,16}(\.\d{1,6})?$/);
 export const date = z.iso.date();
@@ -72,6 +84,7 @@ export const permissions = [
   "settings.manage",
   "audits.read",
   "integrations.manage",
+  "offline.manage",
   "documents.write",
 ] as const;
 export const loginSchema = z
@@ -123,7 +136,7 @@ export const customerSchema = z
     tax_pin: optionalText,
     credit_limit: amount.default("0"),
     credit_days: z.number().int().min(0).max(365).default(30),
-    discount_percent: cost.default("0").refine((v) => D(v).lte(100)),
+    discount_percent: cost.default("0").refine(decCheck((d) => d.lte(100))),
     active: z.boolean().default(true),
   })
   .strict();
@@ -138,7 +151,7 @@ export const cartLineSchema = z
     unit_price: amount.optional(),
     discount_percent: cost
       .optional()
-      .refine((v) => v === undefined || D(v).lte(100)),
+      .refine((v) => v === undefined || decCheck((d) => d.lte(100))(v)),
     batch_id: uuid.optional(),
     serials: z.array(z.string().trim().min(1).max(120)).max(500).default([]),
   })
@@ -146,7 +159,7 @@ export const cartLineSchema = z
 export const tenderSchema = z
   .object({
     method_id: uuid,
-    amount: amount.refine((v) => D(v).gt(0)),
+    amount: amount.refine(decCheck((d) => d.gt(0))),
     reference: z.string().trim().min(1).max(100).optional(),
     intent_id: uuid.optional(),
   })
@@ -158,7 +171,7 @@ export const checkoutSchema = z
     price_list_id: uuid.optional(),
     order_id: uuid.optional(),
     lines: z.array(cartLineSchema).min(1).max(300),
-    discount_percent: cost.default("0").refine((v) => D(v).lte(100)),
+    discount_percent: cost.default("0").refine(decCheck((d) => d.lte(100))),
     payments: z.array(tenderSchema).max(10),
     customer_credit: amount.default("0"),
     accounting_date: date.optional(),
@@ -270,7 +283,7 @@ export const settlementSchema = z
           .object({
             document_id: uuid,
             document_type: z.enum(["invoice", "opening"]).default("invoice"),
-            amount: amount.refine((v) => D(v).gt(0)),
+            amount: amount.refine(decCheck((d) => d.gt(0))),
           })
           .strict(),
       )
@@ -538,7 +551,7 @@ export const openingItemSchema = z
     reference: z.string().trim().min(1).max(120),
     original_date: date.optional(),
     due_date: date,
-    amount: amount.refine((v) => D(v).gt(0)),
+    amount: amount.refine(decCheck((d) => d.gt(0))),
     description: z.string().max(1000).default(""),
   })
   .strict()

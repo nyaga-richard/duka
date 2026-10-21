@@ -216,6 +216,43 @@ test("HTTP authentication, secure cookie flags, CSRF, origin, schema and idempot
   );
   assert.equal((await call("/api/v1/auth/me", { session })).status, 401);
 });
+test("garbage decimals are 422 validation issues, never a 500 inside schema refines", async () => {
+  const f = await fixture();
+  const session = await signIn(f.actor.email);
+  // decimal.js throws on these inputs; zod v4 still runs sibling refines
+  // when the regex check fails, so refineries must be exception-safe.
+  for (const garbage of ["5.", "5..5", "5e2", "abc", "-5", "5.0.0", ""]) {
+    const r = await call("/api/v1/pos/price", {
+      method: "POST",
+      session,
+      body: {
+        register_id: f.registerId,
+        lines: [{ product_id: randomUUID(), quantity: "1" }],
+        discount_percent: garbage,
+        payments: [],
+      },
+    });
+    assert.equal(
+      r.error.code,
+      "VALIDATION_ERROR",
+      `discount ${JSON.stringify(garbage)} -> ${r.status} ${JSON.stringify(r.error)}`,
+    );
+  }
+  assert.equal(
+    (
+      await call("/api/v1/pos/price", {
+        method: "POST",
+        session,
+        body: {
+          register_id: f.registerId,
+          lines: [{ product_id: randomUUID(), quantity: "0" }],
+          payments: [],
+        },
+      })
+    ).error.code,
+    "VALIDATION_ERROR",
+  );
+});
 test("HTTP tenant/branch/warehouse isolation and role restrictions survive guessed IDs and read filters", async () => {
   const f = await fixture(),
     other = await fixture();

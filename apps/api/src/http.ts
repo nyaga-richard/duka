@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   transaction,
   requirePermission,
+  requireOneOf,
   branchAccess,
   idempotent,
   type Context,
@@ -47,7 +48,7 @@ export const searchQuery = z
 export const routeRegistry: {
   method: string;
   path: string;
-  permission?: string;
+  permission?: string | string[];
   schema?: z.ZodType;
   summary: string;
   idempotent: boolean;
@@ -61,7 +62,7 @@ export interface RawResponse {
 export function endpoint(
   method: "get" | "post" | "put" | "patch" | "delete",
   path: string,
-  permission: string | undefined,
+  permission: string | string[] | undefined,
   schema: z.ZodType | undefined,
   summary: string,
   fn: (ctx: Context, input: any, req: Request) => Promise<any>,
@@ -98,7 +99,10 @@ export function endpoint(
       const result = await transaction(
         actor,
         async (ctx) => {
-          if (permission) requirePermission(ctx, permission);
+          if (permission) {
+            if (Array.isArray(permission)) requireOneOf(ctx, permission);
+            else requirePermission(ctx, permission);
+          }
           const selectedBranch =
             method === "get"
               ? (input as z.infer<typeof searchQuery>).branch_id
@@ -180,7 +184,7 @@ export function openApi() {
     paths[path][r.method] = {
       summary: r.summary,
       description: r.permission
-        ? `Required permission: ${r.permission}. Tenant and branch checks are server enforced.`
+        ? `Required permission: ${Array.isArray(r.permission) ? r.permission.map((p) => `[${p}]`).join(" OR ") : r.permission}. Tenant and branch checks are server enforced.`
         : undefined,
       tags: [r.path.split("/")[1]],
       security: [{ sessionCookie: [] }],
