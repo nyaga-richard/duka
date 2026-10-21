@@ -310,3 +310,39 @@ test("cross-tenant settlement is invisible: company B cannot settle company A's 
     assert.equal(row.status, "pending");
   });
 });
+
+test("refund list is permission-gated, branch-scoped and tenant-isolated", async () => {
+  const mine = await pendingRefund(),
+    other = await fixture(),
+    canSee = await roleUser(mine.f, ["sales.refund"]),
+    canNotList = await roleUser(mine.f, ["payments.pay"]),
+    seeSession = await signIn(canSee.email, "RefundProbe-2026"),
+    denySession = await signIn(canNotList.email, "RefundProbe-2026"),
+    otherSession = await signIn(other.actor.email);
+  // Authorized holder sees the pending settlement with its context columns.
+  const list = await call("/api/v1/payments/refunds", { session: seeSession });
+  assert.equal(list.status, 200);
+  const mineRow = list.json.data.items.find(
+    (r: any) => r.id === mine.refund.id,
+  );
+  assert.ok(mineRow, "pending refund visible to a sales.refund holder");
+  assert.equal(mineRow.status, "pending");
+  assert.ok(mineRow.credit_note, "return credit note number joined");
+  assert.ok(mineRow.method, "payment method name joined");
+  // payments.pay alone does NOT authorize the settlement queue.
+  const denied = await call("/api/v1/payments/refunds", {
+    session: denySession,
+  });
+  assert.equal(denied.status, 403);
+  assert.equal(denied.json.error.code, "FORBIDDEN");
+  assert.match(denied.json.error.message, /sales\.refund/);
+  // Company B must never observe company A's pending settlements.
+  const foreign = await call("/api/v1/payments/refunds", {
+    session: otherSession,
+  });
+  assert.equal(foreign.status, 200);
+  assert.ok(
+    !foreign.json.data.items.some((r: any) => r.id === mine.refund.id),
+    "cross-tenant refund ids never list",
+  );
+});
