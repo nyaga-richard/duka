@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
-  "git_commit": "4e6e87187887a1ebc91c25d6acbaaa82f8a1ddad",
+  "git_commit": "d5170511f446b734db7e993ab6f1100ed45ec273",
   "dirty": false,
-  "created_at": "2026-10-21T14:01:29.569622+00:00",
+  "created_at": "2026-10-22T09:40:17.177890+00:00",
   "files": {
     ".dockerignore": "024c933ae4575f3c1b259e08a1534b77b308cba3e746b1c8de183373fd12d12d",
     ".env.example": "3d79133c217d779c09495c1aa7cf13f0170cb9ae5a03838b59f40cae3c680245",
@@ -28,7 +28,7 @@
     "apps/api/src/services/business.ts": "d2f27a5ae65a62087662db3aba31057dd6f8e38220757fb172536ac76cb4d9be",
     "apps/api/src/services/catalog.ts": "e401d4df117c26574f956142b57a5f7a656f6a394b6196bfcd6edd03e830d939",
     "apps/api/src/services/checkout-recovery.ts": "51f2c75d46913d5a4ba06e6b6fe5209638bd7129aaad1abe9a44fcbd35591b82",
-    "apps/api/src/services/documents.ts": "275fea9147d884a9f71c238168c832be0efb976428669bc84b023f93ea3c9cb1",
+    "apps/api/src/services/documents.ts": "640c1222184295d1d8adc3e0f45ec3398b73103ba6320c0035d9f5cc36d9bfc8",
     "apps/api/src/services/expense-refunds.ts": "2d818c470f2730c3a872daa3294c745669d4341479aeab90f6560d95c3e5b613",
     "apps/api/src/services/integrations-config.ts": "9c0b723dc58b78d6c742a5022548876052fa54b051bd69c1daca1cbb6c2f31b2",
     "apps/api/src/services/integrity.ts": "5a9ad86dbb286033bc7ef81ef1fb619ad30a22a55b907ebb0297b97ac96cc6ea",
