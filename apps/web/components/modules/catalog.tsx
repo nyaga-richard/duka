@@ -10,12 +10,18 @@ import {
   Layers,
   ImagePlus,
   Check,
+  History,
+  Tag,
+  Trash2,
+  ArrowRight,
 } from "lucide-react";
 import {
   api,
   useWorkspace,
   currency,
   number,
+  dateText,
+  D,
   download,
   useQuery,
 } from "../lib";
@@ -45,6 +51,10 @@ export function CatalogPage() {
     [importing, setImporting] = useState(false),
     [csv, setCsv] = useState(""),
     [detail, setDetail] = useState<any>(null),
+    [detailPage, setDetailPage] = useState(1),
+    [tab, setTab] = useState<"catalog" | "prices">("catalog"),
+    [priceSeed, setPriceSeed] = useState<any>(null),
+    [priceSeedKey, setPriceSeedKey] = useState(0),
     [advanced, setAdvanced] = useState(""),
     [advancedForm, setAdvancedForm] = useState<any>({}),
     [recipe, setRecipe] = useState<any[]>([]),
@@ -52,6 +62,21 @@ export function CatalogPage() {
   const attachments = useQuery<any>(
     detail ? "/products/" + detail.id + "/attachments" : null,
   );
+  const canReadInventory = actor.permissions.includes("inventory.read");
+  const movements = useQuery<any>(
+    detail && canReadInventory
+      ? `/inventory/movements?product_id=${detail.id}&limit=10&page=${detailPage}`
+      : null,
+  );
+  const prodChanges = useQuery<any>(
+    detail ? `/price-changes?product_id=${detail.id}&limit=5` : null,
+  );
+  function beginPriceChange(p: any) {
+    setPriceSeed({ product_id: p.id, price: p.price });
+    setPriceSeedKey((k) => k + 1);
+    setDetail(null);
+    setTab("prices");
+  }
   const action = useAction(async () => {
     setEditing(null);
     setImporting(false);
@@ -242,7 +267,28 @@ export function CatalogPage() {
           </>
         )}
       </PageHeading>
-      <section className="card">
+      <div className="page-tabs">
+        <button
+          className={tab === "catalog" ? "active" : ""}
+          onClick={() => setTab("catalog")}
+        >
+          Catalog
+        </button>
+        <button
+          className={tab === "prices" ? "active" : ""}
+          onClick={() => setTab("prices")}
+        >
+          <Tag size={15} /> Price changes
+        </button>
+      </div>
+      <PriceChangesSection
+        hidden={tab !== "prices"}
+        canWrite={canWrite}
+        onChanged={() => list.refresh()}
+        key={"pc-" + priceSeedKey}
+        seed={priceSeed}
+      />
+      <section className="card" hidden={tab !== "catalog"}>
         <div className="table-toolbar">
           <SearchBox
             value={list.search}
@@ -266,7 +312,11 @@ export function CatalogPage() {
                   className="cell-button product-cell"
                   onClick={() => setDetail(p)}
                 >
-                  <ProductAvatar name={p.name} small imageAttachmentId={p.image_attachment_id} />
+                  <ProductAvatar
+                    name={p.name}
+                    small
+                    imageAttachmentId={p.image_attachment_id}
+                  />
                   <span>
                     <strong>{p.name}</strong>
                     <small>
@@ -510,8 +560,91 @@ export function CatalogPage() {
               >
                 Price list tier
               </Button>
+              <Button
+                variant="secondary"
+                onClick={() => beginPriceChange(detail)}
+              >
+                <Tag size={16} /> Change selling price
+              </Button>
             </>
           )}
+        </div>
+        {canReadInventory && (
+          <div className="detail-ledger">
+            <h4>
+              Stock movement ledger
+              <small className="muted"> · append-only, newest first</small>
+            </h4>
+            {movements.error && <ErrorCard error={movements.error} />}
+            <DataTable
+              loading={movements.loading}
+              items={movements.data?.items}
+              columns={[
+                {
+                  key: "created_at",
+                  title: "Captured",
+                  render: (r: any) => dateText(r.created_at, true),
+                },
+                { key: "type", title: "Type" },
+                { key: "warehouse", title: "Location" },
+                {
+                  key: "quantity",
+                  title: "Quantity",
+                  align: "right",
+                  render: (r: any) =>
+                    D(r.quantity).gt(0)
+                      ? `+${number(r.quantity)}`
+                      : number(r.quantity),
+                },
+                {
+                  key: "cost",
+                  title: "Avg cost",
+                  align: "right",
+                  render: (r: any) => currency(r.cost, meta.company.currency),
+                },
+                { key: "actor", title: "By" },
+              ]}
+            />
+            <Pagination
+              page={detailPage}
+              total={movements.data?.total ?? 0}
+              onChange={setDetailPage}
+            />
+          </div>
+        )}
+        <div className="detail-ledger">
+          <h4>
+            <History size={15} /> Recent price changes
+          </h4>
+          {prodChanges.error && <ErrorCard error={prodChanges.error} />}
+          <DataTable
+            loading={prodChanges.loading}
+            items={prodChanges.data?.items}
+            empty="No recorded selling price changes yet."
+            columns={[
+              {
+                key: "created_at",
+                title: "Date",
+                render: (r: any) => dateText(r.created_at, true),
+              },
+              {
+                key: "old_price",
+                title: "From",
+                align: "right",
+                render: (r: any) =>
+                  currency(r.old_price, meta.company.currency),
+              },
+              {
+                key: "new_price",
+                title: "To",
+                align: "right",
+                render: (r: any) =>
+                  currency(r.new_price, meta.company.currency),
+              },
+              { key: "actor", title: "By" },
+              { key: "reason", title: "Reason" },
+            ]}
+          />
         </div>
         {attachments.data?.items?.map((f: any) => (
           <a
@@ -636,5 +769,240 @@ export function CatalogPage() {
         </form>
       </Dialog>
     </>
+  );
+}
+
+/** Price change workbench: draft one or more atomic price updates, then a
+ * live history of every recorded change (who, from→to, why). */
+function PriceChangesSection({
+  hidden,
+  canWrite,
+  onChanged,
+  seed,
+}: {
+  hidden: boolean;
+  canWrite: boolean;
+  onChanged: () => void;
+  seed?: any;
+}) {
+  const { meta, notify } = useWorkspace();
+  const [rows, setRows] = useState<any[]>(
+    seed ? [{ ...seed, key: crypto.randomUUID() }] : [],
+  );
+  const [reason, setReason] = useState("");
+  const [dates, setDates] = useState({ from: "", to: "" });
+  const history = useList("/price-changes", {
+    from: dates.from || undefined,
+    to: dates.to || undefined,
+  });
+  const products = useQuery<any>(
+    canWrite ? "/products?active=true&limit=200" : null,
+  );
+  const action = useAction(async () => {
+    setRows([]);
+    setReason("");
+    history.refresh();
+    onChanged();
+  });
+  const items = products.data?.items ?? [];
+  const chosen = new Set(rows.map((r) => r.product_id).filter(Boolean));
+  const valid =
+    reason.trim().length >= 5 &&
+    rows.length > 0 &&
+    rows.every((r) => r.product_id && !D(r.price || "0").isNegative());
+  async function apply(e: React.FormEvent) {
+    e.preventDefault();
+    await action.run(
+      () =>
+        api("/products/bulk-prices", {
+          method: "POST",
+          body: {
+            reason: reason.trim(),
+            prices: rows.map((r) => ({
+              product_id: r.product_id,
+              price: D(r.price).toFixed(2),
+            })),
+          },
+        }),
+      `Applied ${rows.length} price change${rows.length === 1 ? "" : "s"} atomically.`,
+    );
+  }
+  return (
+    <div className="price-changes" hidden={hidden}>
+      {canWrite && (
+        <section className="card">
+          <h3>
+            <Tag size={17} /> Implement a price change
+          </h3>
+          <p className="muted">
+            Updates apply immediately to every point of sale and price list
+            default. Sales already posted keep their original prices — returns
+            value goods at the price they were sold at.
+          </p>
+          {action.error && <ErrorCard error={action.error} />}
+          <form onSubmit={apply}>
+            <div className="price-change-rows">
+              {rows.map((r, i) => (
+                <div className="price-change-row" key={r.key}>
+                  <select
+                    aria-label={"Product for price change " + (i + 1)}
+                    value={r.product_id}
+                    required
+                    onChange={(e) =>
+                      setRows(
+                        rows.map((x, j) =>
+                          j === i ? { ...x, product_id: e.target.value } : x,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="">Select product…</option>
+                    {items
+                      .filter(
+                        (p: any) => !chosen.has(p.id) || p.id === r.product_id,
+                      )
+                      .map((p: any) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} · {p.sku} ·{" "}
+                          {currency(p.price, meta.company.currency)}
+                        </option>
+                      ))}
+                  </select>
+                  <input
+                    aria-label={"New price " + (i + 1)}
+                    inputMode="decimal"
+                    placeholder="New selling price"
+                    value={r.price}
+                    required
+                    onChange={(e) =>
+                      setRows(
+                        rows.map((x, j) =>
+                          j === i ? { ...x, price: e.target.value } : x,
+                        ),
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={"Remove price change " + (i + 1)}
+                    onClick={() => setRows(rows.filter((_x, j) => j !== i))}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() =>
+                setRows([
+                  ...rows,
+                  { product_id: "", price: "", key: crypto.randomUUID() },
+                ])
+              }
+              disabled={items.length === 0}
+            >
+              <Plus size={15} /> Add product
+            </Button>
+            <FormField label="Reason (required)" required>
+              <input
+                value={reason}
+                minLength={5}
+                required
+                placeholder="e.g. Supplier increased wholesale costs in October"
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </FormField>
+            <div className="form-actions">
+              <Button type="submit" busy={action.busy} disabled={!valid}>
+                <Check size={16} /> Apply{" "}
+                {rows.length > 1 ? rows.length + " changes" : "change"}
+              </Button>
+            </div>
+          </form>
+        </section>
+      )}
+      <section className="card">
+        <div className="table-toolbar">
+          <SearchBox
+            value={history.search}
+            onChange={history.setSearch}
+            placeholder="Search product or SKU…"
+          />
+          <div className="date-filter">
+            <input
+              type="date"
+              aria-label="Price changes from"
+              value={dates.from}
+              onChange={(e) => setDates({ ...dates, from: e.target.value })}
+            />
+            <span>to</span>
+            <input
+              type="date"
+              aria-label="Price changes to"
+              value={dates.to}
+              onChange={(e) => setDates({ ...dates, to: e.target.value })}
+            />
+          </div>
+        </div>
+        {history.error && <ErrorCard error={history.error} />}
+        <DataTable
+          loading={history.loading}
+          items={history.data?.items}
+          empty="No price changes recorded in this period."
+          columns={[
+            {
+              key: "created_at",
+              title: "Changed",
+              render: (r) => dateText(r.created_at, true),
+            },
+            {
+              key: "product",
+              title: "Product",
+              render: (r) => (
+                <span>
+                  <strong>{r.product}</strong> <small>{r.sku}</small>
+                </span>
+              ),
+            },
+            {
+              key: "old_price",
+              title: "From",
+              align: "right",
+              render: (r) => currency(r.old_price, meta.company.currency),
+            },
+            {
+              key: "new_price",
+              title: "To",
+              align: "right",
+              render: (r) => currency(r.new_price, meta.company.currency),
+            },
+            {
+              key: "delta",
+              title: "Δ",
+              align: "right",
+              render: (r: any) => {
+                const d = D(r.new_price).minus(r.old_price);
+                return (
+                  <span className={d.isNeg() ? "danger-text" : "success-text"}>
+                    {d.gt(0) ? "+" : ""}
+                    {currency(d, meta.company.currency)}
+                  </span>
+                );
+              },
+            },
+            { key: "actor", title: "By" },
+            { key: "reason", title: "Reason" },
+          ]}
+        />
+        <Pagination
+          page={history.page}
+          total={history.data?.total ?? 0}
+          onChange={history.setPage}
+        />
+      </section>
+    </div>
   );
 }

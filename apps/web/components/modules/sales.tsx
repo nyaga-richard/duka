@@ -286,6 +286,24 @@ export function SalesPage() {
                       currency(r.pending_refund, meta.company.currency),
                   },
                   { key: "reason", title: "Reason" },
+                  {
+                    key: "actions",
+                    title: "",
+                    render: (r) => (
+                      <div className="table-actions">
+                        <a
+                          className="icon-btn"
+                          aria-label={"Print credit note " + r.number}
+                          href={`/api/v1/print/credit-note/${r.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Printer size={16} />
+                        </a>
+                      </div>
+                    ),
+                  },
                 ]
           }
         />

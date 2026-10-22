@@ -5566,3 +5566,21 @@ hr {
 :root[data-theme="dark"] .brand.dark { color: var(--text); }
 :root[data-theme="dark"] .brand.dark small { color: var(--muted); }
 }
+
+/* Price change workbench + product detail ledgers */
+.price-change-rows { margin: var(--space-3, 12px) 0; }
+.price-change-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.detail-ledger { margin-top: 20px; }
+.detail-ledger h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.detail-ledger table { font-size: 13px; }

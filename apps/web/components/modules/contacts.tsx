@@ -429,6 +429,16 @@ export function ContactsPage({ kind }: { kind: "customer" | "supplier" }) {
           ]}
         />
         <div className="form-actions">
+          {actor.permissions.includes(perm + ".write") && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                edit(selected);
+              }}
+            >
+              <PenLine size={16} /> Edit details
+            </Button>
+          )}
           {actor.permissions.includes(
             customer ? "payments.receive" : "payments.pay",
           ) && (

@@ -156,6 +156,97 @@ export async function listProducts(ctx: Context, query: any) {
     total: r.rows[0]?._count ?? 0,
   };
 }
+/** Atomically apply one or more retail price updates and record a queryable
+ * change per product (sale documents always re-price from the product, so
+ * prior sales are untouched; returns re-price from the original sale line). */
+export async function changePrices(
+  ctx: Context,
+  input: { reason: string; prices: { product_id: string; price: string }[] },
+) {
+  requirePermission(ctx, "catalog.write");
+  const ids = input.prices.map((p) => p.product_id);
+  if (new Set(ids).size !== ids.length)
+    fail(422, "DUPLICATE_PRODUCT", "Each product may appear once per change");
+  const changed: any[] = [];
+  for (const p of input.prices) {
+    const next = D(p.price);
+    if (next.isNegative())
+      fail(422, "INVALID_PRICE", "Selling prices cannot be negative");
+    const before = await one(
+      ctx,
+      "SELECT id,name,sku,price FROM products WHERE company_id=$1 AND id=$2 FOR UPDATE",
+      [ctx.companyId, p.product_id],
+    );
+    const row = (
+      await ctx.db.query(
+        "UPDATE products SET price=$1,updated_at=now() WHERE company_id=$2 AND id=$3 RETURNING *",
+        [money(next), ctx.companyId, p.product_id],
+      )
+    ).rows[0];
+    const change = (
+      await ctx.db.query(
+        "INSERT INTO product_price_changes(company_id,product_id,old_price,new_price,reason,actor_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
+        [
+          ctx.companyId,
+          p.product_id,
+          before.price,
+          money(next),
+          input.reason,
+          ctx.actor.id,
+        ],
+      )
+    ).rows[0];
+    await audit(
+      ctx,
+      "price.update",
+      "product",
+      p.product_id,
+      {
+        price: before.price,
+      },
+      { price: money(next), reason: input.reason },
+    );
+    changed.push({
+      ...change,
+      product: before.name,
+      sku: before.sku,
+      price: row.price,
+    });
+  }
+  return { changed: changed.length, items: changed };
+}
+
+export async function priceChanges(ctx: Context, q: any) {
+  requirePermission(ctx, "catalog.read");
+  const { page, limit, offset } = pageArgs(q);
+  const r = await ctx.db.query(
+    `SELECT c.*,p.name AS product,p.sku,u.name AS actor,count(*) OVER()::int AS _count
+     FROM product_price_changes c
+     JOIN products p ON p.company_id=c.company_id AND p.id=c.product_id
+     JOIN identities u ON u.company_id=c.company_id AND u.id=c.actor_id
+     WHERE c.company_id=$1
+       AND ($2::uuid IS NULL OR c.product_id=$2)
+       AND ($3::date IS NULL OR c.created_at >= $3::date)
+       AND ($4::date IS NULL OR c.created_at < $4::date + interval '1 day')
+       AND ($5::text IS NULL OR p.name ILIKE $5 OR p.sku ILIKE $5)
+     ORDER BY c.created_at DESC,c.id LIMIT $6 OFFSET $7`,
+    [
+      ctx.companyId,
+      q.product_id ?? null,
+      q.from ?? null,
+      q.to ?? null,
+      q.q ? `%${String(q.q).trim().slice(0, 160)}%` : null,
+      limit,
+      offset,
+    ],
+  );
+  return {
+    items: r.rows.map(({ _count, ...v }) => v),
+    page,
+    limit,
+    total: r.rows[0]?._count ?? 0,
+  };
+}
 export async function saveContact(
   ctx: Context,
   kind: "customer" | "supplier",

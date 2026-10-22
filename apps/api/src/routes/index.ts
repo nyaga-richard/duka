@@ -91,6 +91,8 @@ import {
   saveContact,
   listContacts,
   priceCart,
+  changePrices,
+  priceChanges,
 } from "../services/catalog.ts";
 import { checkout, getSale, listSales, returnSale } from "../services/sales.ts";
 import {
