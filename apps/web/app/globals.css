@@ -5797,11 +5797,16 @@ hr {
   align-items: start;
 }
 /* Detail-page stat system:icon chips + semantic tones. */
+.detail-header {
+  padding: 20px;
+}
+.detail-header > * + * {
+  margin-top: 16px;
+}
 .stat-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
   gap: 10px;
-  margin-bottom: 14px;
 }
 .stat-tile {
   display: flex;
@@ -5862,10 +5867,16 @@ hr {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 14px;
 }
 .detail-header > .attachment-link {
   margin-top: 10px;
+}
+/* Standalone form cards on the detail pages (edit / payment / price). */
+.form-card {
+  padding: 20px 20px 18px;
+}
+.form-card > h3 {
+  margin-bottom: 14px;
 }
 /* Single-product price change: current → new with delta chip. */
 .price-trio {
@@ -5873,6 +5884,7 @@ hr {
   align-items: flex-end;
   gap: 14px;
   flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 .price-trio .price-current {
   padding-bottom: 4px;
@@ -5930,8 +5942,11 @@ hr {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  margin: 12px 0 16px;
+  margin: 12px 20px 16px;
   color: var(--muted);
+}
+.card-note {
+  margin: 12px 20px 14px;
 }
 .balance-chip {
   display: flex;
@@ -5951,9 +5966,20 @@ hr {
 .balance-chip strong {
   font-size: 15px;
 }
+/* Plain stacked cards sit flush by design elsewhere (one per page); on the
+ * detail pages several stack — give siblings uniform breathing room. */
+.app-main section.card + section.card,
+.app-main section.card + .two-col,
+.app-main .two-col + section.card {
+  margin-top: 16px;
+}
 @media (max-width: 700px) {
   .price-trio .price-arrow {
     display: none;
+  }
+  .detail-header,
+  .form-card {
+    padding: 16px 14px;
   }
 }
 @media (max-width: 700px) {

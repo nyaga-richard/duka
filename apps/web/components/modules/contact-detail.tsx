@@ -246,7 +246,7 @@ export function ContactDetailPage({
         </section>
       )}
       {contact && editing && (
-        <section className="card">
+        <section className="card form-card">
           <h3>
             <PenLine size={16} /> Edit {kind} details
           </h3>
@@ -285,7 +285,7 @@ export function ContactDetailPage({
         </section>
       )}
       {paying && (
-        <section className="card">
+        <section className="card form-card">
           <h3>
             <Wallet size={17} />
             {customer ? " Receive customer payment" : " Pay supplier"}

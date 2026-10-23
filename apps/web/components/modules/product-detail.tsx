@@ -363,7 +363,7 @@ export function ProductDetailPage({ id }: { id: string }) {
         </section>
       )}
       {p && editing && (
-        <section className="card">
+        <section className="card form-card">
           <h3>
             <PenLine size={16} /> Edit product details
           </h3>
@@ -478,7 +478,7 @@ export function ProductDetailPage({ id }: { id: string }) {
         </section>
       )}
       <div className="two-col">
-        <section className="card">
+        <section className="card form-card">
           <h3>
             <Tag size={17} /> Change selling price
           </h3>
@@ -549,9 +549,11 @@ export function ProductDetailPage({ id }: { id: string }) {
           </form>
         </section>
         <section className="card">
-          <h3>
-            <History size={17} /> Price change history
-          </h3>
+          <div className="table-toolbar">
+            <h3>
+              <History size={17} /> Price change history
+            </h3>
+          </div>
           {changes.error && <ErrorCard error={changes.error} />}
           <DataTable
             loading={changes.loading}
@@ -591,7 +593,7 @@ export function ProductDetailPage({ id }: { id: string }) {
             total={changes.data?.total ?? 0}
             onChange={setChangePage}
           />
-          <p className="form-note">
+          <p className="form-note card-note">
             Batch changes across products:{" "}
             <Link href="/price-changes">open the price change workbench</Link>.
           </p>
