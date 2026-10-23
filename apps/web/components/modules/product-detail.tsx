@@ -253,7 +253,7 @@ export function ProductDetailPage({ id }: { id: string }) {
             <div>
               <span>Tax</span>
               <strong>
-                {p.tax_rate ?? "—"}%{" "}
+                {p.tax_rate == null ? "—" : D(p.tax_rate).toString()}%{" "}
                 {p.tax_inclusive ? "inclusive" : "exclusive"}
               </strong>
             </div>
@@ -266,7 +266,10 @@ export function ProductDetailPage({ id }: { id: string }) {
             </div>
             <div>
               <span>Reorder level</span>
-              <strong>{number(p.reorder_level)}</strong>
+              <strong>
+                {number(p.reorder_level)}
+                {p.unit ? ` ${p.unit}` : ""}
+              </strong>
             </div>
             <div>
               <span>Status</span>
