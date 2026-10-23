@@ -1041,7 +1041,10 @@ export default function POS() {
                 disabled={!!pending}
               >
                 <div className="product-tile-art">
-                  <ProductAvatar name={p.name} imageAttachmentId={p.image_attachment_id} />
+                  <ProductAvatar
+                    name={p.name}
+                    imageAttachmentId={p.image_attachment_id}
+                  />
                   <span className="add-product">
                     <Plus size={17} />
                   </span>
@@ -1147,7 +1150,11 @@ export default function POS() {
           {lines.length ? (
             lines.map((l, i) => (
               <div className="cart-line" key={i}>
-                <ProductAvatar name={l.product.name} small imageAttachmentId={l.product.image_attachment_id} />
+                <ProductAvatar
+                  name={l.product.name}
+                  small
+                  imageAttachmentId={l.product.image_attachment_id}
+                />
                 <div className="cart-line-info">
                   <strong>{l.product.name}</strong>
                   <small>
@@ -1576,12 +1583,30 @@ export default function POS() {
             </span>
             <strong>{currency(remaining.abs(), meta.company.currency)}</strong>
           </div>
-          {remaining.gt(0) && (
+          {remaining.gt(0) && !customer && (
             <p className="form-note">
-              Only a registered customer with authorized credit and sufficient
-              credit limit can leave a balance.
+              Select a customer (F4) to place the remaining balance on their
+              account. Walk-in sales must be paid in full.
             </p>
           )}
+          {remaining.gt(0) &&
+            customer &&
+            !actor.permissions.includes("sales.credit") && (
+              <p className="form-note">
+                Your role cannot leave a balance on customer account. Collect
+                full payment, or let an owner or manager post this as a credit
+                sale.
+              </p>
+            )}
+          {remaining.gt(0) &&
+            customer &&
+            actor.permissions.includes("sales.credit") && (
+              <p className="form-note">
+                The balance posts on the customer&apos;s account within their
+                credit limit. Exceeding the limit needs a manager&apos;s
+                override reason.
+              </p>
+            )}
           <div className="form-actions">
             <Button
               variant="secondary"

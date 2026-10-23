@@ -24,19 +24,20 @@ export const amount = z
 /** Decimal predicates must never throw from a refine: zod runs every check
  * even when an earlier one fails, and decimal.js raises on garbage input —
  * an unwrapped D() turns a bad request into a 500 instead of a 422. */
-const decCheck =
-  (fn: (d: Decimal) => boolean) =>
-  (v: string) => {
-    try {
-      return fn(D(v));
-    } catch {
-      return false;
-    }
-  };
+const decCheck = (fn: (d: Decimal) => boolean) => (v: string) => {
+  try {
+    return fn(D(v));
+  } catch {
+    return false;
+  }
+};
 export const quantity = z
   .string()
   .regex(/^\d{1,16}(\.\d{1,6})?$/)
-  .refine(decCheck((d) => d.gt(0)), "Quantity must be positive");
+  .refine(
+    decCheck((d) => d.gt(0)),
+    "Quantity must be positive",
+  );
 export const signedQuantity = z.string().regex(/^-?\d{1,16}(\.\d{1,6})?$/);
 export const cost = z.string().regex(/^\d{1,16}(\.\d{1,6})?$/);
 export const date = z.iso.date();
@@ -516,6 +517,7 @@ export const defaultRoles: Record<string, readonly string[]> = {
     "catalog.read",
     "sales.read",
     "sales.create",
+    "sales.credit",
     "shifts.open",
     "customers.read",
     "customers.write",

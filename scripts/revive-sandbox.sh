@@ -107,6 +107,17 @@ INSERT INTO accounts(company_id,code,name,type,system_key)
 EOF
 fi
 
+# --- 4.6 Privileged backfills that runtime-role migrations cannot see ----------
+# 028 grants sales.credit to seeded Cashier roles, but roles are FORCE RLS and
+# migrate.ts runs as the runtime role, which sees zero rows here. Production is
+# covered because duka_migrator has BYPASSRLS; sandboxes need this privileged,
+# idempotent replay. (Keep in sync with database/migrations/028.)
+sudo -u postgres psql -d duka -v ON_ERROR_STOP=1 <<'EOF'
+INSERT INTO role_permissions(company_id, role_id, permission)
+SELECT company_id, id, 'sales.credit' FROM roles WHERE name = 'Cashier'
+ON CONFLICT DO NOTHING;
+EOF
+
 # --- 5. Documented demo identity (seed refuses an existing owner) -------------
 if sudo -u postgres psql -d duka -tAc "SELECT 1 FROM identities WHERE email='owner@duka.test'" 2>/dev/null | grep -q 1; then
   echo "demo owner present - seed skipped"

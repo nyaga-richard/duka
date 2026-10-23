@@ -1170,3 +1170,109 @@ test("advance API separates customer-receipt authority from supplier-payment aut
     assert.equal(row.available, index === 0 ? "100.00" : "40.00");
   }
 });
+test("cashier posts a credit sale within policy; limit overrides stay forbidden without credit_override", async () => {
+  const f = await fixture();
+  const setup = await transaction(f.actor, async (ctx) => {
+    const role = await one(
+      ctx,
+      "SELECT id FROM roles WHERE company_id=$1 AND name='Cashier'",
+      [f.companyId],
+    );
+    const user = await configureUser(ctx, {
+      name: "Credit cashier",
+      email: randomUUID() + "@example.test",
+      password: "CashierSecure-2026",
+      role_ids: [role.id],
+      branch_ids: [f.branchId],
+      warehouse_ids: [f.warehouseId],
+    });
+    const unit = await one(
+        ctx,
+        "SELECT id FROM units WHERE company_id=$1 LIMIT 1",
+        [f.companyId],
+      ),
+      tax = await one(
+        ctx,
+        "SELECT id FROM tax_rules WHERE company_id=$1 AND code='VAT16'",
+        [f.companyId],
+      ),
+      cash = await one(
+        ctx,
+        "SELECT id FROM payment_methods WHERE company_id=$1 AND kind='cash'",
+        [f.companyId],
+      );
+    const product = await createProduct(
+      ctx,
+      productSchema.parse({
+        name: "Cashier credit tea",
+        sku: "CC-TEA",
+        price: "116",
+        purchase_cost: "40",
+        unit_id: unit.id,
+        tax_rule_id: tax.id,
+      }),
+    );
+    await postStockDocument(ctx, {
+      branch_id: f.branchId,
+      warehouse_id: f.warehouseId,
+      type: "opening",
+      reason: "Stock for cashier credit sale",
+      lines: [{ product_id: product.id, quantity: "5", unit_cost: "40" }],
+    });
+    return { user, product, cash };
+  });
+  const cashier = await signIn(setup.user.email, "CashierSecure-2026");
+  await call("/api/v1/shifts/open", {
+    method: "POST",
+    session: cashier,
+    body: { register_id: f.registerId, opening_float: "0" },
+    headers: { "Idempotency-Key": "credit-cashier-shift" },
+  });
+  const customerRes = await call("/api/v1/customers", {
+    method: "POST",
+    session: cashier,
+    body: { name: "Credit patron", code: "CP-1", credit_limit: "1000" },
+    headers: { "Idempotency-Key": "credit-cashier-customer" },
+  });
+  assert.equal(customerRes.status, 200, JSON.stringify(customerRes.error));
+  const customer = customerRes.data;
+  for (const [label, payments] of [
+    ["full credit", []],
+    ["partial credit", [{ method_id: setup.cash.id, amount: "58" }]],
+  ] as const) {
+    const sale = await call("/api/v1/sales", {
+      method: "POST",
+      session: cashier,
+      body: {
+        register_id: f.registerId,
+        customer_id: customer.id,
+        lines: [{ product_id: setup.product.id, quantity: "1" }],
+        payments,
+      },
+      headers: { "Idempotency-Key": "cashier-" + label },
+    });
+    assert.equal(sale.status, 200, label + ": " + JSON.stringify(sale.error));
+    const invoice = (
+      await call("/api/v1/sales/" + sale.data.id, { session: cashier })
+    ).data;
+    assert.ok(
+      Number(invoice.outstanding) > 0,
+      label + " must leave a balance on account",
+    );
+  }
+  // The limit override gate still requires sales.credit_override: one more
+  // sale exceeds the 1000 limit after the two 116-balance invoices above.
+  const over = await call("/api/v1/sales", {
+    method: "POST",
+    session: cashier,
+    body: {
+      register_id: f.registerId,
+      customer_id: customer.id,
+      lines: [{ product_id: setup.product.id, quantity: "8" }],
+      payments: [],
+      override_reason: "Manager approved over-limit credit",
+    },
+    headers: { "Idempotency-Key": "cashier-over-limit" },
+  });
+  assert.equal(over.status, 403, JSON.stringify(over.error));
+});

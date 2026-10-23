@@ -7,6 +7,7 @@ import {
   canTransition,
   checkoutSchema,
 } from "@duka/shared";
+import { defaultRoles } from "@duka/shared";
 import { validateJournal } from "@duka/accounting";
 import { weightedReceipt, weightedIssue } from "@duka/inventory";
 import { totp, verifyTotp } from "../../apps/api/src/services/auth.ts";
@@ -138,4 +139,20 @@ test("TOTP matches RFC 6238 SHA1 vector and replay is rejected", () => {
     step = verifyTotp(secret, code);
   assert.ok(step !== null);
   assert.equal(verifyTotp(secret, code, Number(step) + 1), null);
+});
+test("default Cashier role can sell on credit within policy, overrides stay privileged", () => {
+  const cashier = defaultRoles.Cashier;
+  assert.ok(
+    cashier.includes("sales.credit"),
+    "cashiers must be able to leave a balance on a customer account",
+  );
+  assert.ok(
+    !cashier.includes("sales.credit_override"),
+    "credit-limit overrides require management",
+  );
+  assert.ok(
+    !cashier.includes("settings.manage") &&
+      !cashier.includes("accounting.post"),
+    "cashier scope stays minimal elsewhere",
+  );
 });

@@ -31,3 +31,5 @@ release/
 /.netrc
 /.npmrc
 /.git-credentials
+
+.tmp/
