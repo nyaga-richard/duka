@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ArrowRight,
   PenLine,
   Check,
   History,
@@ -12,6 +13,10 @@ import {
   Package,
   Tag,
   ImagePlus,
+  Coins,
+  CircleDollarSign,
+  Percent,
+  TriangleAlert,
 } from "lucide-react";
 import {
   api,
@@ -35,6 +40,7 @@ import {
   Fields,
   FormField,
   LineEditor,
+  StatTile,
   type FieldDef,
 } from "../ui";
 import { useAction, save, clean } from "./common";
@@ -233,52 +239,63 @@ export function ProductDetailPage({ id }: { id: string }) {
       )}
       {p && !editing && (
         <section className="card detail-header">
-          <div className="detail-grid">
-            <div>
-              <span>Selling price</span>
-              <strong>{currency(p.price, meta.company.currency)}</strong>
-            </div>
-            <div>
-              <span>Default cost</span>
-              <strong>
-                {p.purchase_cost === undefined
+          <div className="stat-list">
+            <StatTile
+              icon={Tag}
+              label="Selling price"
+              value={currency(p.price, meta.company.currency)}
+            />
+            <StatTile
+              icon={Coins}
+              label="Default cost"
+              value={
+                p.purchase_cost === undefined
                   ? "Restricted"
-                  : currency(p.purchase_cost, meta.company.currency)}
-              </strong>
-            </div>
-            <div>
-              <span>Barcode</span>
-              <strong>{p.barcode ?? "None"}</strong>
-            </div>
-            <div>
-              <span>Tax</span>
-              <strong>
-                {p.tax_rate == null ? "—" : D(p.tax_rate).toString()}%{" "}
-                {p.tax_inclusive ? "inclusive" : "exclusive"}
-              </strong>
-            </div>
-            <div>
-              <span>Stock on hand</span>
-              <strong>
-                {number(p.stock)}
-                {p.unit ? ` ${p.unit}` : ""}
-              </strong>
-            </div>
-            <div>
-              <span>Reorder level</span>
-              <strong>
-                {number(p.reorder_level)}
-                {p.unit ? ` ${p.unit}` : ""}
-              </strong>
-            </div>
-            <div>
-              <span>Status</span>
-              <strong>
+                  : currency(p.purchase_cost, meta.company.currency)
+              }
+            />
+            {p.average_cost !== undefined && (
+              <StatTile
+                icon={CircleDollarSign}
+                label="Average cost"
+                value={currency(p.average_cost, meta.company.currency)}
+              />
+            )}
+            <StatTile
+              icon={Barcode}
+              label="Barcode"
+              value={p.barcode ?? "None"}
+            />
+            <StatTile
+              icon={Percent}
+              label="Tax"
+              value={
+                (p.tax_rate == null ? "—" : D(p.tax_rate).toString()) + "%"
+              }
+              sub={p.tax_inclusive ? "Price includes tax" : "Tax added at sale"}
+            />
+            <StatTile
+              icon={Boxes}
+              tone={
+                Number(p.stock) <= Number(p.reorder_level) ? "warn" : undefined
+              }
+              label="Stock on hand"
+              value={`${number(p.stock)}${p.unit ? ` ${p.unit}` : ""}`}
+              sub={`${number(p.reserved ?? 0)} reserved`}
+            />
+            <StatTile
+              icon={TriangleAlert}
+              label="Reorder level"
+              value={`${number(p.reorder_level)}${p.unit ? ` ${p.unit}` : ""}`}
+            />
+            <StatTile
+              label="Status"
+              value={
                 <Badge status={p.active ? "active" : "inactive"}>
                   {p.active ? "Active" : "Inactive"}
                 </Badge>
-              </strong>
-            </div>
+              }
+            />
           </div>
           {p.description && <p className="muted">{p.description}</p>}
           {canWrite && (
@@ -468,32 +485,34 @@ export function ProductDetailPage({ id }: { id: string }) {
           <form onSubmit={applyPrice}>
             {priceAction.error && <ErrorCard error={priceAction.error} />}
             {p && (
-              <div className="price-change-row standalone">
-                <div className="price-change-current">
-                  <span>Current</span>
+              <div className="price-trio">
+                <div className="price-current">
+                  <span>Current price</span>
                   <strong>{currency(p.price, meta.company.currency)}</strong>
                 </div>
-                <FormField label="New selling price" required>
-                  <input
-                    inputMode="decimal"
-                    required
-                    disabled={!canWrite}
-                    value={priceForm.price}
-                    placeholder={p.price}
-                    onChange={(e) =>
-                      setPriceForm({ ...priceForm, price: e.target.value })
-                    }
-                  />
-                </FormField>
+                <ArrowRight size={18} className="price-arrow" aria-hidden />
+                <div className="price-input">
+                  <FormField label="New selling price" required>
+                    <input
+                      inputMode="decimal"
+                      required
+                      disabled={!canWrite}
+                      value={priceForm.price}
+                      placeholder={p.price}
+                      onChange={(e) =>
+                        setPriceForm({ ...priceForm, price: e.target.value })
+                      }
+                    />
+                  </FormField>
+                </div>
                 {delta !== undefined && (
-                  <div className="price-change-delta" aria-live="polite">
-                    <strong
-                      className={delta.isNeg() ? "danger-text" : "success-text"}
-                    >
-                      {delta.gt(0) ? "+" : ""}
-                      {currency(delta, meta.company.currency)}
-                    </strong>
-                  </div>
+                  <span
+                    className={"delta-chip " + (delta.isNeg() ? "down" : "up")}
+                    aria-live="polite"
+                  >
+                    {delta.gt(0) ? "+" : ""}
+                    {currency(delta, meta.company.currency)}
+                  </span>
                 )}
               </div>
             )}

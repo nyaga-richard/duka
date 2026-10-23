@@ -3,11 +3,17 @@ import React, { useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ArrowRight,
   PenLine,
   Check,
   Wallet,
   Printer,
   FileText,
+  Gauge,
+  CircleDollarSign,
+  CalendarClock,
+  Phone,
+  FileDigit,
 } from "lucide-react";
 import {
   api,
@@ -28,6 +34,7 @@ import {
   ErrorCard,
   Fields,
   FormField,
+  StatTile,
 } from "../ui";
 import { useAction, save, clean } from "./common";
 import { contactFields } from "./contacts";
@@ -171,43 +178,69 @@ export function ContactDetailPage({
       )}
       {contact && !editing && (
         <section className="card detail-header">
-          <div className="detail-grid">
-            <div>
-              <span>{customer ? "Receivable" : "Payable"}</span>
-              <strong
-                className={D(contact.balance).gt(0) ? "warning-text" : ""}
-              >
-                {currency(contact.balance, meta.company.currency)}
-              </strong>
-            </div>
-            <div>
-              <span>Payment terms</span>
-              <strong>{contact.credit_days} days</strong>
-            </div>
+          <div className="stat-list">
+            <StatTile
+              icon={Wallet}
+              tone={D(contact.balance).gt(0) ? "warn" : undefined}
+              label={customer ? "Receivable" : "Payable"}
+              value={currency(contact.balance, meta.company.currency)}
+            />
             {customer && (
-              <div>
-                <span>Credit limit</span>
-                <strong>
-                  {currency(contact.credit_limit, meta.company.currency)}
-                </strong>
-              </div>
+              <>
+                <StatTile
+                  icon={Gauge}
+                  label="Credit limit"
+                  value={currency(contact.credit_limit, meta.company.currency)}
+                />
+                <StatTile
+                  icon={CircleDollarSign}
+                  label="Available credit"
+                  value={currency(
+                    D(contact.credit_limit ?? 0).minus(contact.balance ?? 0),
+                    meta.company.currency,
+                  )}
+                  tone={
+                    D(contact.credit_limit ?? 0).gt(0) &&
+                    D(contact.credit_limit ?? 0)
+                      .minus(contact.balance ?? 0)
+                      .lte(0)
+                      ? "warn"
+                      : undefined
+                  }
+                />
+                {D(contact.discount_percent ?? 0).gt(0) && (
+                  <StatTile
+                    icon={CircleDollarSign}
+                    label="Contract discount"
+                    value={D(contact.discount_percent).toString() + "%"}
+                  />
+                )}
+              </>
             )}
-            <div>
-              <span>Contact</span>
-              <strong>{contact.phone || contact.email || "—"}</strong>
-            </div>
-            <div>
-              <span>Status</span>
-              <strong>
+            <StatTile
+              icon={CalendarClock}
+              label="Payment terms"
+              value={`${contact.credit_days} days`}
+            />
+            <StatTile
+              icon={Phone}
+              label="Contact"
+              value={contact.phone || contact.email || "—"}
+              sub={contact.phone && contact.email ? contact.email : undefined}
+            />
+            <StatTile
+              icon={FileDigit}
+              label="Tax PIN"
+              value={contact.tax_pin || "—"}
+            />
+            <StatTile
+              label="Status"
+              value={
                 <Badge status={contact.active ? "active" : "inactive"}>
                   {contact.active ? "Active" : "Inactive"}
                 </Badge>
-              </strong>
-            </div>
-            <div>
-              <span>Tax PIN</span>
-              <strong>{contact.tax_pin || "—"}</strong>
-            </div>
+              }
+            />
           </div>
           {contact.address && <p className="muted">{contact.address}</p>}
         </section>
@@ -455,10 +488,29 @@ export function ContactDetailPage({
             )}
           </div>
         </div>
-        <div className="muted statement-opening">
-          Opening balance:{" "}
-          {currency(statement.data?.opening, meta.company.currency)}
-        </div>
+        {statement.data && (
+          <div className="balance-chips">
+            <div className="balance-chip">
+              <span>Opening balance</span>
+              <strong>
+                {currency(statement.data.opening, meta.company.currency)}
+              </strong>
+            </div>
+            <ArrowRight size={14} aria-hidden />
+            <div className="balance-chip">
+              <span>Closing balance</span>
+              <strong>
+                {currency(
+                  statement.data.items?.length
+                    ? statement.data.items[statement.data.items.length - 1]
+                        .balance
+                    : statement.data.opening,
+                  meta.company.currency,
+                )}
+              </strong>
+            </div>
+          </div>
+        )}
         <DataTable
           loading={statement.loading}
           items={statement.data?.items}

@@ -44,6 +44,36 @@ export function Button({
     </button>
   );
 }
+/** Compact stat with an optional icon chip and semantic tone, used by the
+ * detail-page headers (products and contacts). */
+export function StatTile({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  icon?: any;
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+  tone?: "default" | "warn";
+}) {
+  return (
+    <div className={"stat-tile" + (tone === "warn" ? " warn" : "")}>
+      {Icon ? (
+        <span className="stat-icon" aria-hidden>
+          <Icon size={16} />
+        </span>
+      ) : null}
+      <span className="stat-body">
+        <span className="stat-label">{label}</span>
+        <span className="stat-value">{value}</span>
+        {sub ? <span className="stat-sub">{sub}</span> : null}
+      </span>
+    </div>
+  );
+}
 export function Badge({
   children,
   status = "neutral",
