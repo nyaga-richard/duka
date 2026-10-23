@@ -218,8 +218,14 @@ export async function contactStatement(
     `SELECT j.number,j.accounting_date,j.description,j.source_type,j.source_id,l.debit,l.credit,a.name AS account,(sum(l.debit-l.credit) OVER(ORDER BY j.accounting_date,j.created_at,j.id,l.id)+$7::numeric)::text AS balance,count(*) OVER()::int AS _count FROM journal_lines l JOIN journals j ON j.company_id=l.company_id AND j.id=l.journal_id JOIN accounts a ON a.company_id=l.company_id AND a.id=l.account_id WHERE l.company_id=$1 AND l.${kind}_id=$2 AND a.system_key=ANY($3::text[]) AND j.branch_id=ANY($4::uuid[]) AND j.accounting_date BETWEEN $5 AND $6 ORDER BY j.accounting_date,j.created_at,j.id,l.id LIMIT $8 OFFSET $9`,
     [ctx.companyId, id, keys, s.branches, s.from, s.to, opening, limit, offset],
   );
+  const balance = (
+    await ctx.db.query(
+      `SELECT coalesce(sum(${kind === "customer" ? "l.debit-l.credit" : "l.credit-l.debit"}),0)::text AS n FROM journal_lines l JOIN accounts a ON a.company_id=l.company_id AND a.id=l.account_id JOIN journals j ON j.company_id=l.company_id AND j.id=l.journal_id WHERE l.company_id=$1 AND l.${kind}_id=$2 AND a.system_key=$3 AND j.branch_id=ANY($4::uuid[])`,
+      [ctx.companyId, id, kind === "customer" ? "ar" : "ap", s.branches],
+    )
+  ).rows[0].n;
   return {
-    contact,
+    contact: { ...contact, balance: money(balance) },
     opening: money(opening),
     items: r.rows.map(({ _count, ...l }) => l),
     page,

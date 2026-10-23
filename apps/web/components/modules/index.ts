@@ -1,4 +1,7 @@
 export { CatalogPage } from "./catalog";
+export { ProductDetailPage } from "./product-detail";
+export { ContactDetailPage } from "./contact-detail";
+export { PriceChangesPage } from "./price-changes";
 export { ContactsPage } from "./contacts";
 export { SalesPage } from "./sales";
 export { InventoryPage } from "./inventory";

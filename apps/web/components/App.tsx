@@ -41,6 +41,7 @@ import {
   ChevronRight,
   LoaderCircle,
   Rocket,
+  Tag,
 } from "lucide-react";
 import {
   api,
@@ -58,6 +59,9 @@ import Dashboard from "./Dashboard";
 import POS from "./POS";
 import {
   CatalogPage,
+  ProductDetailPage,
+  ContactDetailPage,
+  PriceChangesPage,
   ContactsPage,
   SalesPage,
   InventoryPage,
@@ -116,6 +120,13 @@ const navigation = [
     icon: Package,
     permission: "catalog.read",
     group: "OPERATIONS",
+  },
+  {
+    label: "Price changes",
+    href: "/price-changes",
+    icon: Tag,
+    permission: "catalog.read",
+    group: "",
   },
   {
     label: "Inventory",
@@ -636,11 +647,24 @@ export default function App() {
   const visible = navigation.filter((n) =>
     n.permission.split("|").some((p) => actor.permissions.includes(p)),
   );
-  const current = navigation.find((n) => n.href === pathname);
+  // Detail routes share their parent list page's navigation entry, permission
+  // and sidebar highlight.
+  const current =
+    navigation.find((n) => n.href === pathname) ??
+    navigation.find((n) => n.href !== "/" && pathname.startsWith(n.href + "/"));
   let screen: React.ReactNode;
   const allowed = current
     ? current.permission.split("|").some((p) => actor.permissions.includes(p))
     : true;
+  const [, seg1, seg2] = pathname.split("/");
+  const detail =
+    seg1 === "products" && seg2
+      ? "product"
+      : seg1 === "customers" && seg2
+        ? "customer"
+        : seg1 === "suppliers" && seg2
+          ? "supplier"
+          : null;
   if (!allowed)
     screen = (
       <div className="empty page-empty">
@@ -652,6 +676,10 @@ export default function App() {
         <Link href="/">Return to overview</Link>
       </div>
     );
+  else if (detail === "product") screen = <ProductDetailPage id={seg2!} />;
+  else if (detail === "customer" || detail === "supplier")
+    screen = <ContactDetailPage kind={detail} id={seg2!} />;
+  else if (seg1 === "price-changes") screen = <PriceChangesPage />;
   else
     switch (pathname) {
       case "/":
@@ -763,8 +791,8 @@ export default function App() {
                 {n.group && <div className="nav-group">{n.group}</div>}
                 <Link
                   href={n.href}
-                  className={`nav-item ${pathname === n.href ? "active" : ""}`}
-                  aria-current={pathname === n.href ? "page" : undefined}
+                  className={`nav-item ${current?.href === n.href ? "active" : ""}`}
+                  aria-current={current?.href === n.href ? "page" : undefined}
                 >
                   <n.icon size={19} />
                   <span>{n.label}</span>

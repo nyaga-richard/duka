@@ -5509,66 +5509,205 @@ hr {
    re-imposes the light palette (see the print block).
    ============================================================ */
 @media screen {
-:root[data-theme="dark"] .offline-banner { background: #3a2f1d; color: #e2b46b; }
-:root[data-theme="dark"] .stat-icon.green { background: #29422f; color: #9ccdaf; }
-:root[data-theme="dark"] .stat-icon.amber { background: #43402a; color: #e2c483; }
-:root[data-theme="dark"] .stat-icon.blue { background: #2c3643; color: #a4b9d4; }
-:root[data-theme="dark"] .stat-icon.purple { background: #3a3244; color: #bfaeda; }
-:root[data-theme="dark"] .avatar { background: #4a4436; color: #d8c39b; }
-:root[data-theme="dark"] .mini-avatar { background: #2c3a31; color: #a9bda9; }
-:root[data-theme="dark"] .stock-low { background: #4a3d22; color: #dbb877; }
-:root[data-theme="dark"] .low-product-label { background: #4a3d22; color: #dbb877; }
-:root[data-theme="dark"] .till-banner { background: #3d3524; border-color: #5c4f31; color: #dbc287; }
-:root[data-theme="dark"] .till-banner strong { color: #bfab74; }
-:root[data-theme="dark"] .pending-checkout { background: #403520; border-color: #65522e; color: #dfb85e; }
-:root[data-theme="dark"] .payment-balance.warning { background: #413722; color: #dcae56; }
-:root[data-theme="dark"] .receipt-success > span { background: #294031; color: #a9c79b; }
-:root[data-theme="dark"] .category-tabs button.active { background: #2b4231; color: #b7d8b0; border-color: #3f5c43; }
-:root[data-theme="dark"] .report-menu > button.active { background: #2f3f2c; color: #b9ce9d; }
-:root[data-theme="dark"] .accounting-balance-strip { background: #2b3a2e; border-color: #3d5240; color: #a8cf9b; }
-:root[data-theme="dark"] .integration-logo.mpesa { background: #2c4031; color: #a9cf98; }
-:root[data-theme="dark"] .integration-logo.fiscal { background: #413825; color: #d7b285; }
-:root[data-theme="dark"] .cart-empty > div { border-color: #3a4e3d; color: #87a284; }
-:root[data-theme="dark"] .pos-search { border-color: #3a4d3e; color: #93ac8d; }
-:root[data-theme="dark"] .pulse-balances { border-color: #374733; }
-:root[data-theme="dark"] .pulse-ornament { color: #3c5041; }
-:root[data-theme="dark"] .empty svg { color: #5f7563; }
-:root[data-theme="dark"] .product-avatar.photo { background: #333b35; }
-:root[data-theme="dark"] .integration-config h3 { color: var(--text); }
-:root[data-theme="dark"] .integration-config p { color: var(--muted); }
-:root[data-theme="dark"] .field > b,
-:root[data-theme="dark"] .field b { color: #c9a47e; }
-:root[data-theme="dark"] .success-text { color: #7fbf8f; }
-:root[data-theme="dark"] .add-product { color: #93bd84; }
-:root[data-theme="dark"] .cart-heading h2 span { color: #93a693; }
-:root[data-theme="dark"] .btn.primary { background: #2f6b4f; border-color: #2f6b4f; color: #eef7f1; }
-:root[data-theme="dark"] .btn.primary:hover:not(:disabled) { background: #3a7d5c; border-color: #3a7d5c; }
-:root[data-theme="dark"] .btn.secondary:hover:not(:disabled) { border-color: #4a6151; }
-:root[data-theme="dark"] .btn.danger { background: #b85c52; }
-:root[data-theme="dark"] .setup-card.ok { border-color: #3d6b52; }
-:root[data-theme="dark"] .setup-link { color: var(--green); }
-/* Login page: form side follows the theme; the story panel stays branded dark */
-:root[data-theme="dark"] .login-layout,
-:root[data-theme="dark"] .login-form-panel { background: var(--bg); color: var(--text); }
-:root[data-theme="dark"] .login-form-wrap > h2 { color: var(--text); }
-:root[data-theme="dark"] .login-form-wrap > p { color: var(--muted); }
-:root[data-theme="dark"] .login-form-wrap .field > span:first-child { color: var(--muted); }
-:root[data-theme="dark"] .login-form-wrap input { background: var(--surface); border-color: var(--line); color: var(--text); }
-:root[data-theme="dark"] .login-form-wrap input::placeholder { color: #6d7f71; }
-:root[data-theme="dark"] .password-input { border-color: var(--line); }
-:root[data-theme="dark"] .password-input > button { color: var(--muted); }
-:root[data-theme="dark"] .demo-login { background: var(--surface-2); border-color: var(--line); }
-:root[data-theme="dark"] .demo-login .btn { background: var(--surface); color: var(--text); border-color: var(--line); }
-:root[data-theme="dark"] .demo-login:hover .btn,
-:root[data-theme="dark"] .demo-login .btn:hover:not(:disabled) { border-color: #4a6151; }
-:root[data-theme="dark"] .success-panel { color: #8fc294; }
-:root[data-theme="dark"] .success-panel p { color: var(--muted); }
-:root[data-theme="dark"] .brand.dark { color: var(--text); }
-:root[data-theme="dark"] .brand.dark small { color: var(--muted); }
+  :root[data-theme="dark"] .offline-banner {
+    background: #3a2f1d;
+    color: #e2b46b;
+  }
+  :root[data-theme="dark"] .stat-icon.green {
+    background: #29422f;
+    color: #9ccdaf;
+  }
+  :root[data-theme="dark"] .stat-icon.amber {
+    background: #43402a;
+    color: #e2c483;
+  }
+  :root[data-theme="dark"] .stat-icon.blue {
+    background: #2c3643;
+    color: #a4b9d4;
+  }
+  :root[data-theme="dark"] .stat-icon.purple {
+    background: #3a3244;
+    color: #bfaeda;
+  }
+  :root[data-theme="dark"] .avatar {
+    background: #4a4436;
+    color: #d8c39b;
+  }
+  :root[data-theme="dark"] .mini-avatar {
+    background: #2c3a31;
+    color: #a9bda9;
+  }
+  :root[data-theme="dark"] .stock-low {
+    background: #4a3d22;
+    color: #dbb877;
+  }
+  :root[data-theme="dark"] .low-product-label {
+    background: #4a3d22;
+    color: #dbb877;
+  }
+  :root[data-theme="dark"] .till-banner {
+    background: #3d3524;
+    border-color: #5c4f31;
+    color: #dbc287;
+  }
+  :root[data-theme="dark"] .till-banner strong {
+    color: #bfab74;
+  }
+  :root[data-theme="dark"] .pending-checkout {
+    background: #403520;
+    border-color: #65522e;
+    color: #dfb85e;
+  }
+  :root[data-theme="dark"] .payment-balance.warning {
+    background: #413722;
+    color: #dcae56;
+  }
+  :root[data-theme="dark"] .receipt-success > span {
+    background: #294031;
+    color: #a9c79b;
+  }
+  :root[data-theme="dark"] .category-tabs button.active {
+    background: #2b4231;
+    color: #b7d8b0;
+    border-color: #3f5c43;
+  }
+  :root[data-theme="dark"] .report-menu > button.active {
+    background: #2f3f2c;
+    color: #b9ce9d;
+  }
+  :root[data-theme="dark"] .accounting-balance-strip {
+    background: #2b3a2e;
+    border-color: #3d5240;
+    color: #a8cf9b;
+  }
+  :root[data-theme="dark"] .integration-logo.mpesa {
+    background: #2c4031;
+    color: #a9cf98;
+  }
+  :root[data-theme="dark"] .integration-logo.fiscal {
+    background: #413825;
+    color: #d7b285;
+  }
+  :root[data-theme="dark"] .cart-empty > div {
+    border-color: #3a4e3d;
+    color: #87a284;
+  }
+  :root[data-theme="dark"] .pos-search {
+    border-color: #3a4d3e;
+    color: #93ac8d;
+  }
+  :root[data-theme="dark"] .pulse-balances {
+    border-color: #374733;
+  }
+  :root[data-theme="dark"] .pulse-ornament {
+    color: #3c5041;
+  }
+  :root[data-theme="dark"] .empty svg {
+    color: #5f7563;
+  }
+  :root[data-theme="dark"] .product-avatar.photo {
+    background: #333b35;
+  }
+  :root[data-theme="dark"] .integration-config h3 {
+    color: var(--text);
+  }
+  :root[data-theme="dark"] .integration-config p {
+    color: var(--muted);
+  }
+  :root[data-theme="dark"] .field > b,
+  :root[data-theme="dark"] .field b {
+    color: #c9a47e;
+  }
+  :root[data-theme="dark"] .success-text {
+    color: #7fbf8f;
+  }
+  :root[data-theme="dark"] .add-product {
+    color: #93bd84;
+  }
+  :root[data-theme="dark"] .cart-heading h2 span {
+    color: #93a693;
+  }
+  :root[data-theme="dark"] .btn.primary {
+    background: #2f6b4f;
+    border-color: #2f6b4f;
+    color: #eef7f1;
+  }
+  :root[data-theme="dark"] .btn.primary:hover:not(:disabled) {
+    background: #3a7d5c;
+    border-color: #3a7d5c;
+  }
+  :root[data-theme="dark"] .btn.secondary:hover:not(:disabled) {
+    border-color: #4a6151;
+  }
+  :root[data-theme="dark"] .btn.danger {
+    background: #b85c52;
+  }
+  :root[data-theme="dark"] .setup-card.ok {
+    border-color: #3d6b52;
+  }
+  :root[data-theme="dark"] .setup-link {
+    color: var(--green);
+  }
+  /* Login page: form side follows the theme; the story panel stays branded dark */
+  :root[data-theme="dark"] .login-layout,
+  :root[data-theme="dark"] .login-form-panel {
+    background: var(--bg);
+    color: var(--text);
+  }
+  :root[data-theme="dark"] .login-form-wrap > h2 {
+    color: var(--text);
+  }
+  :root[data-theme="dark"] .login-form-wrap > p {
+    color: var(--muted);
+  }
+  :root[data-theme="dark"] .login-form-wrap .field > span:first-child {
+    color: var(--muted);
+  }
+  :root[data-theme="dark"] .login-form-wrap input {
+    background: var(--surface);
+    border-color: var(--line);
+    color: var(--text);
+  }
+  :root[data-theme="dark"] .login-form-wrap input::placeholder {
+    color: #6d7f71;
+  }
+  :root[data-theme="dark"] .password-input {
+    border-color: var(--line);
+  }
+  :root[data-theme="dark"] .password-input > button {
+    color: var(--muted);
+  }
+  :root[data-theme="dark"] .demo-login {
+    background: var(--surface-2);
+    border-color: var(--line);
+  }
+  :root[data-theme="dark"] .demo-login .btn {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--line);
+  }
+  :root[data-theme="dark"] .demo-login:hover .btn,
+  :root[data-theme="dark"] .demo-login .btn:hover:not(:disabled) {
+    border-color: #4a6151;
+  }
+  :root[data-theme="dark"] .success-panel {
+    color: #8fc294;
+  }
+  :root[data-theme="dark"] .success-panel p {
+    color: var(--muted);
+  }
+  :root[data-theme="dark"] .brand.dark {
+    color: var(--text);
+  }
+  :root[data-theme="dark"] .brand.dark small {
+    color: var(--muted);
+  }
 }
 
 /* Price change workbench + product detail ledgers */
-.price-change-rows { margin: var(--space-3, 12px) 0; }
+.price-change-rows {
+  margin: var(--space-3, 12px) 0;
+}
 .price-change-row {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
@@ -5576,11 +5715,105 @@ hr {
   align-items: center;
   margin-bottom: 8px;
 }
-.detail-ledger { margin-top: 20px; }
+.detail-ledger {
+  margin-top: 20px;
+}
 .detail-ledger h4 {
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 0 0 10px;
 }
-.detail-ledger table { font-size: 13px; }
+.detail-ledger table {
+  font-size: 13px;
+}
+
+.price-change-form h3,
+.price-changes .table-toolbar h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+.price-change-form {
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.price-change-form .form-note {
+  margin-bottom: 14px;
+}
+.price-change-row {
+  grid-template-columns: minmax(0, 2.2fr) auto minmax(0, 1fr) auto auto !important;
+  align-items: end !important;
+  gap: 10px 12px !important;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-alt, var(--surface));
+}
+.price-change-row .search-select {
+  min-width: 0;
+}
+.price-change-current {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 9px;
+}
+.price-change-current span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.price-change-delta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 10px;
+  white-space: nowrap;
+}
+.price-change-row .icon-btn.remove-row {
+  margin-bottom: 6px;
+}
+.empty-hint {
+  margin: 4px 0 10px;
+}
+@media (max-width: 760px) {
+  .price-change-row {
+    grid-template-columns: 1fr auto 1fr auto !important;
+  }
+  .price-change-row .search-select {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---- Detail pages (products & contacts, own routes) ---- */
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.detail-header .action-grid {
+  margin-top: 14px;
+}
+.detail-header > .attachment-link {
+  margin-top: 10px;
+}
+.price-change-row.standalone {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto !important;
+  border: none;
+  padding: 0;
+  background: none;
+  margin-bottom: 14px;
+}
+@media (max-width: 700px) {
+  .price-change-row.standalone {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+}

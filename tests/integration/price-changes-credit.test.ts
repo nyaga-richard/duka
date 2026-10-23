@@ -188,3 +188,71 @@ test(
     assert.equal(newSale.total, "200.00");
   },
 );
+
+/** HTTP-surface guard for the price-change endpoints (route registrations can
+ * be lost without service-level tests noticing, as the UI depends on them). */
+test("price change HTTP endpoints exist, track changes and stay tenant-safe", { timeout: 30000 }, async () => {
+  const { createApp } = await import("../../apps/api/src/app.ts");
+  const server = createApp().listen(0, "127.0.0.1");
+  await new Promise<void>((r) => server.once("listening", r));
+  const base = "http://127.0.0.1:" + (server.address() as any).port;
+  try {
+    const f = await fixture();
+    const login = await fetch(base + "/api/v1/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "http://localhost:3000" },
+      body: JSON.stringify({ email: f.actor.email, password: "TestSecurePass-2026" }),
+    });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+    const csrf = (await login.json()).data.csrf_token;
+    const heads = { cookie, "X-CSRF-Token": csrf, "content-type": "application/json", origin: "http://localhost:3000" };
+    async function call(path: string, options: any = {}) {
+      const r = await fetch(base + path, {
+        method: options.method ?? "GET",
+        headers: { ...heads, ...(options.method ? { "Idempotency-Key": randomUUID() } : {}) },
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      });
+      return { status: r.status, json: await r.json().catch(() => ({})) };
+    }
+    // seed a product directly through the service
+    const product = await transaction(f.actor, async (ctx) => {
+      const unit = await one(ctx, "SELECT id FROM units WHERE company_id=$1 AND symbol='pc'", [f.companyId]);
+      const tax = await one(ctx, "SELECT id FROM tax_rules WHERE company_id=$1 AND code='VAT16'", [f.companyId]);
+      return createProduct(
+        ctx,
+        productSchema.parse({
+          name: "HTTP price widget",
+          sku: "HPW-1",
+          price: "50",
+          purchase_cost: "20",
+          unit_id: unit.id,
+          tax_rule_id: tax.id,
+        }),
+      );
+    });
+    // unauthenticated -> 401
+    assert.equal((await fetch(base + "/api/v1/price-changes")).status, 401);
+    // apply a change through the HTTP endpoint
+    const post = await call("/api/v1/products/bulk-prices", {
+      method: "POST",
+      body: {
+        reason: "Quarterly markup review",
+        prices: [{ product_id: product.id, price: "65" }],
+      },
+    });
+    assert.equal(post.status, 200, JSON.stringify(post.json));
+    assert.equal(post.json.data.changed, 1);
+    assert.equal(post.json.data.items[0].old_price, "50.00");
+    // ledger surfaced over HTTP
+    const ledger = await call("/api/v1/price-changes?product_id=" + product.id);
+    assert.equal(ledger.status, 200);
+    assert.equal(ledger.json.data.total, 1);
+    assert.equal(ledger.json.data.items[0].new_price, "65.00");
+    // catalog list reflects the new price
+    const cat = await call("/api/v1/products?q=HPW-1");
+    assert.equal(cat.json.data.items[0].price, "65.00");
+  } finally {
+    await new Promise<void>((r, j) => server.close((e) => (e ? j(e) : r())));
+  }
+});
