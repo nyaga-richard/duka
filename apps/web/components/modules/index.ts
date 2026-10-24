@@ -11,3 +11,4 @@ export { AccountingPage, ReportsPage } from "./accounting";
 export { TeamPage, SettingsPage, AuditPage } from "./admin";
 export { IntegrationsPage, OfflinePage } from "./integrations";
 export { SetupPage } from "./setup";
+export { RouteSalesPage } from "./route-shifts";

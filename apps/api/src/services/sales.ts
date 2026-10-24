@@ -44,6 +44,14 @@ export async function checkout(ctx: Context, input: CheckoutInput) {
       [ctx.companyId, input.customer_id],
     );
   const priced = await priceCart(ctx, input, date);
+  if (shift.route_id) {
+    if (!priced.customer || priced.customer.route_id !== shift.route_id)
+      fail(
+        422,
+        "ROUTE_CUSTOMER_MISMATCH",
+        "A route shift sells only to customers assigned to its route",
+      );
+  }
   let order: any = null;
   if (input.order_id) {
     order = await one(

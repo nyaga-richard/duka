@@ -7,7 +7,12 @@ import { pool, transaction, one, digest } from "../../apps/api/src/db.ts";
 import { configureUser } from "../../apps/api/src/services/admin.ts";
 import { routeRegistry } from "../../apps/api/src/http.ts";
 import "../../apps/api/src/routes/index.ts";
-import { checkoutSchema, customerSchema, supplierSchema, productSchema } from "@duka/shared";
+import {
+  checkoutSchema,
+  customerSchema,
+  supplierSchema,
+  productSchema,
+} from "@duka/shared";
 import { createProduct } from "../../apps/api/src/services/catalog.ts";
 import { checkout } from "../../apps/api/src/services/sales.ts";
 import { postStockDocument } from "../../apps/api/src/services/inventory.ts";
@@ -20,6 +25,7 @@ import {
 import { saveOpeningBatch } from "../../apps/api/src/services/opening-balances.ts";
 import { saveContact } from "../../apps/api/src/services/catalog.ts";
 import { openShift } from "../../apps/api/src/services/shifts.ts";
+import { saveRoute } from "../../apps/api/src/services/route-shifts.ts";
 import { postJournal } from "@duka/accounting";
 
 process.env.LOG_LEVEL = "silent";
@@ -27,10 +33,7 @@ let server: Server, base: string;
 
 before(async () => {
   await pool.query("DELETE FROM rate_limit_buckets WHERE key=ANY($1::text[])", [
-    [
-      "login:ip:127.0.0.1",
-      "login:ip:::ffff:127.0.0.1",
-    ].map(digest),
+    ["login:ip:127.0.0.1", "login:ip:::ffff:127.0.0.1"].map(digest),
   ]);
   const { createApp } = await import("../../apps/api/src/app.ts");
   server = createApp().listen(0, "127.0.0.1");
@@ -215,9 +218,9 @@ test("cross-tenant: company B receives 403/404 for every concrete company A reso
         "SELECT to_char(now() AT TIME ZONE timezone,'YYYY-MM-DD') AS today,(now() AT TIME ZONE timezone)::date-1 AS yesterday FROM companies WHERE id=$1",
         [A.companyId],
       ),
-      yesterday = (await one(ctx, "SELECT $1::date::text AS date", [
-        dates.yesterday,
-      ])).date;
+      yesterday = (
+        await one(ctx, "SELECT $1::date::text AS date", [dates.yesterday])
+      ).date;
     const customer = await saveContact(
         ctx,
         "customer",
@@ -314,6 +317,13 @@ test("cross-tenant: company B receives 403/404 for every concrete company A reso
         "SELECT id FROM journals WHERE company_id=$1 ORDER BY created_at DESC LIMIT 1",
         [A.companyId],
       );
+    const route = await saveRoute(ctx, {
+      name: "Tenant probe route",
+      code: "XT-R",
+      active: true,
+      register_id: A.registerId,
+      salesperson_id: A.actor.id,
+    });
     return {
       product,
       sale,
@@ -324,6 +334,7 @@ test("cross-tenant: company B receives 403/404 for every concrete company A reso
       customer,
       supplier,
       shift,
+      route,
     };
   });
   const o = objects as any;
@@ -341,6 +352,8 @@ test("cross-tenant: company B receives 403/404 for every concrete company A reso
     "GET /expenses/:id/attachments": o.expense.id,
     "GET /accounting/opening-batches/:id": o.opening.id,
     "GET /accounting/journals/:id": o.journal.id,
+    "GET /routes/:id": o.route.id,
+    "GET /routes/:id/ledger": o.route.id,
   };
   // Hard-to-fixture but still parameterized GETs: foreign ids must also miss.
   const foreignMiss = [
@@ -351,6 +364,9 @@ test("cross-tenant: company B receives 403/404 for every concrete company A reso
     "GET /pos/orders/:id",
     "GET /integrations/mpesa/intents/:id",
     "GET /attachments/:id",
+    "GET /route-shifts/:id",
+    "GET /route-shifts/:id/loading-sheet",
+    "GET /route-shifts/:id/delivery-sheet",
   ].map((p) => [p, randomUUID()] as const);
   const misses: string[] = [];
   const covered = new Set(Object.keys(concreteMap));
@@ -364,9 +380,9 @@ test("cross-tenant: company B receives 403/404 for every concrete company A reso
           ? o.shift.id
           : key === "GET /reports/:name"
             ? null
-            : concreteMap[key] ??
+            : (concreteMap[key] ??
               foreignMiss.find(([k]) => k === key)?.[1] ??
-              null;
+              null);
     if (id === null) {
       if (key !== "GET /reports/:name")
         misses.push(`${key} is not covered by the tenant matrix`);
@@ -391,10 +407,9 @@ test("cross-tenant: company B receives 403/404 for every concrete company A reso
   assert.deepEqual([...covered].sort(), mustCover.sort());
   // Branch scope: A session cannot query with B's branch either.
   const aSession = await signIn(A.actor.email);
-  const scoped = await call(
-    "/api/v1/sales?branch_id=" + B.branchId,
-    { session: aSession },
-  );
+  const scoped = await call("/api/v1/sales?branch_id=" + B.branchId, {
+    session: aSession,
+  });
   assert.equal(scoped.status, 403);
   assert.deepEqual(misses, [], misses.join("\n"));
 });

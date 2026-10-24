@@ -103,6 +103,19 @@ import {
   cashMovement,
 } from "../services/shifts.ts";
 import {
+  listRoutes,
+  getRoute,
+  saveRoute,
+  openRouteShift,
+  listRouteShifts,
+  getRouteShift,
+  closeRouteShift,
+  loadingSheet,
+  deliverySheet,
+  routeLedger,
+} from "../services/route-shifts.ts";
+import { routeSchema, routeShiftOpenSchema } from "@duka/shared";
+import {
   settleContact,
   applyAdvance,
   recordPayment,
@@ -829,6 +842,94 @@ endpoint(
   openShiftSchema,
   "Open a till with counted float",
   openShift,
+);
+endpoint(
+  "get",
+  "/routes",
+  "routes.read",
+  undefined,
+  "Routes with salesperson, till and outstanding balance",
+  (ctx, q) => listRoutes(ctx, q),
+);
+endpoint(
+  "post",
+  "/routes",
+  "routes.manage",
+  routeSchema,
+  "Create a van-sales route",
+  (ctx, i) => saveRoute(ctx, i),
+);
+endpoint(
+  "put",
+  "/routes/:id",
+  "routes.manage",
+  routeSchema,
+  "Update route assignment",
+  (ctx, i, req) => saveRoute(ctx, i, idOf(req)),
+);
+endpoint(
+  "get",
+  "/routes/:id",
+  "routes.read",
+  undefined,
+  "Route detail with its exclusive customers",
+  (ctx, _q, req) => getRoute(ctx, idOf(req)),
+);
+endpoint(
+  "get",
+  "/routes/:id/ledger",
+  "routes.read",
+  undefined,
+  "Per-customer running ledger across route activity",
+  (ctx, q, req) => routeLedger(ctx, idOf(req), q),
+);
+endpoint(
+  "get",
+  "/route-shifts",
+  "routes.read",
+  undefined,
+  "Route shifts with invoice totals",
+  (ctx, q) => listRouteShifts(ctx, q),
+);
+endpoint(
+  "post",
+  "/route-shifts/open",
+  "routes.shift",
+  routeShiftOpenSchema,
+  "Open the route van shift on its assigned till",
+  (ctx, i) => openRouteShift(ctx, i),
+);
+endpoint(
+  "get",
+  "/route-shifts/:id",
+  "routes.read",
+  undefined,
+  "Route shift detail with invoices and balances",
+  (ctx, _q, req) => getRouteShift(ctx, idOf(req)),
+);
+endpoint(
+  "post",
+  "/route-shifts/:id/close",
+  "routes.shift",
+  closeShiftSchema,
+  "Close the route shift and freeze its day",
+  (ctx, i, req) => closeRouteShift(ctx, idOf(req), i),
+);
+endpoint(
+  "get",
+  "/route-shifts/:id/loading-sheet",
+  "routes.read",
+  undefined,
+  "Consolidated goods-invoiced sheet for the shift",
+  (ctx, _q, req) => loadingSheet(ctx, idOf(req)),
+);
+endpoint(
+  "get",
+  "/route-shifts/:id/delivery-sheet",
+  "routes.read",
+  undefined,
+  "Per-customer delivery sheet with invoice amounts",
+  (ctx, _q, req) => deliverySheet(ctx, idOf(req)),
 );
 endpoint(
   "get",

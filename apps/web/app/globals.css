@@ -2883,6 +2883,58 @@ hr {
 .checkout-btn > svg:first-child {
   margin-right: 0;
 }
+.credit-sale-btn {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 44px;
+}
+.credit-sale-note {
+  margin: 8px 0 0;
+  text-align: center;
+}
+.tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 18px 0 -1px;
+}
+.tab-bar .tab {
+  appearance: none;
+  border: 1px solid var(--line, #d4dade);
+  border-bottom: none;
+  background: transparent;
+  color: var(--muted, #5a6b72);
+  font: inherit;
+  font-size: 13px;
+  padding: 9px 14px 8px;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+}
+.tab-bar .tab.active {
+  background: var(--card, #ffffff);
+  color: var(--ink, #16222a);
+  font-weight: 650;
+}
+.tab-bar + .card {
+  border-top-left-radius: 0;
+}
+.route-bar .route-bar-fields {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) repeat(3, minmax(120px, 1fr));
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 6px;
+}
+.delivery-customer + .delivery-customer {
+  margin-top: 18px;
+  border-top: 1px solid var(--line, #d4dade);
+  padding-top: 10px;
+}
+@media (max-width: 900px) {
+  .route-bar .route-bar-fields {
+    grid-template-columns: 1fr;
+  }
+}
 .cart-security {
   display: flex;
   align-items: center;

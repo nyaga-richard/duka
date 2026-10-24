@@ -117,6 +117,27 @@ INSERT INTO role_permissions(company_id, role_id, permission)
 SELECT company_id, id, 'sales.credit' FROM roles WHERE name = 'Cashier'
 ON CONFLICT DO NOTHING;
 EOF
+# 029 route-sales grants (same FORCE-RLS pitfall; keep in sync with 029).
+if sudo -u postgres psql -d duka -tAc "SELECT 1 FROM schema_migrations WHERE name='029_route_sales.sql'" 2>/dev/null | grep -q 1; then
+  sudo -u postgres psql -d duka -v ON_ERROR_STOP=1 <<'EOF'
+INSERT INTO role_permissions(company_id, role_id, permission)
+SELECT r.company_id, r.id, p.permission FROM roles r
+CROSS JOIN (VALUES ('routes.read'), ('routes.manage'), ('routes.shift')) AS p(permission)
+WHERE r.name IN ('Business owner','General manager','Branch manager')
+ON CONFLICT DO NOTHING;
+INSERT INTO role_permissions(company_id, role_id, permission)
+SELECT r.company_id, r.id, p.permission FROM roles r
+CROSS JOIN (VALUES ('routes.read'), ('routes.shift'), ('sales.create'), ('sales.credit'), ('shifts.open'), ('payments.receive')) AS p(permission)
+WHERE r.name = 'Salesperson'
+ON CONFLICT DO NOTHING;
+INSERT INTO role_permissions(company_id, role_id, permission)
+SELECT r.company_id, r.id, 'routes.read' FROM roles r
+WHERE r.name = 'Accountant'
+ON CONFLICT DO NOTHING;
+EOF
+else
+  echo "029 not migrated yet - privileged role grants skipped (will run on next revive)"
+fi
 
 # --- 5. Documented demo identity (seed refuses an existing owner) -------------
 if sudo -u postgres psql -d duka -tAc "SELECT 1 FROM identities WHERE email='owner@duka.test'" 2>/dev/null | grep -q 1; then

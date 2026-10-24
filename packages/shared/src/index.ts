@@ -65,6 +65,9 @@ export const permissions = [
   "purchases.receive",
   "payments.receive",
   "payments.pay",
+  "routes.read",
+  "routes.manage",
+  "routes.shift",
   "shifts.open",
   "shifts.manage",
   "shifts.review",
@@ -127,23 +130,37 @@ export const productSchema = z
   .refine((v) => !v.expiry_tracked || v.batch_tracked, {
     message: "Expiry tracking requires batch tracking",
   });
+const contactFields = {
+  name: z.string().trim().min(1).max(160),
+  code: z.string().trim().min(1).max(40),
+  email: z.email().or(z.literal("")).optional(),
+  phone: optionalText,
+  address: optionalText,
+  tax_pin: optionalText,
+  credit_limit: amount.default("0"),
+  credit_days: z.number().int().min(0).max(365).default(30),
+  discount_percent: cost.default("0").refine(decCheck((d) => d.lte(100))),
+  active: z.boolean().default(true),
+};
 export const customerSchema = z
+  .object({ ...contactFields, route_id: uuid.optional().nullable() })
+  .strict();
+// Suppliers share the trade terms but never belong to a sales route.
+export const supplierSchema = z.object(contactFields).strict();
+// Route (van sales) master data: one salesperson and one till per route.
+export const routeSchema = z
   .object({
-    name: z.string().trim().min(1).max(160),
+    name: z.string().trim().min(1).max(120),
     code: z.string().trim().min(1).max(40),
-    email: z.email().or(z.literal("")).optional(),
-    phone: optionalText,
-    address: optionalText,
-    tax_pin: optionalText,
-    credit_limit: amount.default("0"),
-    credit_days: z.number().int().min(0).max(365).default(30),
-    discount_percent: cost.default("0").refine(decCheck((d) => d.lte(100))),
+    salesperson_id: uuid.optional(),
+    register_id: uuid.optional(),
     active: z.boolean().default(true),
+    notes: optionalText,
   })
   .strict();
-// Suppliers now also carry trade terms (credit limit + trade discount) as
-// reviewable master data; persisted by migration024 columns.
-export const supplierSchema = customerSchema;
+export const routeShiftOpenSchema = z
+  .object({ route_id: uuid, opening_float: amount })
+  .strict();
 export const cartLineSchema = z
   .object({
     product_id: uuid,
@@ -528,6 +545,12 @@ export const defaultRoles: Record<string, readonly string[]> = {
     "customers.read",
     "customers.write",
     "sales.read",
+    "sales.create",
+    "sales.credit",
+    "payments.receive",
+    "shifts.open",
+    "routes.read",
+    "routes.shift",
     "documents.write",
   ],
   Auditor: [

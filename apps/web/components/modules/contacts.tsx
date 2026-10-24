@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { Plus, PenLine } from "lucide-react";
-import { useWorkspace, currency, D } from "../lib";
+import { useWorkspace, useQuery, currency, D } from "../lib";
 import {
   Button,
   Badge,
@@ -63,7 +63,23 @@ export function ContactsPage({ kind }: { kind: "customer" | "supplier" }) {
   const list = useList(resource);
   const [editing, setEditing] = useState<any>(null),
     [form, setForm] = useState<any>({});
-  const fields = contactFields(customer);
+  const routes = useQuery<any>(customer ? "/routes?limit=200" : null);
+  const fields =
+    customer && routes.data?.items
+      ? [
+          ...contactFields(true),
+          {
+            key: "route_id",
+            label: "Van route",
+            type: "select",
+            options: routes.data.items.map((r: any) => ({
+              id: r.id,
+              name: r.code + " — " + r.name,
+            })),
+            help: "Each customer sits on one route; the route's salesperson invoices them from the route shift. Managers reassign.",
+          },
+        ]
+      : contactFields(customer);
   const action = useAction(() => {
     setEditing(null);
     list.refresh();
@@ -80,6 +96,7 @@ export function ContactsPage({ kind }: { kind: "customer" | "supplier" }) {
             credit_days: "30",
             credit_limit: "0",
             discount_percent: "0",
+            ...(customer ? { route_id: null } : {}),
             active: true,
           },
     );
@@ -206,7 +223,11 @@ export function ContactsPage({ kind }: { kind: "customer" | "supplier" }) {
             action.run(() =>
               save(
                 resource,
-                { ...clean(form), credit_days: Number(form.credit_days ?? 30) },
+                {
+                  ...clean(form),
+                  credit_days: Number(form.credit_days ?? 30),
+                  ...(customer ? { route_id: form.route_id || null } : {}),
+                },
                 editing.id,
               ),
             );

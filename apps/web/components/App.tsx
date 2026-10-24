@@ -42,6 +42,7 @@ import {
   LoaderCircle,
   Rocket,
   Tag,
+  Route as RouteIcon,
 } from "lucide-react";
 import {
   api,
@@ -77,6 +78,7 @@ import {
   IntegrationsPage,
   OfflinePage,
   SetupPage,
+  RouteSalesPage,
 } from "./modules";
 const navigation = [
   {
@@ -105,6 +107,13 @@ const navigation = [
     href: "/sales",
     icon: ReceiptText,
     permission: "sales.read",
+    group: "",
+  },
+  {
+    label: "Van route sales",
+    href: "/route-sales",
+    icon: RouteIcon,
+    permission: "routes.read",
     group: "",
   },
   {
@@ -717,6 +726,9 @@ export default function App() {
         break;
       case "/shifts":
         screen = <ShiftsPage />;
+        break;
+      case "/route-sales":
+        screen = <RouteSalesPage />;
         break;
       case "/accounting":
         screen = <AccountingPage />;

@@ -297,7 +297,7 @@ export async function listContacts(
   const table = kind === "customer" ? "customers" : "suppliers",
     account = kind === "customer" ? "ar" : "ap";
   const r = await ctx.db.query(
-    `SELECT c.*,coalesce((SELECT sum(${kind === "customer" ? "l.debit-l.credit" : "l.credit-l.debit"}) FROM journal_lines l JOIN accounts a ON a.company_id=l.company_id AND a.id=l.account_id JOIN journals j ON j.company_id=l.company_id AND j.id=l.journal_id WHERE l.company_id=c.company_id AND l.${kind}_id=c.id AND a.system_key=$2 AND j.branch_id=ANY($6::uuid[])),0)::text AS balance,count(*) OVER()::int AS _count FROM ${table} c WHERE c.company_id=$1 AND (c.name ILIKE $3 OR c.code ILIKE $3 OR c.phone ILIKE $3) ORDER BY c.name LIMIT $4 OFFSET $5`,
+    `SELECT c.*,coalesce((SELECT sum(${kind === "customer" ? "l.debit-l.credit" : "l.credit-l.debit"}) FROM journal_lines l JOIN accounts a ON a.company_id=l.company_id AND a.id=l.account_id JOIN journals j ON j.company_id=l.company_id AND j.id=l.journal_id WHERE l.company_id=c.company_id AND l.${kind}_id=c.id AND a.system_key=$2 AND j.branch_id=ANY($6::uuid[])),0)::text AS balance,count(*) OVER()::int AS _count FROM ${table} c WHERE c.company_id=$1 AND (c.name ILIKE $3 OR c.code ILIKE $3 OR c.phone ILIKE $3) AND ($7::uuid IS NULL OR c.route_id=$7) ORDER BY c.name LIMIT $4 OFFSET $5`,
     [
       ctx.companyId,
       account,
@@ -305,6 +305,7 @@ export async function listContacts(
       limit,
       offset,
       ctx.actor.branch_ids,
+      kind === "customer" && query.route_id ? String(query.route_id) : null,
     ],
   );
   return {

@@ -1404,6 +1404,74 @@ export async function businessPdf(ctx: Context, kind: string, id: string) {
       ).rows;
       title = "Stock " + doc.type;
       break;
+    case "route-loading":
+    case "route-delivery": {
+      requirePermission(ctx, "routes.read");
+      const { loadingSheet, deliverySheet } = await import("./route-shifts.ts");
+      if (kind === "route-loading") {
+        const sheet = await loadingSheet(ctx, id);
+        doc = {
+          ...sheet.shift,
+          routeName: sheet.shift.route,
+          salespersonName: sheet.shift.salesperson,
+        };
+        lines = sheet.lines.map((l: any) => ({
+          description: `${l.name}${l.sku ? ` · ${l.sku}` : ""}`,
+          quantity: l.quantity,
+          unit: l.unit,
+          total: l.total,
+        }));
+        title = "Route loading sheet";
+        doc.printMeta = [
+          ["Route", `${sheet.shift.route_code} — ${sheet.shift.route}`],
+          ["Salesperson", sheet.shift.salesperson],
+          ["Warehouse", sheet.shift.warehouse],
+          [
+            "Shift opened",
+            dstr(sheet.shift.opened_at ?? sheet.shift.created_at),
+          ],
+        ];
+        doc.printTotals = {
+          "Consolidated quantity": sheet.totals.quantity,
+          "Net value": sheet.totals.net,
+          VAT: sheet.totals.tax,
+          "Goods invoiced total": sheet.totals.total,
+        };
+        doc.notes =
+          "Consolidated from the invoices posted on this shift; returns recorded later adjust stock separately. Internal loading record, not a fiscal document.";
+      } else {
+        const sheet = await deliverySheet(ctx, id);
+        doc = { ...sheet.shift, routeName: sheet.shift.route };
+        lines = sheet.customers.flatMap((c: any) => [
+          {
+            description: `${c.customer} — ${c.invoices
+              .map((i: any) => i.number)
+              .join(", ")}`,
+            total: c.total,
+          },
+        ]);
+        title = "Route delivery sheet";
+        doc.printMeta = [
+          ["Route", `${sheet.shift.route_code} — ${sheet.shift.route}`],
+          ["Salesperson", sheet.shift.salesperson],
+          ["Register", sheet.shift.register],
+          ["Invoices", String(sheet.totals.invoices)],
+        ];
+        doc.printTotals = {
+          "Invoice value": sheet.totals.total,
+          "Outstanding balance": sheet.totals.outstanding,
+        };
+        doc.printParty = {
+          label: "Deliveries are signed for by each customer",
+          name: "____________________",
+          sub: "Receiver name & signature",
+        };
+        doc.notes =
+          "Customers listed with their invoice numbers and amounts for this shift. Balances are settled later through Receive payment / Clear account.";
+      }
+      doc.printNumber = undefined;
+      break;
+    }
     default:
       fail(404, "NOT_FOUND", "Document type not found");
   }

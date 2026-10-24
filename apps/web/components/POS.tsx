@@ -19,6 +19,7 @@ import {
   Wallet,
   Smartphone,
   CreditCard,
+  FileText,
   Settings2,
   Package,
   WifiOff,
@@ -682,6 +683,7 @@ export default function POS() {
     } catch {}
   }
   async function finishPosted(result: any) {
+    const creditCustomer = customer?.name ?? null;
     clearPending();
     setPaymentOpen(false);
     setLines([]);
@@ -695,7 +697,11 @@ export default function POS() {
     shifts.refresh();
     notify("Sale posted. Stock, payments and books are connected.");
     try {
-      setReceipt(await api("/sales/" + result.id));
+      const full = await api("/sales/" + result.id);
+      setReceipt({
+        ...full,
+        customer_name: full.customer_name ?? creditCustomer,
+      });
     } catch {
       notify(
         "Sale is confirmed as " +
@@ -705,6 +711,75 @@ export default function POS() {
       );
     }
   }
+  // Direct credit sale shortcut: posts the whole cart to the customer's
+  // account (no payment collected now) and returns a sales invoice, not a
+  // receipt. Uses the same idempotent submission + uncertainty recovery as
+  // the ordinary checkout.
+  async function postCreditSale() {
+    if (!lines.length || quoting || busy || pending) return;
+    if (!customer) return;
+    if (!online) {
+      setError(
+        new ApiError(
+          "OFFLINE_FORBIDDEN",
+          "Credit invoices need a connection: the invoice, stock and ledger must post atomically.",
+        ),
+      );
+      return;
+    }
+    if (
+      !window.confirm(
+        `Post the whole cart — ${currency(totals.total, meta.company.currency)} — to ${customer.name}'s account as a sales invoice? No payment is recorded now; the balance is collected later.`,
+      )
+    )
+      return;
+    setError(null);
+    setBusy(true);
+    let submitted = false;
+    try {
+      const p = { ...payload(), customer_credit: "0", payments: [] };
+      const validated = checkoutSchema.safeParse(p);
+      if (!validated.success)
+        throw new ApiError(
+          "VALIDATION_ERROR",
+          "Review the quantities, prices and discounts before posting the invoice.",
+          validated.error.issues.map((i) => ({
+            path: i.path.join("."),
+            message: i.message,
+          })),
+        );
+      const submission = { key: crypto.randomUUID(), payload: validated.data };
+      setPending(submission);
+      try {
+        localStorage.setItem(pendingKey, JSON.stringify(submission));
+      } catch {
+        throw new Error(
+          "Cannot save checkout recovery on this device. No invoice was submitted.",
+        );
+      }
+      submitted = true;
+      const result: any = await api("/sales", {
+        method: "POST",
+        body: submission.payload,
+        key: submission.key,
+      });
+      await finishPosted(result);
+    } catch (e: any) {
+      setError(e);
+      const definitelyRejected =
+        e instanceof ApiError &&
+        e.status !== undefined &&
+        e.status >= 400 &&
+        e.status < 500 &&
+        ![401, 429].includes(e.status) &&
+        !["TRANSACTION_BUSY", "IDEMPOTENCY_SCOPE_CHANGED"].includes(e.code);
+      if (e?.code === "COMMAND_CANCELLED" || !submitted || definitelyRejected)
+        clearPending();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function recoverOrCancel() {
     if (
       !pending ||
@@ -1313,6 +1388,35 @@ export default function POS() {
               </>
             )}
           </Button>
+          {online && !pending && (
+            <Button
+              variant="secondary"
+              className="credit-sale-btn"
+              onClick={postCreditSale}
+              disabled={
+                !lines.length ||
+                quoting ||
+                busy ||
+                !customer ||
+                !actor.permissions.includes("sales.credit")
+              }
+              title={
+                !customer
+                  ? "Select a customer (F4) to sell on credit"
+                  : !actor.permissions.includes("sales.credit")
+                    ? "Your role cannot post credit sales"
+                    : "Post the whole cart on the customer's account"
+              }
+            >
+              <FileText size={17} /> Post credit sale
+            </Button>
+          )}
+          {online && !pending && (
+            <p className="form-note credit-sale-note">
+              Skips payment and produces a sales invoice on the customer's
+              account — collection happens later.
+            </p>
+          )}
           <div className="cart-security">
             <LockKeyhole size={12} />
             {online
@@ -1807,8 +1911,16 @@ export default function POS() {
       <Dialog
         open={!!receipt}
         onClose={() => setReceipt(null)}
-        title="Sale complete"
-        description="The sale, stock movements and balanced journal have been posted."
+        title={
+          receipt && D(receipt.outstanding ?? 0).gt(0)
+            ? "Sales invoice posted"
+            : "Sale complete"
+        }
+        description={
+          receipt && D(receipt.outstanding ?? 0).gt(0)
+            ? `The balance is on ${receipt.customer_name ?? "the customer"}'s account — collect it later from the customer or route ledger.`
+            : "The sale, stock movements and balanced journal have been posted."
+        }
       >
         <div className="receipt-success">
           <span>
@@ -1816,6 +1928,14 @@ export default function POS() {
           </span>
           <h3>{currency(receipt?.total, meta.company.currency)}</h3>
           <p>{receipt?.number}</p>
+          {receipt && D(receipt.outstanding ?? 0).gt(0) && (
+            <p className="form-note">
+              Balance due {currency(receipt.outstanding, meta.company.currency)}
+              {receipt.due_date
+                ? ` · due ${String(receipt.due_date).slice(0, 10)}`
+                : ""}
+            </p>
+          )}
         </div>
         <div className="receipt-preview">
           <h3>{meta.company.name}</h3>
@@ -1842,6 +1962,17 @@ export default function POS() {
           </p>
         </div>
         <div className="form-actions">
+          <a
+            className="btn secondary"
+            href={`/api/v1/sales/${receipt?.id}/receipt`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Printer size={16} />{" "}
+            {receipt && D(receipt.outstanding ?? 0).gt(0)
+              ? "Print sales invoice (A4)"
+              : "Print invoice (A4)"}
+          </a>
           <a
             className="btn secondary"
             href={`/api/v1/sales/${receipt?.id}/receipt?thermal=true`}

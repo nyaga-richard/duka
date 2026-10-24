@@ -26,6 +26,7 @@ export const searchQuery = z
     product_id: z.uuid().optional(),
     category_id: z.uuid().optional(),
     customer_id: z.uuid().optional(),
+    route_id: z.uuid().optional(),
     supplier_id: z.uuid().optional(),
     user_id: z.uuid().optional(),
     contact_id: z.uuid().optional(),
