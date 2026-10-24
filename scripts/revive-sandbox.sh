@@ -32,6 +32,11 @@ if [ ! -x node_modules/.bin/tsx ]; then
 else
   echo "node_modules present - skip"
 fi
+# Built server artifacts (always pruned on recreation) — restore step needs unpack-backup.mjs.
+if [ ! -f artifacts/server/unpack-backup.mjs ]; then
+  say "build server artifacts"
+  npm run build:server
+fi
 
 # --- 2. PostgreSQL 17 service ------------------------------------------------
 if ! command -v psql >/dev/null; then

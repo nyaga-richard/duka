@@ -2883,6 +2883,31 @@ hr {
 .checkout-btn > svg:first-child {
   margin-right: 0;
 }
+.route-shift-picker-inner {
+  display: flex;
+  gap: 14px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.route-shift-picker-inner .form-field {
+  min-width: 320px;
+}
+.route-shift-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 6px;
+}
+.row-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.row-actions .btn {
+  padding: 5px 10px;
+  min-height: 0;
+  font-size: 12px;
+}
 .credit-sale-btn {
   width: 100%;
   margin-top: 10px;

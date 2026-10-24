@@ -43,6 +43,7 @@ import {
   Rocket,
   Tag,
   Route as RouteIcon,
+  MapPin,
 } from "lucide-react";
 import {
   api,
@@ -79,6 +80,7 @@ import {
   OfflinePage,
   SetupPage,
   RouteSalesPage,
+  RouteManagePage,
 } from "./modules";
 const navigation = [
   {
@@ -114,6 +116,13 @@ const navigation = [
     href: "/route-sales",
     icon: RouteIcon,
     permission: "routes.read",
+    group: "",
+  },
+  {
+    label: "Manage routes",
+    href: "/routes-manage",
+    icon: MapPin,
+    permission: "routes.manage",
     group: "",
   },
   {
@@ -729,6 +738,9 @@ export default function App() {
         break;
       case "/route-sales":
         screen = <RouteSalesPage />;
+        break;
+      case "/routes-manage":
+        screen = <RouteManagePage />;
         break;
       case "/accounting":
         screen = <AccountingPage />;

@@ -113,6 +113,7 @@ import {
   loadingSheet,
   deliverySheet,
   routeLedger,
+  listStaffPicklist,
 } from "../services/route-shifts.ts";
 import { routeSchema, routeShiftOpenSchema } from "@duka/shared";
 import {
@@ -867,6 +868,15 @@ endpoint(
   "Update route assignment",
   (ctx, i, req) => saveRoute(ctx, i, idOf(req)),
 );
+endpoint(
+  "get",
+  "/staff/picklist",
+  "routes.manage",
+  undefined,
+  "Active staff for route assignment picklists",
+  (ctx) => listStaffPicklist(ctx),
+);
+
 endpoint(
   "get",
   "/routes/:id",

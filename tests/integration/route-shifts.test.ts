@@ -21,6 +21,7 @@ import { settleContact } from "../../apps/api/src/services/payments.ts";
 import {
   closeRouteShift,
   deliverySheet,
+  listStaffPicklist,
   getRouteShift,
   listRouteShifts,
   listRoutes,
@@ -361,6 +362,64 @@ test("route-management guardrails: unknown register/salesperson rejected; routes
       f.routeCustomer.id,
     );
     assert.equal(moved.route_id, route2.id);
+  });
+});
+
+test("staff picklist is company-scoped and route updates clear assignments with null", async () => {
+  const f = await routeFixture();
+  const other = await fixture();
+  await transaction(f.actor, async (ctx) => {
+    const staff = await listStaffPicklist(ctx);
+    assert.ok(
+      staff.items.some(
+        (s: any) => s.id === f.actor.id && s.status === "active",
+      ),
+      "picklist must contain the company owner",
+    );
+    assert.ok(
+      !staff.items.some((s: any) => s.id === other.actor.id),
+      "picklist must never contain other companies' staff",
+    );
+    // Clearing assignments: null unassigns salesperson and till linkage.
+    const cleared = await saveRoute(
+      ctx,
+      routeSchema.parse({
+        name: f.route.name,
+        code: f.route.code,
+        active: true,
+        salesperson_id: null,
+        register_id: null,
+      }),
+      f.route.id,
+    );
+    assert.equal(cleared.salesperson_id, null);
+    assert.equal(cleared.register_id, null);
+    // Deactivation then reactivation round-trip.
+    const off = await saveRoute(
+      ctx,
+      routeSchema.parse({
+        name: f.route.name,
+        code: f.route.code,
+        active: false,
+        register_id: f.registerId,
+        salesperson_id: f.actor.id,
+      }),
+      f.route.id,
+    );
+    assert.equal(off.active, false);
+    const on = await saveRoute(
+      ctx,
+      routeSchema.parse({
+        name: f.route.name,
+        code: f.route.code,
+        active: true,
+        register_id: f.registerId,
+        salesperson_id: f.actor.id,
+      }),
+      f.route.id,
+    );
+    assert.equal(on.active, true);
+    assert.equal(on.register_id, f.registerId);
   });
 });
 

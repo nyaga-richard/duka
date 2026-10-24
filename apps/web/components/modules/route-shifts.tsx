@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Truck,
   FileText,
@@ -7,6 +8,9 @@ import {
   MapPin,
   Plus,
   Check,
+  X,
+  PenLine,
+  Search,
 } from "lucide-react";
 import { calculateLine } from "@duka/shared";
 import {
@@ -32,7 +36,10 @@ import {
   LineEditor,
   DataTable,
   StatTile,
+  Pagination,
+  SearchBox,
 } from "../ui";
+import { useList } from "./common";
 
 function invoiceTotals(lines: any[], discountPercent: string) {
   const t = lines.reduce(
@@ -64,6 +71,11 @@ export function RouteSalesPage() {
   const { meta, actor, notify } = useWorkspace();
   const routes = useQuery<any>("/routes?limit=100");
   const [routeId, setRouteId] = useState("");
+  // Deep links from the route manager page carry ?route=<id>.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("route");
+    if (q && !routeId) setRouteId(q);
+  }, []);
   useEffect(() => {
     if (!routeId && routes.data?.items?.length) {
       const mine = routes.data.items.find(
@@ -103,9 +115,7 @@ export function RouteSalesPage() {
       ? `/route-shifts/${shiftId}/delivery-sheet`
       : null,
   );
-  const [manageOpen, setManageOpen] = useState(false),
-    [editingRoute, setEditingRoute] = useState<any>(null),
-    [openShiftOpen, setOpenShiftOpen] = useState(false),
+  const [openShiftOpen, setOpenShiftOpen] = useState(false),
     [invoiceOpen, setInvoiceOpen] = useState(false),
     [closeOpen, setCloseOpen] = useState(false),
     [paying, setPaying] = useState<any>(null),
@@ -134,9 +144,9 @@ export function RouteSalesPage() {
         description="Each route belongs to one salesperson. Sell on credit to route customers, settle accounts later, and close with a consolidated loading sheet and delivery sheet."
       >
         {canManage && (
-          <Button variant="secondary" onClick={() => setManageOpen(true)}>
+          <Link href="/routes-manage" className="btn secondary">
             <MapPin size={16} /> Manage routes
-          </Button>
+          </Link>
         )}
       </PageHeading>
       {error && <ErrorCard error={error} />}
@@ -149,9 +159,9 @@ export function RouteSalesPage() {
           </p>
           {canManage && (
             <div className="form-actions">
-              <Button onClick={() => setManageOpen(true)}>
+              <Link href="/routes-manage" className="btn primary">
                 <Plus size={16} /> Create route
-              </Button>
+              </Link>
             </div>
           )}
         </section>
@@ -217,6 +227,47 @@ export function RouteSalesPage() {
               {openShiftItem.invoices} invoices ·{" "}
               {currency(openShiftItem.invoiced, meta.company.currency)}
             </p>
+          )}
+          {!!shifts.data?.items?.length && (
+            <section className="card form-card route-shift-picker">
+              <div className="route-shift-picker-inner">
+                <FormField label="Viewing shift (history)">
+                  <select
+                    value={shiftId}
+                    onChange={(e) => setShiftId(e.target.value)}
+                  >
+                    {shifts.data.items.map((s: any) => (
+                      <option key={s.id} value={s.id}>
+                        {dateText(s.opened_at, true)} · {s.salesperson} ·{" "}
+                        {s.status} · {s.invoices} invoices ·{" "}
+                        {currency(s.invoiced, meta.company.currency)}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+                {detail.data && (
+                  <div className="route-shift-meta">
+                    <Badge
+                      status={
+                        detail.data.status === "open"
+                          ? "approved"
+                          : detail.data.status === "submitted"
+                            ? "partial"
+                            : "paid"
+                      }
+                    >
+                      {detail.data.status}
+                    </Badge>
+                    <span className="form-note">
+                      opened {dateText(detail.data.opened_at, true)}
+                      {detail.data.closed_at
+                        ? " · closed " + dateText(detail.data.closed_at, true)
+                        : ""}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </section>
           )}
           <div className="tab-bar">
             {(
@@ -462,21 +513,7 @@ export function RouteSalesPage() {
           )}
         </>
       )}
-      <RouteManagerDialog
-        open={manageOpen}
-        onClose={() => setManageOpen(false)}
-        routes={routes.data?.items ?? []}
-        onEdit={(r) => setEditingRoute(r ?? {})}
-      />
-      <RouteFormDialog
-        route={editingRoute}
-        onClose={() => setEditingRoute(null)}
-        onSaved={() => {
-          setEditingRoute(null);
-          refresh();
-          notify("Route saved.");
-        }}
-      />
+
       <OpenRouteShiftDialog
         open={openShiftOpen}
         route={route}
@@ -534,174 +571,386 @@ const numberFmt = (v: any) => {
   }
 };
 
-function RouteManagerDialog({
-  open,
-  onClose,
-  routes,
-  onEdit,
-}: {
-  open: boolean;
-  onClose: () => void;
-  routes: any[];
-  onEdit: (r: any) => void;
-}) {
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="Van-sales routes"
-      description="A route couples a salesperson with a till and its own customers."
-    >
-      <div className="form-actions">
-        <Button variant="secondary" onClick={() => onEdit({})}>
-          <Plus size={16} /> New route
-        </Button>
-      </div>
-      <DataTable
-        columns={[
-          { key: "code", title: "Code" },
-          { key: "name", title: "Name" },
-          {
-            key: "salesperson",
-            title: "Salesperson",
-            render: (r: any) => r.salesperson ?? "—",
-          },
-          {
-            key: "register",
-            title: "Till",
-            render: (r: any) => r.register ?? "—",
-          },
-          {
-            key: "active",
-            title: "Status",
-            render: (r: any) => (
-              <Badge status={r.active ? "paid" : "void"}>
-                {r.active ? "Active" : "Inactive"}
-              </Badge>
-            ),
-          },
-          {
-            key: "id",
-            title: "",
-            render: (r: any) => (
-              <Button variant="secondary" onClick={() => onEdit(r)}>
-                Edit
-              </Button>
-            ),
-          },
-        ]}
-        items={routes}
-      />
-    </Dialog>
-  );
-}
+// ---------- Route management (manage routes page) ----------
 
-function RouteFormDialog({
-  route,
-  onClose,
-  onSaved,
-}: {
-  route: any;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const { meta, actor } = useWorkspace();
-  const isNew = route && !route.id;
-  const [form, setForm] = useState<any>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<any>(null);
-  const users = useQuery<any>(
-    actor?.permissions?.includes("users.manage") ? "/users?limit=100" : null,
+export function RouteManagePage() {
+  const { meta, notify } = useWorkspace();
+  const canManage = usePermission("routes.manage");
+  const list = useList("/routes", { limit: 200 });
+  const staff = useQuery<any>(canManage ? "/staff/picklist" : null);
+  const [editing, setEditing] = useState<any>(undefined),
+    [form, setForm] = useState<any>({}),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState<any>(null),
+    [selected, setSelected] = useState<any>(null);
+  const customers = useQuery<any>(
+    selected
+      ? `/customers?route_id=${selected.id}&limit=100&active=true`
+      : null,
   );
-  useEffect(() => {
-    if (route)
-      setForm({
-        name: route.name ?? "",
-        code: route.code ?? "",
-        salesperson_id: route.salesperson_id ?? "",
-        register_id: route.register_id ?? "",
-        active: route.active ?? true,
-        notes: route.notes ?? "",
-      });
-  }, [route]);
-  if (!route) return null;
+  const stats = useMemo(() => {
+    const items = list.data?.items ?? [];
+    return items.reduce(
+      (acc: any, r: any) => ({
+        routes: acc.routes + 1,
+        active: acc.active + (r.active ? 1 : 0),
+        customers: acc.customers + Number(r.customers ?? 0),
+        outstanding: acc.outstanding.plus(r.outstanding ?? "0"),
+        openShifts: acc.openShifts + Number(r.open_shifts ?? 0),
+      }),
+      {
+        routes: 0,
+        active: 0,
+        customers: 0,
+        outstanding: D(0),
+        openShifts: 0,
+      },
+    );
+  }, [list.data]);
   const registerOptions = meta.registers.map((r: any) => ({
     id: r.id,
-    name: `${r.name} · ${r.warehouse ?? "warehouse"}`,
+    name: r.name + (r.warehouse ? " · " + r.warehouse : ""),
   }));
+
+  function edit(v?: any) {
+    setError(null);
+    setEditing(v ?? {});
+    setForm(
+      v
+        ? {
+            name: v.name,
+            code: v.code,
+            salesperson_id: v.salesperson_id ?? "",
+            register_id: v.register_id ?? "",
+            active: v.active,
+            notes: v.notes ?? "",
+          }
+        : { name: "", code: "", active: true },
+    );
+  }
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      await api(route.id ? `/routes/${route.id}` : "/routes", {
-        method: route.id ? "PUT" : "POST",
-        body: {
-          name: form.name,
-          code: form.code,
-          active: !!form.active,
-          ...(form.salesperson_id
-            ? { salesperson_id: form.salesperson_id }
-            : { salesperson_id: undefined }),
-          ...(form.register_id
-            ? { register_id: form.register_id }
-            : { register_id: undefined }),
-          ...(form.notes ? { notes: form.notes } : {}),
-        },
+      const body: any = {
+        name: form.name,
+        code: form.code,
+        active: !!form.active,
+        // null clears the assignment; blank keeps nothing pending
+        salesperson_id: form.salesperson_id || null,
+        register_id: form.register_id || null,
+      };
+      if (form.notes) body.notes = form.notes;
+      if (!editing?.id) delete body.notes_if_blank;
+      await api(editing?.id ? `/routes/${editing.id}` : "/routes", {
+        method: editing?.id ? "PUT" : "POST",
+        body,
         key: crypto.randomUUID(),
       });
-      onSaved();
+      setEditing(undefined);
+      list.refresh();
+      notify(
+        editing?.id
+          ? `Route ${body.code} updated.`
+          : `Route ${body.code} created — open its first shift from Van route sales.`,
+      );
     } catch (e) {
       setError(e);
     } finally {
       setBusy(false);
     }
   }
+
+  async function toggle(r: any) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/routes/${r.id}`, {
+        method: "PUT",
+        body: {
+          name: r.name,
+          code: r.code,
+          active: !r.active,
+          salesperson_id: r.salesperson_id ?? null,
+          register_id: r.register_id ?? null,
+          ...(r.notes ? { notes: r.notes } : {}),
+        },
+        key: crypto.randomUUID(),
+      });
+      list.refresh();
+      notify(`Route ${r.code} ${r.active ? "deactivated" : "reactivated"}.`);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const fields = [
+    { key: "name", label: "Route name", required: true },
+    {
+      key: "code",
+      label: "Route code",
+      required: true,
+      help: "Short code shown on sheets and ledgers, e.g. RT-02.",
+    },
+    {
+      key: "salesperson_id",
+      label: "Assigned salesperson",
+      type: "select",
+      options: staff.data?.items
+        .filter((u: any) => u.status === "active")
+        .map((u: any) => ({ id: u.id, name: u.name })),
+      help: "Only this person can open the route's shift in the van. Leave unassigned to let any route-shift holder drive it.",
+    },
+    {
+      key: "register_id",
+      label: "Route till",
+      type: "select",
+      options: registerOptions,
+      help: "Invoices posted on a route shift deduct stock from this till's warehouse.",
+    },
+    { key: "active", label: "Active (accepts sales)", type: "checkbox" },
+    {
+      key: "notes",
+      label: "Route notes (streets, drops, days)",
+      type: "textarea",
+      full: true,
+    },
+  ];
+
   return (
-    <Dialog
-      open
-      onClose={onClose}
-      title={isNew ? "New route" : "Edit route"}
-      description="Assign the salesperson and the till the route's stock leaves from."
-    >
-      <form onSubmit={save}>
-        {error && <ErrorCard error={error} />}
-        <Fields
-          fields={[
-            { key: "name", label: "Route name", required: true },
-            { key: "code", label: "Route code", required: true },
-            {
-              key: "salesperson_id",
-              label: "Salesperson",
-              type: "select",
-              options: users.data?.items.map((u: any) => ({
-                id: u.id,
-                name: u.name,
-              })),
-              help: users.data
-                ? undefined
-                : "Listing staff needs user-management access; leave blank to allow any route.shift holder.",
-            },
-            {
-              key: "register_id",
-              label: "Route till",
-              type: "select",
-              options: registerOptions,
-              help: "Invoices deduct stock from this till's warehouse.",
-            },
-            { key: "active", label: "Active", type: "checkbox" },
-            { key: "notes", label: "Notes", type: "textarea", full: true },
-          ]}
-          value={form}
-          onChange={setForm}
-        />
-        <div className="form-actions">
-          <Button type="submit" busy={busy}>
-            Save route
-          </Button>
-        </div>
-      </form>
-    </Dialog>
+    <div>
+      <PageHeading
+        eyebrow="SALES · VAN ROUTES"
+        title="Manage routes"
+        description="Create and maintain van-sales routes: one route pairs a salesperson with a till, and every route owns its customers."
+      >
+        <Button onClick={() => edit()}>
+          <Plus size={16} /> Create route
+        </Button>
+      </PageHeading>
+      {!canManage && (
+        <section className="card form-card">
+          <h3>Manage access required</h3>
+          <p className="form-note">
+            Only managers with the users.manage-style routes.manage permission
+            can create or edit routes. Ask an owner to grant it, or head to{" "}
+            <Link href="/route-sales">Van route sales</Link>.
+          </p>
+        </section>
+      )}
+      {canManage && (
+        <>
+          <section className="card detail-header">
+            <div className="stat-list">
+              <StatTile label="Routes" value={String(stats.routes)} />
+              <StatTile label="Active" value={String(stats.active)} />
+              <StatTile
+                label="Customers on routes"
+                value={String(stats.customers)}
+              />
+              <StatTile
+                label="Route receivables"
+                value={currency(stats.outstanding, meta.company.currency)}
+                tone={stats.outstanding.gt(0) ? "warn" : undefined}
+              />
+              <StatTile
+                label="Open route shifts"
+                value={String(stats.openShifts)}
+              />
+            </div>
+          </section>
+          {editing !== undefined && (
+            <section className="card form-card">
+              <h3>
+                {editing?.id
+                  ? "Edit route " + (editing.code ?? "")
+                  : "Create a route"}
+              </h3>
+              <p className="form-note">
+                Once a route exists, open its shift from the Van route sales
+                page; invoices post against the route's till and customers.
+              </p>
+              {error && <ErrorCard error={error} />}
+              <form onSubmit={save}>
+                <Fields
+                  fields={fields as any}
+                  value={form}
+                  onChange={setForm}
+                />
+                <div className="form-actions">
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    onClick={() => setEditing(undefined)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" busy={busy}>
+                    <Check size={16} />{" "}
+                    {editing?.id ? "Save route" : "Create route"}
+                  </Button>
+                </div>
+              </form>
+            </section>
+          )}
+          {error && editing === undefined && <ErrorCard error={error} />}
+          <section className="card">
+            <div className="table-toolbar">
+              <SearchBox
+                value={list.search}
+                onChange={list.setSearch}
+                placeholder="Search route name or code…"
+              />
+              <span className="muted">{list.data?.total ?? 0} routes</span>
+            </div>
+            {list.error && <ErrorCard error={list.error} />}
+            <DataTable
+              items={list.data?.items}
+              loading={list.loading}
+              onRow={(r: any) => setSelected(r)}
+              columns={[
+                { key: "code", title: "Code" },
+                { key: "name", title: "Route" },
+                {
+                  key: "salesperson",
+                  title: "Salesperson",
+                  render: (r: any) => r.salesperson ?? "Unassigned",
+                },
+                {
+                  key: "register",
+                  title: "Till",
+                  render: (r: any) => r.register ?? "—",
+                },
+                { key: "customers", title: "Customers" },
+                {
+                  key: "outstanding",
+                  title: "Receivables",
+                  render: (r: any) =>
+                    currency(r.outstanding, meta.company.currency),
+                },
+                {
+                  key: "open_shifts",
+                  title: "Shift",
+                  render: (r: any) => (
+                    <Badge status={r.open_shifts > 0 ? "approved" : "draft"}>
+                      {r.open_shifts > 0 ? "Open" : "Closed"}
+                    </Badge>
+                  ),
+                },
+                {
+                  key: "active",
+                  title: "Status",
+                  render: (r: any) => (
+                    <Badge status={r.active ? "paid" : "void"}>
+                      {r.active ? "Active" : "Inactive"}
+                    </Badge>
+                  ),
+                },
+                {
+                  key: "id",
+                  title: "",
+                  render: (r: any) => (
+                    <span className="row-actions">
+                      <Link
+                        className="icon-btn"
+                        href={`/route-sales?route=${r.id}`}
+                        aria-label={"Open route sales for " + r.code}
+                        title="Open route sales"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Truck size={15} />
+                      </Link>
+                      <Button
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelected(r);
+                        }}
+                      >
+                        Customers
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          edit(r);
+                        }}
+                      >
+                        <PenLine size={14} /> Edit
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggle(r);
+                        }}
+                      >
+                        {r.active ? "Deactivate" : "Reactivate"}
+                      </Button>
+                    </span>
+                  ),
+                },
+              ]}
+            />
+            <Pagination
+              page={list.page}
+              total={list.data?.total ?? 0}
+              limit={200}
+              onChange={list.setPage}
+            />
+          </section>
+          {selected && (
+            <section className="card">
+              <div className="table-toolbar">
+                <h3 className="subheading">
+                  Customers on {selected.code} — {selected.name}
+                </h3>
+                <Button variant="secondary" onClick={() => setSelected(null)}>
+                  <X size={15} /> Close
+                </Button>
+              </div>
+              {customers.error && <ErrorCard error={customers.error} />}
+              <DataTable
+                items={customers.data?.items}
+                loading={customers.loading}
+                columns={[
+                  { key: "name", title: "Customer" },
+                  { key: "code", title: "Code" },
+                  {
+                    key: "phone",
+                    title: "Phone",
+                    render: (r: any) => r.phone ?? "—",
+                  },
+                  {
+                    key: "credit_limit",
+                    title: "Credit limit",
+                    render: (r: any) =>
+                      currency(r.credit_limit, meta.company.currency),
+                  },
+                  {
+                    key: "balance",
+                    title: "Balance",
+                    render: (r: any) => (
+                      <Badge status={D(r.balance).gt(0) ? "partial" : "paid"}>
+                        {currency(r.balance, meta.company.currency)}
+                      </Badge>
+                    ),
+                  },
+                ]}
+              />
+              <p className="form-note card-note">
+                Assign or move customers from the Customers page — each customer
+                belongs to one route.
+              </p>
+            </section>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

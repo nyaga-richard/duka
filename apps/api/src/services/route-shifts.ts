@@ -46,6 +46,20 @@ export async function listRoutes(ctx: Context, q: any) {
   };
 }
 
+/** Minimal staff list for route assignment — works without users.manage. */
+export async function listStaffPicklist(ctx: Context) {
+  requirePermission(ctx, "routes.manage");
+  const rows = (
+    await ctx.db.query(
+      "SELECT id, name, status FROM identities WHERE company_id=$1 ORDER BY name",
+      [ctx.companyId],
+    )
+  ).rows;
+  return {
+    items: rows.map(({ id, name, status }: any) => ({ id, name, status })),
+  };
+}
+
 export async function getRoute(ctx: Context, id: string) {
   requirePermission(ctx, "routes.read");
   const r = await one(

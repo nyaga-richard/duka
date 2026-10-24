@@ -152,8 +152,8 @@ export const routeSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
     code: z.string().trim().min(1).max(40),
-    salesperson_id: uuid.optional(),
-    register_id: uuid.optional(),
+    salesperson_id: uuid.optional().nullable(),
+    register_id: uuid.optional().nullable(),
     active: z.boolean().default(true),
     notes: optionalText,
   })
