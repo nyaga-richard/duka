@@ -63,7 +63,7 @@ export function ContactsPage({ kind }: { kind: "customer" | "supplier" }) {
   const list = useList(resource);
   const [editing, setEditing] = useState<any>(null),
     [form, setForm] = useState<any>({});
-  const routes = useQuery<any>(customer ? "/routes?limit=200" : null);
+  const routes = useQuery<any>(customer ? "/routes?limit=100" : null);
   const fields =
     customer && routes.data?.items
       ? [

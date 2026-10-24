@@ -576,7 +576,7 @@ const numberFmt = (v: any) => {
 export function RouteManagePage() {
   const { meta, notify } = useWorkspace();
   const canManage = usePermission("routes.manage");
-  const list = useList("/routes", { limit: 200 });
+  const list = useList("/routes", { limit: 100 });
   const staff = useQuery<any>(canManage ? "/staff/picklist" : null);
   const [editing, setEditing] = useState<any>(undefined),
     [form, setForm] = useState<any>({}),
@@ -899,7 +899,7 @@ export function RouteManagePage() {
             <Pagination
               page={list.page}
               total={list.data?.total ?? 0}
-              limit={200}
+              limit={100}
               onChange={list.setPage}
             />
           </section>

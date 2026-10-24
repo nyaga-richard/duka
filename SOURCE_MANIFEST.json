@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
-  "git_commit": "9254d726affa5a6857b363966e50e94ea43a14b5",
+  "git_commit": "c792d29d07065e641567963b7c2cea31c43b3730",
   "dirty": false,
-  "created_at": "2026-10-24T05:06:42.970761+00:00",
+  "created_at": "2026-10-24T05:31:02.894768+00:00",
   "files": {
     ".dockerignore": "024c933ae4575f3c1b259e08a1534b77b308cba3e746b1c8de183373fd12d12d",
     ".env.example": "3d79133c217d779c09495c1aa7cf13f0170cb9ae5a03838b59f40cae3c680245",
@@ -55,7 +55,7 @@
     "apps/web/components/modules/catalog.tsx": "ad6d4c1dc9df7e1b5d7596d1fe21041da24cf255277ce36fc35c329c857dc037",
     "apps/web/components/modules/common.tsx": "5fba8ed9b155442a3d06899dbdbd189632e5294bb4cdcf875efd3614c309e156",
     "apps/web/components/modules/contact-detail.tsx": "1cd6df52b89e5881e7daa5bed52c08d2b3993b33282e81fbb381c3b69c29a4ec",
-    "apps/web/components/modules/contacts.tsx": "5a3e326ba43c60d549cc37627a20bdaba09595ca68af5c3106e9054240208e4d",
+    "apps/web/components/modules/contacts.tsx": "5aa8875310cf32db98bd2ff112636cc0799af261f166e83186e9276d56015c22",
     "apps/web/components/modules/expense-refunds.tsx": "64eaea0638f3c09609e0ae6e1ab42472e885e4a112e6ef35b0df5ed98d4b0e26",
     "apps/web/components/modules/index.ts": "f21fcceb61becfbbeeb6daebd290857a468374c2c544b6984f42ae135ddfb2c3",
     "apps/web/components/modules/integrations.tsx": "39393b52d7f821337faff677416a89180c2e5d3b07cab825d7711ef11ab56431",
@@ -64,7 +64,7 @@
     "apps/web/components/modules/price-changes.tsx": "30e6ad534d4adb853cce297887801dc69e3dbe3dbebe2929979201ed714d6062",
     "apps/web/components/modules/product-detail.tsx": "f3e8687fa4db67d3717c584edb890f6968e90698da1a10d7bca625a2fd59a741",
     "apps/web/components/modules/purchasing.tsx": "37186342c7dc1ac5e1f3c8c66c23532ea85d572d54c0c1448b08b59e5f1abf98",
-    "apps/web/components/modules/route-shifts.tsx": "f7019ed640760204dad45f391b219a139fe1096309e2e7da87935751c8668a68",
+    "apps/web/components/modules/route-shifts.tsx": "be8ad96612ba6ef62f8a8435019907c9cdcdbb10a7f60f35f976409626468904",
     "apps/web/components/modules/sales.tsx": "3297bdcc0f8bf37c31c85960cb4b80a80107dbf4ee95f31f5b35981785605a0a",
     "apps/web/components/modules/setup.tsx": "57cf71b6454de9ff53758c394255a1c7cc936a92abc98864f4fe07bf405acb08",
     "apps/web/components/modules/supplier-credits.tsx": "e23ff267ed263f3b59554e8687b593aff0a9d39c16f35127516c0759873f4bb8",
