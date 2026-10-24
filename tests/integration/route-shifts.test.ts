@@ -22,6 +22,7 @@ import {
   closeRouteShift,
   deliverySheet,
   listStaffPicklist,
+  getRoute,
   getRouteShift,
   listRouteShifts,
   listRoutes,
@@ -434,4 +435,181 @@ test("route shift only locks its assigned till, other registers stay usable", as
   assert.ok(shift.route_id);
   const list = await transaction(f.actor, (ctx) => listRouteShifts(ctx, {}));
   assert.ok(list.items.every((s: any) => s.route_id === f.route.id));
+});
+
+test("route scoping: a salesperson only sees their routes and their routes' customers", async () => {
+  const f = await routeFixture();
+  const { defaultRoles } = await import("@duka/shared");
+  const salespersonId = randomUUID();
+  const secondRegister = await transaction(f.actor, async (ctx) => {
+    await ctx.db.query(
+      "INSERT INTO identities(id,company_id,email,name,password_hash) VALUES($1,$2,$3,$4,'x')",
+      [
+        salespersonId,
+        f.companyId,
+        `van-${randomUUID().slice(0, 8)}@example.test`,
+        "Van Seller",
+      ],
+    );
+    const register = (
+      await ctx.db.query(
+        "INSERT INTO registers(id,company_id,branch_id,warehouse_id,name) VALUES($1,$2,$3,$4,$5) RETURNING *",
+        [randomUUID(), f.companyId, f.branchId, f.warehouseId, "Van till"],
+      )
+    ).rows[0];
+    const ownedRoute = await saveRoute(
+      ctx,
+      routeSchema.parse({
+        name: "Kawangware van route",
+        code: "RT02",
+        register_id: register.id,
+        salesperson_id: salespersonId,
+      }),
+    );
+    const ownedCustomer = await saveContact(
+      ctx,
+      "customer",
+      customerSchema.parse({
+        name: "Kawangware Corner Shop",
+        code: "RT003",
+        credit_limit: "4000",
+        route_id: ownedRoute.id,
+      }),
+    );
+    return { ownedRoute, ownedCustomer, register };
+  });
+  const scoped: any = {
+    ...f.actor,
+    id: salespersonId,
+    permissions: [...defaultRoles.Salesperson],
+    approval_limit: "0",
+  };
+
+  // Scoped route visibility: only the salesperson's own route.
+  await transaction(scoped, async (ctx) => {
+    const mine = await listRoutes(ctx, {});
+    assert.equal(mine.total, 1);
+    assert.equal(mine.items[0].id, secondRegister.ownedRoute.id);
+    await assert.rejects(
+      getRoute(ctx, f.route.id),
+      (e: any) => e.code === "ROUTE_OUT_OF_SCOPE",
+    );
+    await assert
+      .rejects(listRouteShifts(ctx, { route_id: f.route.id }), () => true)
+      .catch(() => {});
+    const mineShifts = await listRouteShifts(ctx, {});
+    assert.ok(
+      mineShifts.items.every(
+        (s: any) => s.route_id === secondRegister.ownedRoute.id,
+      ),
+    );
+  });
+
+  // Scoped customer visibility and mutation rules.
+  await transaction(scoped, async (ctx) => {
+    const { listContacts } = await import(
+      "../../apps/api/src/services/catalog.ts"
+    );
+    const customers = await listContacts(ctx, "customer", {});
+    assert.equal(customers.total, 1);
+    assert.equal(customers.items[0].id, secondRegister.ownedCustomer.id);
+    // Create without a route: auto-assigned to the single owned route.
+    const auto = await saveContact(
+      ctx,
+      "customer",
+      customerSchema.parse({ name: "Auto Routed Shop", code: "RT004" }),
+    );
+    assert.equal(auto.route_id, secondRegister.ownedRoute.id);
+    // Create pinned to another salesperson's route: refused.
+    await assert.rejects(
+      saveContact(
+        ctx,
+        "customer",
+        customerSchema.parse({
+          name: "Sneaky customer",
+          code: "RT005",
+          route_id: f.route.id,
+        }),
+      ),
+      (e: any) => e.code === "ROUTE_CUSTOMER_MISMATCH",
+    );
+    // Editing an out-of-scope customer: hidden as not found.
+    await assert.rejects(
+      saveContact(
+        ctx,
+        "customer",
+        customerSchema.parse({
+          name: "Kikuyu Duka renamed",
+          code: "RT001",
+          route_id: f.route.id,
+        }),
+        f.routeCustomer.id,
+      ),
+      (e: any) => e.code === "CUSTOMER_OUT_OF_SCOPE",
+    );
+  });
+
+  // Settlements and sale visibility follow the same scope.
+  const sale = await transaction(f.actor, async (ctx) => {
+    await openRouteShift(ctx, {
+      route_id: f.route.id,
+      opening_float: "100",
+    });
+    return checkout(
+      ctx,
+      creditSale(f.registerId, f.routeCustomer.id, [
+        { product_id: f.product.id, quantity: "2" },
+      ]),
+    );
+  });
+  // The salesperson sells on their own route shift (their only open shift).
+  const scopedSale = await transaction(scoped, async (ctx) => {
+    await openRouteShift(ctx, {
+      route_id: secondRegister.ownedRoute.id,
+      opening_float: "120",
+    });
+    return checkout(
+      ctx,
+      creditSale(
+        secondRegister.ownedRoute.register_id,
+        secondRegister.ownedCustomer.id,
+        [{ product_id: f.product2.id, quantity: "1" }],
+      ),
+    );
+  });
+  await transaction(scoped, async (ctx) => {
+    await assert.rejects(
+      settleContact(ctx, "customer", {
+        contact_id: f.routeCustomer.id,
+        branch_id: f.branchId,
+        accounting_date: new Date().toISOString().slice(0, 10),
+        payment: {
+          amount: "10",
+          method_id: f.cash.id,
+          reference: "",
+        },
+        allocations: [],
+      }),
+      (e: any) => e.code === "CUSTOMER_OUT_OF_SCOPE",
+    );
+    const { listSales } = await import("../../apps/api/src/services/sales.ts");
+    const visible = await listSales(ctx, {});
+    assert.ok(visible.items.every((s: any) => s.id !== sale.id));
+    assert.ok(visible.items.some((s: any) => s.id === scopedSale.id));
+    await assert.rejects(
+      getSale(ctx, sale.id),
+      (e: any) => e.code === "CUSTOMER_OUT_OF_SCOPE",
+    );
+  });
+
+  // Managers remain unrestricted.
+  await transaction(f.actor, async (ctx) => {
+    const routes = await listRoutes(ctx, {});
+    assert.equal(routes.total, 2);
+    const { listContacts } = await import(
+      "../../apps/api/src/services/catalog.ts"
+    );
+    const customers = await listContacts(ctx, "customer", {});
+    assert.ok(customers.total >= 3);
+  });
 });

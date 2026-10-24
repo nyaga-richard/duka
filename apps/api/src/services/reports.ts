@@ -10,6 +10,7 @@ import {
   type Context,
   pageArgs,
 } from "../db.ts";
+import { requireCustomerInScope } from "./route-scope.ts";
 export async function reportScope(ctx: Context, q: any) {
   const branches = q.branch_id ? [q.branch_id] : ctx.actor.branch_ids;
   if (q.branch_id) branchAccess(ctx, q.branch_id);
@@ -201,6 +202,7 @@ export async function contactStatement(
     `SELECT * FROM ${kind === "customer" ? "customers" : "suppliers"} WHERE company_id=$1 AND id=$2`,
     [ctx.companyId, id],
   );
+  if (kind === "customer") await requireCustomerInScope(ctx, id);
   // Statement includes control and advance accounts, never the entire unrelated GL.
   const s = await reportScope(ctx, q),
     { page, limit, offset } = pageArgs(q);

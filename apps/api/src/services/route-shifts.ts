@@ -15,11 +15,13 @@ import {
 } from "../db.ts";
 import { openShift, closeShift } from "./shifts.ts";
 import { contactStatement } from "./reports.ts";
+import { routeScope, requireRouteInScope } from "./route-scope.ts";
 
 type RouteInput = z.infer<typeof routeSchema>;
 
 export async function listRoutes(ctx: Context, q: any) {
   requirePermission(ctx, "routes.read");
+  const scoped = await routeScope(ctx);
   const { page, limit, offset } = pageArgs(q);
   const r = await ctx.db.query(
     `SELECT r.*, u.name AS salesperson, g.name AS register, w.name AS warehouse,
@@ -35,8 +37,15 @@ export async function listRoutes(ctx: Context, q: any) {
      LEFT JOIN registers g ON g.company_id=r.company_id AND g.id=r.register_id
      LEFT JOIN warehouses w ON w.company_id=g.company_id AND w.id=g.warehouse_id
      WHERE r.company_id=$1 AND (r.name ILIKE $2 OR r.code ILIKE $2)
+       AND ($5::uuid IS NULL OR r.salesperson_id=$5::uuid)
      ORDER BY r.name LIMIT $3 OFFSET $4`,
-    [ctx.companyId, `%${String(q.q ?? "").slice(0, 160)}%`, limit, offset],
+    [
+      ctx.companyId,
+      `%${String(q.q ?? "").slice(0, 160)}%`,
+      limit,
+      offset,
+      scoped !== null ? ctx.actor.id : null,
+    ],
   );
   return {
     items: r.rows.map(({ _count, ...v }) => v),
@@ -62,6 +71,7 @@ export async function listStaffPicklist(ctx: Context) {
 
 export async function getRoute(ctx: Context, id: string) {
   requirePermission(ctx, "routes.read");
+  await requireRouteInScope(ctx, id);
   const r = await one(
     ctx,
     `SELECT r.*, u.name AS salesperson, u.id IS NOT NULL AS has_salesperson,
@@ -185,6 +195,7 @@ export async function openRouteShift(
 
 export async function listRouteShifts(ctx: Context, q: any) {
   requirePermission(ctx, "routes.read");
+  const scopedShifts = await routeScope(ctx);
   const { page, limit, offset } = pageArgs(q);
   const r = await ctx.db.query(
     `SELECT s.*, r.name AS route, r.code AS route_code, g.name AS register, u.name AS salesperson,
@@ -198,8 +209,16 @@ export async function listRouteShifts(ctx: Context, q: any) {
      WHERE s.company_id=$1 AND s.route_id IS NOT NULL
        AND ($2::uuid IS NULL OR s.route_id=$2)
        AND ($3::text IS NULL OR s.status=$3)
+       AND ($6::uuid[] IS NULL OR s.route_id=ANY($6::uuid[]))
      ORDER BY s.opened_at DESC LIMIT $4 OFFSET $5`,
-    [ctx.companyId, q.route_id || null, q.status || null, limit, offset],
+    [
+      ctx.companyId,
+      q.route_id || null,
+      q.status || null,
+      limit,
+      offset,
+      scopedShifts,
+    ],
   );
   return {
     items: r.rows.map(({ _count, ...v }) => v),
@@ -222,6 +241,7 @@ export async function getRouteShift(ctx: Context, id: string) {
     [ctx.companyId, id],
   );
   branchAccess(ctx, shift.branch_id);
+  await requireRouteInScope(ctx, shift.route_id);
   const invoices = (
     await ctx.db.query(
       `SELECT v.id, v.number, c.name AS customer, v.total, v.paid_at_sale,
@@ -367,6 +387,7 @@ async function shiftWithRoute(ctx: Context, id: string) {
     [ctx.companyId, id],
   );
   branchAccess(ctx, shift.branch_id);
+  await requireRouteInScope(ctx, shift.route_id);
   return shift;
 }
 
@@ -378,6 +399,7 @@ export async function routeLedger(ctx: Context, routeId: string, q: any) {
     "SELECT * FROM routes WHERE company_id=$1 AND id=$2",
     [ctx.companyId, routeId],
   );
+  await requireRouteInScope(ctx, routeId);
   const customers = (
     await ctx.db.query(
       `SELECT c.id, c.name, c.code, c.phone,

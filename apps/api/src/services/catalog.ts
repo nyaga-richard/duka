@@ -19,6 +19,11 @@ import {
   type Context,
   pageArgs,
 } from "../db.ts";
+import {
+  requireCustomerInScope,
+  routeScope,
+  scopeCustomerRouteAssignment,
+} from "./route-scope.ts";
 export async function createProduct(
   ctx: Context,
   input: z.infer<typeof productSchema>,
@@ -258,6 +263,8 @@ export async function saveContact(
     kind === "customer" ? "customers.write" : "suppliers.write",
   );
   const table = kind === "customer" ? "customers" : "suppliers";
+  if (kind === "customer" && !id)
+    await scopeCustomerRouteAssignment(ctx, input as any, undefined);
   const keys = Object.keys(input),
     values = Object.values(input);
   let before = null;
@@ -268,6 +275,8 @@ export async function saveContact(
       `SELECT * FROM ${table} WHERE company_id=$1 AND id=$2 FOR UPDATE`,
       [ctx.companyId, id],
     );
+    if (kind === "customer")
+      await scopeCustomerRouteAssignment(ctx, input as any, before.route_id);
     row = (
       await ctx.db.query(
         `UPDATE ${table} SET ${keys.map((k, i) => `${k}=$${i + 3}`).join(",")} WHERE company_id=$1 AND id=$2 RETURNING *`,
@@ -296,8 +305,9 @@ export async function listContacts(
   const { page, limit, offset } = pageArgs(query);
   const table = kind === "customer" ? "customers" : "suppliers",
     account = kind === "customer" ? "ar" : "ap";
+  const scope = kind === "customer" ? await routeScope(ctx) : null;
   const r = await ctx.db.query(
-    `SELECT c.*,coalesce((SELECT sum(${kind === "customer" ? "l.debit-l.credit" : "l.credit-l.debit"}) FROM journal_lines l JOIN accounts a ON a.company_id=l.company_id AND a.id=l.account_id JOIN journals j ON j.company_id=l.company_id AND j.id=l.journal_id WHERE l.company_id=c.company_id AND l.${kind}_id=c.id AND a.system_key=$2 AND j.branch_id=ANY($6::uuid[])),0)::text AS balance,count(*) OVER()::int AS _count FROM ${table} c WHERE c.company_id=$1 AND (c.name ILIKE $3 OR c.code ILIKE $3 OR c.phone ILIKE $3) AND ($7::uuid IS NULL OR c.route_id=$7) ORDER BY c.name LIMIT $4 OFFSET $5`,
+    `SELECT c.*,coalesce((SELECT sum(${kind === "customer" ? "l.debit-l.credit" : "l.credit-l.debit"}) FROM journal_lines l JOIN accounts a ON a.company_id=l.company_id AND a.id=l.account_id JOIN journals j ON j.company_id=l.company_id AND j.id=l.journal_id WHERE l.company_id=c.company_id AND l.${kind}_id=c.id AND a.system_key=$2 AND j.branch_id=ANY($6::uuid[])),0)::text AS balance,count(*) OVER()::int AS _count FROM ${table} c WHERE c.company_id=$1 AND (c.name ILIKE $3 OR c.code ILIKE $3 OR c.phone ILIKE $3) AND ($7::uuid IS NULL OR c.route_id=$7)${kind === "customer" ? " AND ($8::uuid[] IS NULL OR c.route_id=ANY($8::uuid[]))" : ""} ORDER BY c.name LIMIT $4 OFFSET $5`,
     [
       ctx.companyId,
       account,
@@ -306,6 +316,7 @@ export async function listContacts(
       offset,
       ctx.actor.branch_ids,
       kind === "customer" && query.route_id ? String(query.route_id) : null,
+      ...(kind === "customer" ? [scope] : []),
     ],
   );
   return {

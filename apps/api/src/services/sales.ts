@@ -16,6 +16,7 @@ import {
   type Context,
   pageArgs,
 } from "../db.ts";
+import { requireCustomerInScope, routeScope } from "./route-scope.ts";
 import { postJournal, type PostingLine } from "@duka/accounting";
 import { lockStock, moveStock } from "@duka/inventory";
 import { priceCart } from "./catalog.ts";
@@ -37,12 +38,14 @@ export async function checkout(ctx: Context, input: CheckoutInput) {
     "SELECT * FROM shifts WHERE company_id=$1 AND register_id=$2 AND cashier_id=$3 AND status IN ('open','rejected') FOR UPDATE",
     [ctx.companyId, register.id, ctx.actor.id],
   );
-  if (input.customer_id)
+  if (input.customer_id) {
     await one(
       ctx,
       "SELECT id FROM customers WHERE company_id=$1 AND id=$2 AND active FOR UPDATE",
       [ctx.companyId, input.customer_id],
     );
+    await requireCustomerInScope(ctx, input.customer_id);
+  }
   const priced = await priceCart(ctx, input, date);
   if (shift.route_id) {
     if (!priced.customer || priced.customer.route_id !== shift.route_id)
@@ -401,6 +404,11 @@ export async function checkout(ctx: Context, input: CheckoutInput) {
 export async function getSale(ctx: Context, id: string, reprint = false) {
   requirePermission(ctx, "sales.read");
   const s = await saleOutstanding(ctx, id);
+  if ((await routeScope(ctx)) !== null) {
+    if (s.customer_id) await requireCustomerInScope(ctx, s.customer_id);
+    else if (s.created_by !== ctx.actor.id)
+      fail(404, "NOT_FOUND", "Sale not found");
+  }
   const lines = (
     await ctx.db.query(
       "SELECT l.*,u.symbol AS unit FROM sale_lines l JOIN units u ON u.company_id=l.company_id AND u.id=l.unit_id WHERE l.company_id=$1 AND l.sale_id=$2 ORDER BY l.id",
@@ -442,8 +450,9 @@ export async function listSales(ctx: Context, q: any) {
   const { page, limit, offset } = pageArgs(q);
   const branches = q.branch_id ? [q.branch_id] : ctx.actor.branch_ids;
   if (q.branch_id) branchAccess(ctx, q.branch_id);
+  const scoped = await routeScope(ctx);
   const r = await ctx.db.query(
-    `SELECT s.*,c.name AS customer,u.name AS cashier,coalesce((SELECT sum(amount) FROM customer_allocations a WHERE a.company_id=s.company_id AND a.sale_id=s.id),0)::text AS allocated,coalesce((SELECT sum(credit_applied) FROM sale_returns a WHERE a.company_id=s.company_id AND a.sale_id=s.id),0)::text AS credited,count(*) OVER()::int AS _count FROM sales s LEFT JOIN customers c ON c.company_id=s.company_id AND c.id=s.customer_id JOIN identities u ON u.company_id=s.company_id AND u.id=s.created_by WHERE s.company_id=$1 AND s.branch_id=ANY($2::uuid[]) AND (s.number ILIKE $3 OR c.name ILIKE $3) AND ($4::date IS NULL OR s.accounting_date>=$4) AND ($5::date IS NULL OR s.accounting_date<=$5) ORDER BY s.created_at DESC LIMIT $6 OFFSET $7`,
+    `SELECT s.*,c.name AS customer,u.name AS cashier,coalesce((SELECT sum(amount) FROM customer_allocations a WHERE a.company_id=s.company_id AND a.sale_id=s.id),0)::text AS allocated,coalesce((SELECT sum(credit_applied) FROM sale_returns a WHERE a.company_id=s.company_id AND a.sale_id=s.id),0)::text AS credited,count(*) OVER()::int AS _count FROM sales s LEFT JOIN customers c ON c.company_id=s.company_id AND c.id=s.customer_id JOIN identities u ON u.company_id=s.company_id AND u.id=s.created_by WHERE s.company_id=$1 AND s.branch_id=ANY($2::uuid[]) AND (s.number ILIKE $3 OR c.name ILIKE $3) AND ($4::date IS NULL OR s.accounting_date>=$4) AND ($5::date IS NULL OR s.accounting_date<=$5) AND ($8::uuid[] IS NULL OR c.route_id=ANY($8::uuid[]) OR (s.customer_id IS NULL AND s.created_by=$9::uuid)) ORDER BY s.created_at DESC LIMIT $6 OFFSET $7`,
     [
       ctx.companyId,
       branches,
@@ -452,6 +461,8 @@ export async function listSales(ctx: Context, q: any) {
       q.to ?? null,
       limit,
       offset,
+      scoped,
+      ctx.actor.id,
     ],
   );
   return {

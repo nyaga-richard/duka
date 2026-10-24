@@ -152,10 +152,11 @@ export function RouteSalesPage() {
       {error && <ErrorCard error={error} />}
       {routes.data && !routes.data.items.length && (
         <section className="card form-card">
-          <h3>No routes yet</h3>
+          <h3>{canManage ? "No routes yet" : "No route assigned"}</h3>
           <p className="form-note">
-            Create a route, assign its salesperson and till, and place customers
-            on it — then open the first route shift.
+            {canManage
+              ? "Create a route, assign its salesperson and till, and place customers on it — then open the first route shift."
+              : "You can only sell on a route assigned to you. Ask your manager to assign a route to your account and place your customers on it."}
           </p>
           {canManage && (
             <div className="form-actions">

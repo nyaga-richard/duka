@@ -16,6 +16,7 @@ import {
   uniqueIds,
   type Context,
 } from "../db.ts";
+import { requireCustomerInScope } from "./route-scope.ts";
 import { postJournal, type PostingLine } from "@duka/accounting";
 import { createAdvance, consumeAdvance } from "./advances.ts";
 export async function validateShift(
@@ -225,6 +226,7 @@ export async function settleContact(
     `SELECT id FROM ${table} WHERE company_id=$1 AND id=$2 AND active FOR UPDATE`,
     [ctx.companyId, input.contact_id],
   );
+  if (kind === "customer") await requireCustomerInScope(ctx, input.contact_id);
   uniqueIds(input.allocations.map((a: any) => a.document_id));
   const allocated = sum(input.allocations.map((a: any) => a.amount));
   if (allocated.gt(input.payment.amount))

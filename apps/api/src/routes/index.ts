@@ -165,6 +165,7 @@ import {
   csv,
   reportScope,
 } from "../services/reports.ts";
+import { requireCustomerInScope } from "../services/route-scope.ts";
 import {
   salePdf,
   businessPdf,
@@ -2598,6 +2599,7 @@ for (const kind of ["customer", "supplier"] as const)
         `SELECT id FROM ${customer ? "customers" : "suppliers"} WHERE company_id=$1 AND id=$2`,
         [ctx.companyId, idOf(req)],
       );
+      if (customer) await requireCustomerInScope(ctx, idOf(req));
       const balance = customer
         ? `s.total-s.paid_at_sale-coalesce((SELECT sum(a.amount) FROM customer_allocations a WHERE a.company_id=s.company_id AND a.sale_id=s.id),0)-coalesce((SELECT sum(r.credit_applied) FROM sale_returns r WHERE r.company_id=s.company_id AND r.sale_id=s.id),0)`
         : `supplier_invoice_balance(s.company_id,s.id)`;
