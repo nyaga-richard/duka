@@ -24,7 +24,10 @@
 	handle @shop_api {
 		reverse_proxy shop-api:4100
 	}
-	handle {
+	@shop {
+		not path /api/* /health/*
+	}
+	handle @shop {
 		reverse_proxy shop-web:3100
 	}
 	request_body {

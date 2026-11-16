@@ -149,6 +149,16 @@ bash deploy/ecommerce/shop.sh proxy
 `deploy/self-check.sh` performs both probes itself (proxy `SHOP_PUBLIC_HOST`,
 then the loopback request) and prints this remedy when the origin answers 404.
 
+If the 404 survives the recreate, `bash deploy/ecommerce/shop.sh diag` prints the
+facts needed to settle it in one pass, read-only: the sha256 of the Caddyfile on
+the host versus the one mounted in the proxy (a mismatch is the stale-inode
+bind-mount case), the **compiled** `:8080` routes with their matchers and
+upstream dials in evaluation order, each upstream container asked directly
+(`shop-web:3100/` must be the HTML storefront), the origin's answer for both
+hosts and both path shapes, and the tunnel container's status. The shop
+storefront route also carries an explicit `not path /api/* /health/*`, so its
+correctness does not depend on the order the `handle` blocks compile into.
+
 A **530** on the same hostname is unrelated to this: Cloudflare produced it, so
 the hostname is not bound to the running tunnel — add it as a Public Hostname on
 the *same* tunnel with service `http://proxy:8080`. Do not create a second
