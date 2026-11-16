@@ -1,0 +1,10 @@
+node_modules/
+.pglite/
+.next/
+dist/
+coverage/
+*.log
+.env
+.env.local
+.env.*.local
+*.tsbuildinfo
