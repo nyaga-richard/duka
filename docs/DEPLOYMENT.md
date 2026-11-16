@@ -10,7 +10,7 @@ From the repository root on a fresh Ubuntu LTS host with Docker Engine + Compose
 bash deploy/go-live.sh pos.your-domain.example
 ```
 
-The orchestrator is idempotent at every guarded boundary: it refuses to overwrite an existing `deploy/docker/.env.production`/backup key, reuses an already-provisioned business (the server's `SETUP_IDENTITY_EXISTS` refusal), and can be re-run after failures (it resumes at the step that failed). It performs the Docker quick-start's init-env generation, secret capture with hidden prompts (tunnel token, company, owner email/password — never shell history), the combined `docker/compose.yml` + `cloudflare/compose.tunnel.yml` configuration check, the pinned image build, database boot and health gate, reviewed schema migrations, first-business provisioning, application boot, readiness verification and the post-boot operator report (Cloudflare public-hostname binding to `http://proxy:8080`, no-cache/no-Rocket-Loader rules, backup-key custody, restore rehearsal).
+The orchestrator is idempotent at every guarded boundary: it refuses to overwrite an existing `deploy/docker/.env.production`/backup key, reuses an already-provisioned business (the server's `SETUP_IDENTITY_EXISTS` refusal), and can be re-run after failures (it resumes at the step that failed). It performs the Docker quick-start's init-env generation, secret capture with hidden prompts (tunnel token, company, owner email/password — never shell history), the combined `docker/compose.yml` + `cloudflare/compose.tunnel.yml` configuration check, the pinned image build, database boot and health gate, reviewed schema migrations, first-business provisioning, application boot, readiness verification and the post-boot operator report (Cloudflare public-hostname binding to `http://proxy:8080`, no-cache/no-Rocket-Loader rules, backup-key custody, restore rehearsal). It also provisions the **e-commerce storefront** in the same Compose project (own hostname, database, role, volume, images and backup key) — see `deploy/ecommerce/README.md` for what that adds and what it deliberately does not claim.
 
 A verified-TLS relay (`SMTP_URL`, plus a sane `MAIL_FROM`) is mandatory: the production API hard-fails at boot without safe password-reset delivery, so the orchestrator refuses to continue until a real `smtp://`/`smtps://` URL is supplied. Everything else this runbook says about secrets custody, acceptance gates and non-public ports still applies — the one command covers mechanics, not the operator's host acceptance responsibility.
 
@@ -99,6 +99,39 @@ Bypass CDN caching for the entire application host/API/auth/documents and avoid 
 `systemd-analyze verify` passed for the supplied units/timers; that is static validation, not host execution. Timer schedules use the host timezone; configure it deliberately. Install unit files, run `systemctl daemon-reload`, then enable services/timers only after the real host acceptance run.
 
 Systemd templates are not proof of host execution. Do a real non-root/read-only filesystem, startup, restart, SMTP, callback, printing, upload, period-lock and backup/restore acceptance run.
+
+## E-commerce storefront (same Compose project)
+
+The storefront lives in `ecommerce/` and is deployed by the two scripts above —
+it is not a separate stack to install. The overlay is
+`deploy/ecommerce/compose.shop.yml`; its generated configuration is
+`deploy/ecommerce/.env.shop` (0600) plus `deploy/ecommerce/secrets/shop-backup.key`.
+
+```bash
+# created by go-live.sh; or reconcile it on an existing install
+bash deploy/ecommerce/shop.sh up
+bash deploy/ecommerce/shop.sh status
+bash deploy/ecommerce/shop.sh backup
+```
+
+- `shop-db` is a **second PostgreSQL container with its own database, role and
+  volume**; Duka's `duka` database, roles and dump key are untouched.
+- Caddy routes a **second hostname** (`SHOP_PUBLIC_HOST`) to `shop-web`/`shop-api`
+  on the same tunnel; the ERP's paths are unchanged and no backend port is published.
+- The shop API reaches the ERP only as a read-only HTTP client over the private
+  `edge` network. Enabling it needs an ERP user that can log in without an
+  interactive MFA challenge; the catalogue stays empty until a pull is run.
+- `update.sh` backs the shop database up (encrypted, verified, separate key),
+  tags `duka-shop-api:previous`/`duka-shop-web:previous`, applies only forward
+  migrations, swaps only the shop's api/ worker/ web containers, and rolls back
+  both stacks together if either health gate fails.
+- Phase 1 boundary: no live payment provider, no automatic capture and no ERP
+  writes. Payments are recorded deliberately by staff.
+
+**Not executed here:** no Docker Engine, Cloudflare account or public DNS was
+available, so this overlay has never been built, started or routed. Treat the
+files as reviewed configuration plus mandatory host acceptance gates, and run
+`deploy/self-check.sh` with `SHOP_HOST=<storefront host>` after the first boot.
 
 ## Upgrade and rollback
 

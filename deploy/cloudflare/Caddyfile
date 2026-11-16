@@ -12,6 +12,22 @@
 }
 
 :8080 {
+	# E-commerce host (deploy/ecommerce). Host-matched first: shares this
+	# loopback listener with the ERP host but never shares routes or cookies.
+	@shop_api host {$SHOP_PUBLIC_HOST:shop.invalid} path /api/* /health/*
+	handle @shop_api {
+		reverse_proxy shop-api:4100 {
+			header_up X-Forwarded-Proto https
+			# Trust this only on the private, Tunnel-only origin.
+			header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+		}
+	}
+	@shop host {$SHOP_PUBLIC_HOST:shop.invalid}
+	handle @shop {
+		reverse_proxy shop-web:3100 {
+			header_up X-Forwarded-Proto https
+		}
+	}
 	@api path /api/* /health/*
 	handle @api {
 		reverse_proxy api:4000 {

@@ -20,6 +20,13 @@ async function main() {
     format: "esm" as const,
     target: "node22",
     packages: "external" as const,
+    // Workspace packages are bundled: the runtime image prunes dev dependencies
+    // and must not depend on npm's workspace symlinks surviving that prune.
+    alias: {
+      "@ecom/shared": "./packages/shared/src/index.ts",
+      "@ecom/payments": "./packages/payments/src/index.ts",
+      "@ecom/erp-adapter": "./packages/erp-adapter/src/index.ts",
+    },
     sourcemap: true,
     logLevel: "info" as const,
     banner: {
