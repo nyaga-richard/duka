@@ -8,7 +8,10 @@
 # process only ever loads dist/ (bundled) plus the root runtime dependencies.
 FROM node:22-alpine AS build
 WORKDIR /app
-ENV NODE_ENV=development
+# Installation must see dev dependencies (esbuild, tsx, Next), so the stage is
+# NOT production. The Next build below therefore overrides NODE_ENV explicitly.
+ENV NODE_ENV=development \
+    NEXT_TELEMETRY_DISABLED=1
 
 COPY package.json package-lock.json tsconfig.json ./
 COPY apps ./apps
@@ -19,7 +22,15 @@ RUN npm ci --no-audit --no-fund
 
 ARG API_INTERNAL_URL=http://shop-api:4100
 ENV API_INTERNAL_URL=${API_INTERNAL_URL}
-RUN npm run build && npm run build:web
+
+# API/worker/esbuild bundle first (independent of NODE_ENV), so a web-build
+# failure does not throw away this layer.
+RUN npm run build
+
+# `next build` MUST run with NODE_ENV=production. Under any other value Next 16
+# loads the development React runtime and static prerendering dies with
+# "Cannot read properties of null (reading 'useContext')" on /_global-error.
+RUN NODE_ENV=production npm run build:web
 
 
 # ---- API / worker / migrate / seed -------------------------------------------

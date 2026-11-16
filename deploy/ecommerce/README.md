@@ -178,6 +178,8 @@ into Duka's `duka` database.
 | Storefront host resolves to the ERP app | Cloudflare hostname still points at the ERP route, or Caddy was not recreated (`dc up -d proxy`) |
 | `duka-shop-api-1` unhealthy | `shop.sh logs shop-api`; typical causes are a missing `.env.shop` database URL, `NODE_ENV=production` with a bad URL, or migrations not applied |
 | `shop-migrate` fails | forward-only migrations are checksummed; never edit an applied file — add a new migration |
+| `update.sh` says "configured but its database container does not exist yet" | `.env.shop` exists but `shop.sh up` never completed. The ERP upgrade proceeds without touching the shop; finish the storefront with `shop.sh up` (it is safe to re-run) |
+| image build fails in `next build` with `Cannot read properties of null (reading 'useContext')` | the Next build ran under a non-production `NODE_ENV`. The Dockerfile pins `NODE_ENV=production` for `next build`; if you edited it, put that back |
 | Empty catalogue | ERP integration disabled, or no catalogue pull has been run |
 | `self-check` storefront checks fail | the hostname is not bound in Cloudflare, or `SHOP_HOST` was not passed |
 

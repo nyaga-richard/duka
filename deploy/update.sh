@@ -62,6 +62,8 @@ SHOP_OVERLAY="$TARGET/deploy/ecommerce/compose.shop.yml"
 SHOP_ENV_ARGS=()
 SHOP_FILE_ARGS=()
 SHOP_ENABLED=0
+# absent = no .env.shop; pending = configured but never started; running = live.
+SHOP_STATE=absent
 shop_enabled() { [[ "$SHOP_ENABLED" == 1 ]]; }
 die() { echo "update: $*" >&2; exit 1; }
 step() { printf '\n==> %s\n' "$*"; }
@@ -77,8 +79,19 @@ shop_args() {
   SHOP_ENV_ARGS=()
   SHOP_FILE_ARGS=()
   SHOP_ENABLED=0
+  SHOP_STATE=absent
   [[ -e "$SHOP_ENV" ]] || return 0
   [[ -e "$SHOP_OVERLAY" ]] || die "the e-commerce configuration exists but $SHOP_OVERLAY is missing; restore the new release and re-run"
+  # Configured but never started (e.g. the first image build failed). The ERP
+  # upgrade must still be able to proceed: do not touch or migrate a shop that
+  # has no database yet, and say so loudly.
+  if ! docker inspect duka-shop-db-1 >/dev/null 2>&1; then
+    SHOP_STATE=pending
+    echo "update: the storefront is configured ($SHOP_ENV) but its database container does not exist yet." >&2
+    echo "update: upgrading the ERP only. Finish the storefront with 'bash deploy/ecommerce/shop.sh up'." >&2
+    return 0
+  fi
+  SHOP_STATE=running
   SHOP_ENV_ARGS=(--env-file "$SHOP_ENV")
   SHOP_FILE_ARGS=(-f "$SHOP_OVERLAY")
   SHOP_ENABLED=1
@@ -97,11 +110,11 @@ if shop_enabled; then
   SHOP_PUBLIC_HOST=$(sed -n 's/^SHOP_PUBLIC_HOST=//p' "$SHOP_ENV" | head -n1)
   [[ "$SHOP_PUBLIC_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,63}$ ]] ||
     die "SHOP_PUBLIC_HOST missing from $SHOP_ENV; restore it from your protected copy"
-  docker inspect duka-shop-db-1 >/dev/null 2>&1 ||
-    die "the e-commerce database container duka-shop-db-1 was not found; run deploy/go-live.sh or deploy/ecommerce/shop.sh up first"
   SHOP_DB_HEALTH=$(docker inspect --format '{{.State.Health.Status}}' duka-shop-db-1)
   [[ "$SHOP_DB_HEALTH" == healthy ]] || die "the e-commerce database is $SHOP_DB_HEALTH; never upgrade on top of an unhealthy database"
   echo "storefront: https://$SHOP_PUBLIC_HOST (separate database duka-shop-db-1)"
+elif [[ "$SHOP_STATE" == pending ]]; then
+  echo "storefront: configured but not started — finishing it is a separate step (shop.sh up)"
 fi
 echo "target: $TARGET  host: https://$PUBLIC_HOST"
 
@@ -266,6 +279,14 @@ cat <<REPORT
    dc up -d api web
  - First-run setup state is visible to owners at https://$PUBLIC_HOST/setup
 REPORT
+
+if [[ "$SHOP_STATE" == pending ]]; then
+  cat <<REPORT
+ - Storefront: configured but NOT running. Finish it with:
+     sudo bash deploy/ecommerce/shop.sh up
+     sudo ADMIN_BOOTSTRAP_EMAIL=... ADMIN_BOOTSTRAP_PASSWORD=... bash deploy/ecommerce/shop.sh seed
+REPORT
+fi
 
 if shop_enabled; then
   cat <<REPORT
