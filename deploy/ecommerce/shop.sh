@@ -45,6 +45,37 @@ wait_healthy() { # wait_healthy container attempts
   done
 }
 
+# The one acceptance check that catches a *routing* mistake: ask the loopback
+# origin for the storefront hostname and require the storefront's HTML. A JSON
+# 404 here means Caddy matched the shop host to the API instead of shop-web.
+verify_route() {
+  command -v curl >/dev/null 2>&1 || return 0
+  local attempt=0 out code ctype
+  while :; do
+    out=$(curl -sS -o /dev/null -w '%{http_code} %{content_type}' --max-time 8 \
+      -H "Host: $SHOP_PUBLIC_HOST" http://127.0.0.1:8080/ 2>/dev/null) || out='000'
+    [[ "$out" != 000* ]] && break
+    ((attempt++ , attempt < 6)) || {
+      # Direct-TLS deployments publish 80/443, not a loopback :8080.
+      echo "  note: no loopback :8080 listener (direct-TLS mode) — skipped the route check"
+      return 0
+    }
+    sleep 1
+  done
+  code=${out%% *}
+  ctype=${out#* }
+  if [[ "$code" == 200 && "$ctype" == text/html* ]]; then
+    echo "  ok   $SHOP_PUBLIC_HOST/ -> 200 $ctype (storefront route)"
+    return 0
+  fi
+  printf '  FAIL %s/ -> %s %s (expected 200 text/html)\n' "$SHOP_PUBLIC_HOST" "$code" "$ctype"
+  if [[ "$code" == 404 && "$ctype" == application/json* ]]; then
+    echo "        the API answered, so the storefront route is not matching. Run"
+    echo "        'bash deploy/ecommerce/shop.sh diag' — it prints the compiled routes."
+  fi
+  return 1
+}
+
 cmd=${1:-status}
 shift || true
 case "$cmd" in
@@ -67,6 +98,8 @@ case "$cmd" in
     dc up -d shop-api shop-worker shop-web proxy
     wait_healthy duka-shop-api-1 40 || die "the storefront API did not become healthy; check 'shop.sh logs shop-api'"
     wait_healthy duka-shop-web-1 40 || die "the storefront web app did not become healthy; check 'shop.sh logs shop-web'"
+    step "Checking the storefront route at the origin"
+    verify_route || exit 1
     echo "Storefront is up behind the proxy on host $SHOP_PUBLIC_HOST."
     ;;
   logs)
@@ -159,6 +192,15 @@ import json, sys
 
 cfg = json.load(open(sys.argv[1]))
 
+# Registered Caddy matcher names. If one of these shows up as a *value* inside
+# another matcher's list, the Caddyfile line held two matchers and the second one
+# was swallowed as arguments (e.g. host: [shop…, path, /api/*, /health/*]).
+MATCHER_NAMES = {
+    "host", "path", "method", "query", "header", "header_regexp", "path_regexp",
+    "expression", "file", "protocol", "remote_ip", "client_ip", "vars", "named",
+    "not", "form", "json", "tls", "match",
+}
+
 
 def walk(routes, depth):
     for route in routes:
@@ -166,6 +208,20 @@ def walk(routes, depth):
         for handler in route.get("handle", []):
             dials = [u.get("dial") for u in handler.get("upstreams", [])]
             label = json.dumps(match, separators=(",", ":")) if match else "(no matcher: catch-all)"
+            for matcher_set in match or []:
+                if not isinstance(matcher_set, dict):
+                    continue
+                for key, values in matcher_set.items():
+                    if not isinstance(values, list):
+                        continue
+                    rogue = sorted({v for v in values
+                                    if isinstance(v, str) and v in MATCHER_NAMES and v != key})
+                    if rogue:
+                        print("  " * (depth + 1) +
+                              "  !! MALFORMED MATCHER: %r contains matcher name(s) %s as values\n"
+                              % (key, ", ".join(rogue)) +
+                              "  " * (depth + 1) +
+                              "  !! a named-matcher line can hold ONE matcher; put each on its own line")
             print("  " * (depth + 1) + "%s -> %s %s" % (
                 label, handler.get("handler", "?"), " ".join(d for d in dials if d)))
             if handler.get("routes"):
@@ -214,6 +270,7 @@ PY
     # API instead of the storefront). Force-recreating re-adapts the file.
     step "Recreating the edge proxy so Caddy re-reads deploy/cloudflare/Caddyfile"
     dc up -d --force-recreate --no-deps proxy
+    verify_route || exit 1
     ;;
   down)
     step "Stopping storefront containers (database volume is preserved)"
