@@ -182,6 +182,7 @@ into Duka's `duka` database.
 | image build fails in `next build` with `Cannot read properties of null (reading 'useContext')` | the Next build ran under a non-production `NODE_ENV`. The Dockerfile pins `NODE_ENV=production` for `next build`; if you edited it, put that back |
 | Empty catalogue | ERP integration disabled, or no catalogue pull has been run |
 | `self-check` storefront checks fail | the hostname is not bound in Cloudflare, or `SHOP_HOST` was not passed |
+| storefront returns Cloudflare **530 / 52x** | Cloudflare cannot reach the origin: the public hostname is missing from the tunnel (or its DNS record was created by hand without a tunnel entry). `self-check.sh` first probes the loopback proxy listener (`127.0.0.1:8080`) with the storefront `Host` header, so an "ok … loopback proxy" line proves Caddy and the app are fine and the fault is Cloudflare-side |
 
 ## What is NOT proven here
 
