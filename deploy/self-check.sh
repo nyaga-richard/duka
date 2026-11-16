@@ -3,6 +3,10 @@
 #
 #   bash deploy/self-check.sh [pos.your-domain.example]
 #
+# With the e-commerce overlay provisioned, export SHOP_HOST (or pass it as the
+# second argument) to gate the storefront host as well: storefront shell,
+# its API readiness, the public catalogue and fail-closed admin endpoints.
+#
 # Verifies the LIVE public host over real HTTPS (through the Cloudflare
 # Tunnel): static login shell, API health/readiness, the public OpenAPI/doc
 # surface, and fail-closed authentication behaviour. No credentials are
@@ -14,6 +18,7 @@
 # you which). No business data is changed by this script.
 set -uo pipefail
 HOST=$1
+SHOP_HOST=${SHOP_HOST:-${2:-}}
 [[ "$HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,63}$ ]] || {
   echo "usage: bash deploy/self-check.sh pos.your-domain.example (or export PUBLIC_HOST)" >&2
   HOST=${HOST:-$PUBLIC_HOST}
@@ -57,6 +62,29 @@ if [[ -n "${SELF_CHECK_EMAIL:-}" && -n "${SELF_CHECK_PASSWORD:-}" ]]; then
     c=$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 15 -b "$cookie_jar" -H 'origin: '"$BASE" "$BASE/api/v1/setup/status")
     [[ "$c" == 200 ]] && ok "first-run setup status readable (200)" || bad "setup/status authenticated expected 200, got $c"
   fi
+fi
+
+if [[ -n "$SHOP_HOST" ]]; then
+  [[ "$SHOP_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,63}$ ]] || {
+    echo "self-check: SHOP_HOST '$SHOP_HOST' is not a valid hostname" >&2
+    exit 2
+  }
+  SHOP_BASE="https://$SHOP_HOST"
+  shcode() { curl -k -sS -o /dev/null -w '%{http_code}' --max-time 15 -H 'origin: '"$SHOP_BASE" "$@"; }
+  echo
+  echo "self-check of $SHOP_BASE (storefront host, live)"
+  c=$(shcode "$SHOP_BASE/")
+  [[ "$c" == 200 ]] && ok "storefront shell serves (200)" || bad "storefront shell expected 200, got $c"
+  c=$(shcode "$SHOP_BASE/health/ready")
+  [[ "$c" == 200 ]] && ok "storefront API readiness incl. DB + migrations (200)" || bad "storefront readiness expected 200, got $c"
+  c=$(shcode "$SHOP_BASE/api/v1/openapi.json")
+  [[ "$c" == 200 ]] && ok "storefront API document reachable" || bad "storefront openapi.json expected 200, got $c"
+  c=$(shcode "$SHOP_BASE/api/v1/catalog/products")
+  [[ "$c" == 200 ]] && ok "public catalogue responds (200; empty until an ERP pull)" || bad "catalogue expected 200, got $c"
+  c=$(shcode "$SHOP_BASE/admin")
+  [[ "$c" == 200 ]] && ok "storefront admin shell serves (200)" || bad "storefront /admin expected 200, got $c"
+  c=$(shcode "$SHOP_BASE/api/v1/admin/orders")
+  [[ "$c" == 401 ]] && ok "storefront admin API refuses anonymous access (401)" || bad "storefront admin orders expected 401, got $c"
 fi
 
 echo
