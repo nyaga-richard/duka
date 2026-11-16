@@ -44,7 +44,7 @@ c=$(code "$BASE/api/v1/openapi.json")
 c=$(code "$BASE/api/v1/setup/status")
 [[ "$c" == 401 ]] && ok "setup/status refuses anonymous access (401)" || bad "setup/status expected 401 outside a session, got $c"
 c=$(code -X POST -H 'content-type: application/json' --data-binary '{}' "$BASE/api/v1/auth/login" 2>/dev/null)
-[[ "$c" =~ ^40[0-9]$ ]] && ok "login endpoint fail-closed on bad input ($c)" || bad "login on empty body expected 4xx, got $c"
+[[ "$c" =~ ^4[0-9][0-9]$ ]] && ok "login endpoint fail-closed on bad input ($c)" || bad "login on empty body expected 4xx, got $c"
 c=$(code "$BASE/api/v1/auth/sessions")
 [[ "$c" == 401 ]] && ok "session listing refuses anonymous access (401)" || bad "/auth/sessions anonymous expected 401, got $c"
 
@@ -70,21 +70,59 @@ if [[ -n "$SHOP_HOST" ]]; then
     exit 2
   }
   SHOP_BASE="https://$SHOP_HOST"
+  shop_cf5=0
   shcode() { curl -k -sS -o /dev/null -w '%{http_code}' --max-time 15 -H 'origin: '"$SHOP_BASE" "$@"; }
+  shcheck() { # path expected label
+    local path=$1 expected=$2 label=$3 got
+    got=$(shcode "$SHOP_BASE$path")
+    if [[ "$got" == "$expected" ]]; then
+      ok "$label"
+    else
+      bad "$label (got $got)"
+      [[ "$got" =~ ^5[0-9][0-9]$ ]] && shop_cf5=1
+    fi
+  }
   echo
   echo "self-check of $SHOP_BASE (storefront host, live)"
-  c=$(shcode "$SHOP_BASE/")
-  [[ "$c" == 200 ]] && ok "storefront shell serves (200)" || bad "storefront shell expected 200, got $c"
-  c=$(shcode "$SHOP_BASE/health/ready")
-  [[ "$c" == 200 ]] && ok "storefront API readiness incl. DB + migrations (200)" || bad "storefront readiness expected 200, got $c"
-  c=$(shcode "$SHOP_BASE/api/v1/openapi.json")
-  [[ "$c" == 200 ]] && ok "storefront API document reachable" || bad "storefront openapi.json expected 200, got $c"
-  c=$(shcode "$SHOP_BASE/api/v1/catalog/products")
-  [[ "$c" == 200 ]] && ok "public catalogue responds (200; empty until an ERP pull)" || bad "catalogue expected 200, got $c"
-  c=$(shcode "$SHOP_BASE/admin")
-  [[ "$c" == 200 ]] && ok "storefront admin shell serves (200)" || bad "storefront /admin expected 200, got $c"
-  c=$(shcode "$SHOP_BASE/api/v1/admin/orders")
-  [[ "$c" == 401 ]] && ok "storefront admin API refuses anonymous access (401)" || bad "storefront admin orders expected 401, got $c"
+
+  # Loopback probe: separates "Cloudflare cannot reach the origin" from
+  # "Caddy/app is broken". Only meaningful on the deployment host, where the
+  # Tunnel-mode proxy publishes 127.0.0.1:8080. Uses the host's curl, so it does
+  # not depend on anything installed inside the Caddy image.
+  if command -v docker >/dev/null 2>&1 && docker inspect duka-proxy-1 >/dev/null 2>&1; then
+    routed_host=$(docker exec duka-proxy-1 printenv SHOP_PUBLIC_HOST 2>/dev/null | tr -d '\r')
+    if [[ "$routed_host" != "$SHOP_HOST" ]]; then
+      if [[ -n "$routed_host" ]]; then
+        bad "the running proxy routes '$routed_host', not $SHOP_HOST — recreate it: bash deploy/ecommerce/shop.sh up"
+      else
+        bad "the running proxy has no SHOP_PUBLIC_HOST — recreate it: bash deploy/ecommerce/shop.sh up"
+      fi
+    else
+      origin_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+        -H "Host: $SHOP_HOST" http://127.0.0.1:8080/ 2>/dev/null || true)
+      case "$origin_code" in
+        200) ok "storefront answers through Caddy on the loopback proxy (app + routing are fine)" ;;
+        000|"")
+          echo "  note: no loopback :8080 listener found (direct-TLS mode?) — skipped the origin probe"
+          ;;
+        *) bad "Caddy answered $origin_code for $SHOP_HOST on the loopback proxy" ;;
+      esac
+    fi
+  fi
+
+  shcheck "/" 200 "storefront shell serves (200)"
+  shcheck "/health/ready" 200 "storefront API readiness incl. DB + migrations (200)"
+  shcheck "/api/v1/openapi.json" 200 "storefront API document reachable"
+  shcheck "/api/v1/catalog/products" 200 "public catalogue responds (200; empty until an ERP pull)"
+  shcheck "/admin" 200 "storefront admin shell serves (200)"
+  shcheck "/api/v1/admin/orders" 401 "storefront admin API refuses anonymous access (401)"
+
+  if ((shop_cf5)); then
+    echo "  hint: 52x/530 responses are produced by Cloudflare, not by the app — the hostname is not"
+    echo "        reaching the origin. Add $SHOP_HOST as a Public Hostname on the SAME tunnel with"
+    echo "        service http://proxy:8080 and keep the DNS record Cloudflare creates (a hand-made"
+    echo "        CNAME without the tunnel entry returns 530). Then check 'docker logs duka-tunnel-1 --tail 50'."
+  fi
 fi
 
 echo
