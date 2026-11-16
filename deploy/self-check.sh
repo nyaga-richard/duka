@@ -118,6 +118,7 @@ if [[ -n "$SHOP_HOST" ]]; then
              echo "        the proxy routes this host, but not to shop-web:3100 (a JSON 404 here is the"
              echo "        shop API answering — a stale compiled config). Recreate it so Caddy re-reads"
              echo "        the Caddyfile: bash deploy/ecommerce/shop.sh proxy"
+             echo "        if it survives that, run bash deploy/ecommerce/shop.sh diag (read-only)"
            fi ;;
       esac
     fi

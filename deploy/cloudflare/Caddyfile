@@ -22,7 +22,14 @@
 			header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
 		}
 	}
-	@shop host {$SHOP_PUBLIC_HOST:shop.invalid}
+	# Everything on the shop host that is NOT its API: the storefront itself.
+	# The `not path` is deliberate: it makes this route correct on its own terms,
+	# so ordering (or a reordered/legacy compiled config) can never send the
+	# storefront's `/` to the API, and the API paths stay with @shop_api above.
+	@shop {
+		host {$SHOP_PUBLIC_HOST:shop.invalid}
+		not path /api/* /health/*
+	}
 	handle @shop {
 		reverse_proxy shop-web:3100 {
 			header_up X-Forwarded-Proto https
