@@ -71,6 +71,8 @@ SHOP_HOST=shop.example.com bash deploy/self-check.sh pos.example.com
 sudo bash deploy/ecommerce/shop.sh proxy
 # the shop hostname answers with the wrong app or nothing at all:
 sudo bash deploy/ecommerce/shop.sh diag
+# the shop hostname returns Cloudflare 5xx (530):
+sudo bash deploy/ecommerce/shop.sh tunnel
 ```
 
 `init-shop-env.sh` refuses to overwrite an existing `.env.shop` or backup key,
@@ -188,7 +190,8 @@ into Duka's `duka` database.
 | image build fails in `next build` with `Cannot read properties of null (reading 'useContext')` | the Next build ran under a non-production `NODE_ENV`. The Dockerfile pins `NODE_ENV=production` for `next build`; if you edited it, put that back |
 | Empty catalogue | ERP integration disabled, or no catalogue pull has been run |
 | `self-check` storefront checks fail | the hostname is not bound in Cloudflare, or `SHOP_HOST` was not passed (`bash deploy/self-check.sh <erp-host> <shop-host>`; with no host it prints usage and exits 2) |
-| storefront returns Cloudflare **530 / 52x** | Cloudflare cannot reach the origin: the public hostname is missing from the tunnel (or its DNS record was created by hand without a tunnel entry). `self-check.sh` first probes the loopback proxy listener (`127.0.0.1:8080`) with the storefront `Host` header, so an "ok … loopback proxy" line proves Caddy and the app are fine and the fault is Cloudflare-side |
+| storefront returns Cloudflare **530 / 52x** | run `shop.sh tunnel` first: it prints the tunnel UUID your token belongs to, the ingress the connector accepted, and what each hostname answers (annotating 1033/1016) — then follow its verdict |
+| storefront returns Cloudflare **530 / 52x** (detail) | Cloudflare cannot reach the origin: the public hostname is missing from the tunnel (or its DNS record was created by hand without a tunnel entry). `self-check.sh` first probes the loopback proxy listener (`127.0.0.1:8080`) with the storefront `Host` header, so an "ok … loopback proxy" line proves Caddy and the app are fine and the fault is Cloudflare-side |
 
 ## What is NOT proven here
 

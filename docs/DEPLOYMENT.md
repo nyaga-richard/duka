@@ -185,6 +185,28 @@ the hostname is not bound to the running tunnel — add it as a Public Hostname 
 the *same* tunnel with service `http://proxy:8080`. Do not create a second
 tunnel/token, and do not hand-create a DNS record.
 
+`bash deploy/ecommerce/shop.sh tunnel` settles that question in one read-only
+pass and is the right first move when the storefront answers 530 publicly while
+the loopback probe says `ok`:
+
+- the tunnel container's status;
+- the **UUID of the tunnel your token belongs to**, decoded from
+  `TUNNEL_TOKEN` (only the id is printed, never the secret) — a correctly bound
+  hostname is a proxied CNAME to `<uuid>.cfargotunnel.com`;
+- the ingress list this connector last accepted, i.e. whether the tunnel itself
+  carries the hostname and which service it points at;
+- what each public hostname actually answers, annotating Cloudflare errors
+  **1033** (no DNS record on an active tunnel) and **1016** (record points
+  elsewhere).
+
+If the hostname is present in the ingress and still 530s, the server side is
+finished and the fault is the DNS record: delete it under DNS and re-add the
+Public Hostname so Cloudflare recreates the proxied CNAME. If it is absent from
+the ingress, add the Public Hostname (service `http://proxy:8080`). Two mistakes
+to avoid: pointing the tunnel service at `https://proxy:8080` (the origin speaks
+HTTP on `:8080`, so Cloudflare returns 530), and creating a second tunnel with
+its own token.
+
 **Not executed here:** no Docker Engine, Cloudflare account or public DNS was
 available, so this overlay has never been built, started or routed. Treat the
 files as reviewed configuration plus mandatory host acceptance gates, and run

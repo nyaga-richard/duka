@@ -6,6 +6,7 @@
 #   bash deploy/ecommerce/shop.sh logs [service]
 #   bash deploy/ecommerce/shop.sh proxy        # force-recreate the edge proxy (re-reads the Caddyfile)
 #   bash deploy/ecommerce/shop.sh diag         # read-only: who answers the shop hostname, and why
+#   bash deploy/ecommerce/shop.sh tunnel       # read-only: is the public hostname bound to this tunnel?
 #   bash deploy/ecommerce/shop.sh migrate       # forward-only, reviewed migrations
 #   bash deploy/ecommerce/shop.sh seed          # settings + first admin (needs ADMIN_BOOTSTRAP_*)
 #   bash deploy/ecommerce/shop.sh backup        # encrypted custom-format dump + verification
@@ -263,6 +264,95 @@ PY
     echo "A 530 on the public hostname is Cloudflare's: bind $SHOP_PUBLIC_HOST as a Public Hostname"
     echo "on the SAME tunnel (service http://proxy:8080). This command changes nothing."
     ;;
+  tunnel)
+    # Read-only: is the public hostname bound to THIS tunnel? A 530 is decided in
+    # Cloudflare, so the useful facts are the tunnel's own ingress config, the
+    # UUID a DNS record has to point at, and what each public name answers.
+    tmp=$(mktemp -d) && trap 'rm -rf "$tmp"' EXIT
+    diag_public=$(sed -n 's/^PUBLIC_HOST=//p' "$env_file" | head -n1)
+    cat > "$tmp/uuid.py" <<'PY'
+import base64, json, sys
+
+raw = sys.stdin.read().strip()
+raw += "=" * (-len(raw) % 4)
+try:
+    print(json.loads(base64.b64decode(raw, altchars=b"-_")).get("t", ""))
+except Exception:
+    print("")
+PY
+    cat > "$tmp/ingress.py" <<'PY'
+import re, sys
+
+raw = sys.stdin.read()
+pairs = re.findall(r'\\"hostname\\":\\"([^\\"]+)\\",\\"service\\":\\"([^\\"]+)\\"', raw)
+if not pairs:
+    print("  could not parse the ingress list; raw line:")
+    print("  " + raw.strip()[:400])
+for host, service in pairs:
+    print("  %-32s -> %s" % (host, service))
+if pairs:
+    print("  (the connector accepted this config, so these are this tunnel's routes)")
+PY
+
+    step "1/4 tunnel container"
+    docker ps --filter name=duka-tunnel-1 --format '  {{.Names}}  {{.Status}}' || true
+
+    step "2/4 the tunnel this token belongs to"
+    uuid=$(docker exec duka-tunnel-1 printenv TUNNEL_TOKEN 2>/dev/null | tr -d '\r\n' |
+      python3 "$tmp/uuid.py" 2>/dev/null || true)
+    if [[ -n "$uuid" ]]; then
+      printf '  tunnel UUID   %s\n' "$uuid"
+      printf '  bound CNAME   %s.cfargotunnel.com\n' "$uuid"
+      echo "  (only the id is printed, never the token secret)"
+    else
+      echo "  could not read the tunnel UUID from the container's token"
+    fi
+
+    step "3/4 ingress this connector last accepted"
+    docker logs duka-tunnel-1 --tail 400 2>&1 |
+      grep 'Updated to new configuration' | tail -n1 >"$tmp/ingress.log" || true
+    if [[ ! -s "$tmp/ingress.log" ]]; then
+      echo "  no 'Updated to new configuration' line in the last 400 lines"
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 "$tmp/ingress.py" <"$tmp/ingress.log"
+    else
+      echo "  python3 not present; raw line:"
+      cut -c1-400 "$tmp/ingress.log"
+    fi
+
+    step "4/4 what the public hostnames answer"
+    for h in "${diag_public:-}" "$SHOP_PUBLIC_HOST"; do
+      [[ -n "$h" ]] || continue
+      # `|| code=000` (not `|| echo 000`): curl already printed its -w output
+      # before failing, so appending would yield a bogus "000000".
+      code=$(curl -sS -o "$tmp/pub.html" -w '%{http_code}' --max-time 15 "https://$h/" 2>/dev/null) ||
+        code=000
+      [[ -n "$code" ]] || code=000
+      printf '  %-32s %s' "$h" "$code"
+      if grep -qiE 'error 1033|argo tunnel error' "$tmp/pub.html" 2>/dev/null; then
+        printf '  (Cloudflare 1033: this hostname has no DNS record on an active tunnel)'
+      elif grep -qi 'error 1016' "$tmp/pub.html" 2>/dev/null; then
+        printf '  (Cloudflare 1016: the DNS record points at a different origin)'
+      fi
+      printf '\n'
+    done
+    echo
+    if [[ -s "$tmp/ingress.log" ]] && grep -qF "$SHOP_PUBLIC_HOST" "$tmp/ingress.log"; then
+      echo "The hostname IS in this tunnel's ingress, so the server side is done: a 5xx here is"
+      echo "Cloudflare's DNS record for $SHOP_PUBLIC_HOST. Delete that record under DNS, then"
+      echo "re-add the Public Hostname on this tunnel (service http://proxy:8080) so Cloudflare"
+      if [[ -n "$uuid" ]]; then
+        echo "creates the proxied CNAME to $uuid.cfargotunnel.com for you."
+      else
+        echo "creates the proxied CNAME for you."
+      fi
+    else
+      echo "The hostname is NOT in this tunnel's ingress: add $SHOP_PUBLIC_HOST as a Public"
+      echo "Hostname on this tunnel with service http://proxy:8080, and keep the DNS record"
+      echo "Cloudflare creates. Do not create a second tunnel or a second token."
+    fi
+    echo "This command changes nothing."
+    ;;
   proxy)
     # `docker restart duka-proxy-1` is not always enough: if the container's
     # Caddyfile predates the current one on disk, the running config stays stale
@@ -277,6 +367,6 @@ PY
     dc stop shop-worker shop-web shop-api
     ;;
   *)
-    die "unknown command '$cmd' (status|up|logs|proxy|diag|migrate|seed|backup|restore|psql|down)"
+    die "unknown command '$cmd' (status|up|logs|proxy|diag|tunnel|migrate|seed|backup|restore|psql|down)"
     ;;
 esac
