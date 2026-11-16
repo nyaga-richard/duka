@@ -74,11 +74,11 @@ that matter for your flow.
    `ERP_DEFAULT_WAREHOUSE_ID`.
 4. Restart the API and worker.
 5. Verify from the staff UI or with the service account:
-   `GET /api/v1/admin/sync/erp/capabilities`, then `POST
-   /api/v1/admin/sync/erp/probe`, then `POST
-   /api/v1/admin/sync/erp/pull/catalog`.
-6. Watch `GET /api/v1/admin/sync/erp/overview` and `erp_sync_log` until the
-   catalogue and inventory pulls report `succeeded`.
+   `GET /api/v1/admin/erp/capabilities`, then `POST /api/v1/admin/erp/probe`,
+   then `POST /api/v1/admin/sync/pull-catalog` (and `pull-inventory`).
+6. Watch `GET /api/v1/admin/sync/overview` and the `erp_sync_log` table until the
+   catalogue and inventory pulls report `succeeded`; `POST
+   /api/v1/admin/sync/process` drains the queue on demand.
 
 Leave `ERP_RESERVE_ORDERS_IN_ERP=false` until the ERP can reserve stock for web
 orders (contract gap G1/G2). Orders are then pushed as sales-order documents in
