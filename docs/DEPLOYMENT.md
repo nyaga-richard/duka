@@ -133,8 +133,29 @@ bash deploy/ecommerce/shop.sh backup
 If `https://<SHOP_PUBLIC_HOST>/` (or `/cart`) returns `application/json` with
 `{"error":{"code":"NOT_FOUND","message":"Endpoint not found","request_id":…}}`,
 the proxy routed that hostname to the **API** rather than to `shop-web:3100`.
-The Caddyfile on disk can be correct in that state: the running container is
-still serving a previously compiled config.
+
+**The cause we hit in production was a one-line matcher with two matchers on it.**
+A named-matcher line holds exactly one matcher; `@shop_api host … path /api/* /health/*`
+compiles to `{"host":["shop…","path","/api/*","/health/*"]}` — the `path` token and
+its values become additional *host* values, so the route matches **every** path on
+the storefront hostname and the API answers the storefront's `/`. The file looks
+right, `caddy adapt` succeeds, and recreating the proxy changes nothing because the
+bytes are already correct. Put each matcher on its own line inside a block:
+
+```
+@shop_api {
+	host {$SHOP_PUBLIC_HOST:shop.invalid}
+	path /api/* /health/*
+}
+```
+
+`shop.sh diag` flags this shape explicitly ("MALFORMED MATCHER: 'host' contains
+matcher name(s) path"), and `shop.sh up` / `shop.sh proxy` now assert the outcome:
+`<SHOP_PUBLIC_HOST>/` at the loopback origin must answer `200 text/html`, and the
+command exits non-zero if the API answers instead.
+
+The same JSON 404 can also mean the running container is serving a previously
+compiled config with a correct file on disk.
 
 ```bash
 # which upstream really answers? shop-api serves /api/v1/catalog/products

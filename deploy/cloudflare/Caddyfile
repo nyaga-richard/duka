@@ -14,7 +14,17 @@
 :8080 {
 	# E-commerce host (deploy/ecommerce). Host-matched first: shares this
 	# loopback listener with the ERP host but never shares routes or cookies.
-	@shop_api host {$SHOP_PUBLIC_HOST:shop.invalid} path /api/* /health/*
+	#
+	# ONE MATCHER PER LINE. Do not collapse this into
+	# `@shop_api host … path /api/* /health/*`: Caddy puts a single matcher on a
+	# named-matcher line, so the `path` token and its values are swallowed as
+	# extra *host* values (`{"host":["shop…","path","/api/*","/health/*"]}`).
+	# The route then matches every path on the shop host and the storefront's
+	# `/` is answered by the API (a JSON 404) — verified with `caddy adapt`.
+	@shop_api {
+		host {$SHOP_PUBLIC_HOST:shop.invalid}
+		path /api/* /health/*
+	}
 	handle @shop_api {
 		reverse_proxy shop-api:4100 {
 			header_up X-Forwarded-Proto https
