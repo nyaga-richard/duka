@@ -57,14 +57,20 @@ a seed that invents business data would make the tests lie.
 
 ```bash
 cd ecommerce
-cp .env.docker.example .env
+cp docker/env.example docker/.env
 # edit POSTGRES_PASSWORD, ALLOWED_ORIGINS, COOKIE_SECURE (true behind HTTPS)
-docker compose -f docker/docker-compose.yml up -d --build
+docker compose --env-file docker/.env -f docker/docker-compose.yml up -d --build
 ```
 
-Services: `db` (PostgreSQL 16, not published), one-shot `migrate`, `api`,
-`worker`, `web` (port 3100). The ERP is not part of the stack; `ERP_ENABLED`
-defaults to `false`.
+This standalone stack is for development/demo. In a real Duka deployment the
+storefront is created and upgraded as part of Duka's own Compose project
+(`deploy/ecommerce/compose.shop.yml`, driven by `deploy/go-live.sh` and
+`deploy/update.sh`) with a separate hostname, database and backup key.
+
+Services here: `db` (PostgreSQL 17.11, not published), one-shot `migrate`,
+`api`, `worker`, `web` (port 3100). Both `api` and `migrate` build from
+`docker/Dockerfile` target `api`; `web` uses target `web`. Only `docker` needs
+to build the images; nothing is deployed by this repository.
 
 ## Design decisions worth knowing
 

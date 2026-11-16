@@ -1,4 +1,7 @@
-# Phase 1 stack: PostgreSQL, the API, the worker and the Next web app.
+# STANDALONE Phase 1 stack (development/demo): PostgreSQL, the API, the worker
+# and the Next web app. The Duka-integrated stack lives at
+# deploy/ecommerce/compose.shop.yml and is created/upgraded by
+# deploy/go-live.sh and deploy/update.sh.
 #
 # The ERP is intentionally NOT part of this stack: this repository never runs,
 # modifies or fakes the ERP. Set ERP_ENABLED=true and ERP_BASE_URL only after
@@ -7,11 +10,11 @@ name: duka-ecommerce
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ecommerce_app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.docker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in docker/.env (copy docker/env.example)}
       POSTGRES_DB: ${POSTGRES_DB:-ecommerce}
     volumes:
       - db-data:/var/lib/postgresql/data
@@ -25,7 +28,9 @@ services:
   migrate:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.api
+      dockerfile: docker/Dockerfile
+      target: api
+    image: duka-ecommerce-api:local
     command: ["node", "dist/migrate.mjs"]
     environment:
       NODE_ENV: production
@@ -38,7 +43,9 @@ services:
   api:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.api
+      dockerfile: docker/Dockerfile
+      target: api
+    image: duka-ecommerce-api:local
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -71,7 +78,9 @@ services:
   worker:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.api
+      dockerfile: docker/Dockerfile
+      target: api
+    image: duka-ecommerce-api:local
     command: ["node", "dist/worker.mjs"]
     restart: unless-stopped
     environment:
@@ -93,9 +102,11 @@ services:
   web:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.web
+      dockerfile: docker/Dockerfile
+      target: web
       args:
         API_INTERNAL_URL: http://api:4100
+    image: duka-ecommerce-web:local
     restart: unless-stopped
     environment:
       API_INTERNAL_URL: http://api:4100

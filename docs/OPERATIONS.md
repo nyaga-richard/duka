@@ -16,13 +16,17 @@ browser ──HTTPS──> web (Next, :3100) ──server-side proxy──> api 
 
 ## First deploy
 
-1. Copy `.env.docker.example` to `.env`, set `POSTGRES_PASSWORD`,
+1. Copy `docker/env.example` to `docker/.env`, set `POSTGRES_PASSWORD`,
    `ALLOWED_ORIGINS`, and `COOKIE_SECURE=true` when behind TLS.
-2. `docker compose -f docker/docker-compose.yml up -d --build`.
+2. `docker compose --env-file docker/.env -f docker/docker-compose.yml up -d --build`.
+
+   In a Duka deployment this step is replaced by `bash deploy/go-live.sh`
+   (create) and `bash deploy/update.sh` (upgrade), which run the stack defined
+   by `deploy/ecommerce/compose.shop.yml` inside the `duka` Compose project.
 3. Confirm: `curl -sf http://localhost:4100/health/ready | jq`.
 4. Create the first administrator (once), then unset the bootstrap variables:
    ```bash
-   docker compose -f docker/docker-compose.yml run --rm \
+   docker compose --env-file docker/.env -f docker/docker-compose.yml run --rm \
      -e ADMIN_BOOTSTRAP_EMAIL=owner@example.com \
      -e ADMIN_BOOTSTRAP_PASSWORD='a-long-unique-password' \
      migrate node dist/seed.mjs
@@ -30,6 +34,41 @@ browser ──HTTPS──> web (Next, :3100) ──server-side proxy──> api 
    The seed only writes store settings and the administrator; it never invents
    catalogue or order data.
 5. Sign in at `https://<host>/admin`.
+
+## Duka-managed deployment
+
+In a Duka installation the storefront is not deployed from this directory. It
+runs inside the `duka` Compose project as the `shop-*` services, created by
+`deploy/go-live.sh` and upgraded by `deploy/update.sh` using
+`deploy/ecommerce/compose.shop.yml`:
+
+| Thing | Value |
+| --- | --- |
+| database container | `duka-shop-db-1`, database `ecommerce`, role `shop_app` |
+| application containers | `duka-shop-api-1`, `duka-shop-worker-1`, `duka-shop-web-1` |
+| images | `duka-shop-api:<RELEASE>`, `duka-shop-web:<RELEASE>` |
+| config | `deploy/ecommerce/.env.shop` (0600) |
+| dump key | `deploy/ecommerce/secrets/shop-backup.key` (separate from Duka's) |
+| public entry | `https://$SHOP_PUBLIC_HOST` through Caddy on the Duka tunnel |
+
+Day-2 commands (no secrets on the command line):
+
+```bash
+bash deploy/ecommerce/shop.sh status
+bash deploy/ecommerce/shop.sh logs shop-worker
+bash deploy/ecommerce/shop.sh migrate
+bash deploy/ecommerce/shop.sh backup        # encrypted + verified
+bash deploy/ecommerce/shop.sh restore <file>
+```
+
+The ERP API is reachable at `http://api:4000` on the private network. Set
+`SHOP_ERP_*` in `.env.shop` to enable read-only catalogue and stock pulls; the
+ERP user must not require an interactive MFA challenge. Stock and prices are
+read from the ERP and never written back.
+
+Rollback happens through `deploy/update.sh` (both stacks roll back together if
+either health gate fails). Do not restore a storefront dump into Duka's `duka`
+database — the schemas and owners are different by design.
 
 ## Health
 
