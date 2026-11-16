@@ -4,6 +4,7 @@
 #   bash deploy/ecommerce/shop.sh status
 #   bash deploy/ecommerce/shop.sh up            # build + start + migrate (safe to re-run)
 #   bash deploy/ecommerce/shop.sh logs [service]
+#   bash deploy/ecommerce/shop.sh proxy        # force-recreate the edge proxy (re-reads the Caddyfile)
 #   bash deploy/ecommerce/shop.sh migrate       # forward-only, reviewed migrations
 #   bash deploy/ecommerce/shop.sh seed          # settings + first admin (needs ADMIN_BOOTSTRAP_*)
 #   bash deploy/ecommerce/shop.sh backup        # encrypted custom-format dump + verification
@@ -115,11 +116,19 @@ case "$cmd" in
   psql)
     dc exec shop-db psql -U shop_app -d ecommerce
     ;;
+  proxy)
+    # `docker restart duka-proxy-1` is not always enough: if the container's
+    # Caddyfile predates the current one on disk, the running config stays stale
+    # and the shop host can be served by the wrong upstream (a JSON 404 from the
+    # API instead of the storefront). Force-recreating re-adapts the file.
+    step "Recreating the edge proxy so Caddy re-reads deploy/cloudflare/Caddyfile"
+    dc up -d --force-recreate --no-deps proxy
+    ;;
   down)
     step "Stopping storefront containers (database volume is preserved)"
     dc stop shop-worker shop-web shop-api
     ;;
   *)
-    die "unknown command '$cmd' (status|up|logs|migrate|seed|backup|restore|psql|down)"
+    die "unknown command '$cmd' (status|up|logs|proxy|migrate|seed|backup|restore|psql|down)"
     ;;
 esac

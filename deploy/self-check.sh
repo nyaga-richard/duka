@@ -17,13 +17,21 @@
 # Exit 0 = every check passed. Exit 1 = at least one failed (message tells
 # you which). No business data is changed by this script.
 set -uo pipefail
-HOST=$1
+# Never expand $1/$2 directly under `set -u`: running with only SHOP_HOST set is
+# an easy mistake and must print usage, not die with "unbound variable".
+HOST=${1:-}
 SHOP_HOST=${SHOP_HOST:-${2:-}}
-[[ "$HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,63}$ ]] || {
-  echo "usage: bash deploy/self-check.sh pos.your-domain.example (or export PUBLIC_HOST)" >&2
-  HOST=${HOST:-$PUBLIC_HOST}
-}
-[[ -n "$HOST" ]] || exit 2
+if [[ ! "$HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,63}$ ]]; then
+  HOST=${PUBLIC_HOST:-}
+fi
+if [[ ! "$HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,63}$ ]]; then
+  cat >&2 <<'USAGE'
+usage: bash deploy/self-check.sh <erp-host> [shop-host]
+       SHOP_HOST=shop.example.com bash deploy/self-check.sh erp.example.com
+       (the first host may also come from the PUBLIC_HOST environment variable)
+USAGE
+  exit 2
+fi
 BASE="https://$HOST"
 pass=0 fail=0
 ok()  { pass=$((pass+1)); printf '  ok   %s\n' "$*"; }
@@ -93,9 +101,9 @@ if [[ -n "$SHOP_HOST" ]]; then
     routed_host=$(docker exec duka-proxy-1 printenv SHOP_PUBLIC_HOST 2>/dev/null | tr -d '\r')
     if [[ "$routed_host" != "$SHOP_HOST" ]]; then
       if [[ -n "$routed_host" ]]; then
-        bad "the running proxy routes '$routed_host', not $SHOP_HOST — recreate it: bash deploy/ecommerce/shop.sh up"
+        bad "the running proxy routes '$routed_host', not $SHOP_HOST — recreate it: bash deploy/ecommerce/shop.sh proxy"
       else
-        bad "the running proxy has no SHOP_PUBLIC_HOST — recreate it: bash deploy/ecommerce/shop.sh up"
+        bad "the running proxy has no SHOP_PUBLIC_HOST — recreate it: bash deploy/ecommerce/shop.sh proxy"
       fi
     else
       origin_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
@@ -105,7 +113,12 @@ if [[ -n "$SHOP_HOST" ]]; then
         000|"")
           echo "  note: no loopback :8080 listener found (direct-TLS mode?) — skipped the origin probe"
           ;;
-        *) bad "Caddy answered $origin_code for $SHOP_HOST on the loopback proxy" ;;
+        *) bad "Caddy answered $origin_code for $SHOP_HOST on the loopback proxy"
+           if [[ "$origin_code" == 404 ]]; then
+             echo "        the proxy routes this host, but not to shop-web:3100 (a JSON 404 here is the"
+             echo "        shop API answering — a stale compiled config). Recreate it so Caddy re-reads"
+             echo "        the Caddyfile: bash deploy/ecommerce/shop.sh proxy"
+           fi ;;
       esac
     fi
   fi
