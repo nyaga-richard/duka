@@ -192,7 +192,10 @@ the loopback probe says `ok`:
 - the tunnel container's status;
 - the **UUID of the tunnel your token belongs to**, decoded from
   `TUNNEL_TOKEN` (only the id is printed, never the secret) — a correctly bound
-  hostname is a proxied CNAME to `<uuid>.cfargotunnel.com`;
+  hostname is a proxied CNAME to `<uuid>.cfargotunnel.com`. The token is read
+  from `deploy/docker/.env.production`, falling back to the container's
+  `Config.Env`: the cloudflared image is distroless, so `docker exec printenv`
+  inside it cannot work;
 - the ingress list this connector last accepted, i.e. whether the tunnel itself
   carries the hostname and which service it points at;
 - what each public hostname actually answers, annotating Cloudflare errors

@@ -298,8 +298,15 @@ PY
     docker ps --filter name=duka-tunnel-1 --format '  {{.Names}}  {{.Status}}' || true
 
     step "2/4 the tunnel this token belongs to"
-    uuid=$(docker exec duka-tunnel-1 printenv TUNNEL_TOKEN 2>/dev/null | tr -d '\r\n' |
-      python3 "$tmp/uuid.py" 2>/dev/null || true)
+    # The cloudflared image is distroless: no shell, no printenv, so `docker exec`
+    # cannot read its environment. Take the token from the private env file the
+    # container was created from, and fall back to the container's own Config.Env.
+    token=$(sed -n 's/^TUNNEL_TOKEN=//p' "$env_file" | head -n1 | tr -d '\r')
+    if [[ -z "$token" ]]; then
+      token=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' duka-tunnel-1 2>/dev/null |
+        sed -n 's/^TUNNEL_TOKEN=//p' | head -n1 | tr -d '\r')
+    fi
+    uuid=$(printf '%s' "$token" | python3 "$tmp/uuid.py" 2>/dev/null || true)
     if [[ -n "$uuid" ]]; then
       printf '  tunnel UUID   %s\n' "$uuid"
       printf '  bound CNAME   %s.cfargotunnel.com\n' "$uuid"
