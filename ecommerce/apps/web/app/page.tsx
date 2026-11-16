@@ -14,7 +14,7 @@ export default async function HomePage() {
       {products.length === 0 ? (
         <div className="notice info">
           No published products yet. An administrator must enable the ERP integration and run a catalogue pull
-          (<code>POST /api/v1/admin/sync/erp/pull/catalog</code>), or create products locally.
+          (<code>POST /api/v1/admin/sync/pull-catalog</code>), or create products locally.
         </div>
       ) : (
         <div className="grid">
