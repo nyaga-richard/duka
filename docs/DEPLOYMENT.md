@@ -128,10 +128,37 @@ bash deploy/ecommerce/shop.sh backup
 - Phase 1 boundary: no live payment provider, no automatic capture and no ERP
   writes. Payments are recorded deliberately by staff.
 
+### The shop hostname answers with JSON instead of the storefront
+
+If `https://<SHOP_PUBLIC_HOST>/` (or `/cart`) returns `application/json` with
+`{"error":{"code":"NOT_FOUND","message":"Endpoint not found","request_id":…}}`,
+the proxy routed that hostname to the **API** rather than to `shop-web:3100`.
+The Caddyfile on disk can be correct in that state: the running container is
+still serving a previously compiled config.
+
+```bash
+# which upstream really answers? shop-api serves /api/v1/catalog/products
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: shop.example.com' \
+  http://127.0.0.1:8080/api/v1/catalog/products      # 200 = shop-api, 404 = another API
+sudo docker logs duka-shop-api-1 --tail 5            # the GET / with status 404 is the proof
+
+# re-adapt deploy/cloudflare/Caddyfile inside the proxy (a restart is not always enough)
+bash deploy/ecommerce/shop.sh proxy
+```
+
+`deploy/self-check.sh` performs both probes itself (proxy `SHOP_PUBLIC_HOST`,
+then the loopback request) and prints this remedy when the origin answers 404.
+
+A **530** on the same hostname is unrelated to this: Cloudflare produced it, so
+the hostname is not bound to the running tunnel — add it as a Public Hostname on
+the *same* tunnel with service `http://proxy:8080`. Do not create a second
+tunnel/token, and do not hand-create a DNS record.
+
 **Not executed here:** no Docker Engine, Cloudflare account or public DNS was
 available, so this overlay has never been built, started or routed. Treat the
 files as reviewed configuration plus mandatory host acceptance gates, and run
-`deploy/self-check.sh` with `SHOP_HOST=<storefront host>` after the first boot.
+`bash deploy/self-check.sh <erp-host> <shop-host>` (or `SHOP_HOST=<shop-host>` in
+front of it) after the first boot.
 
 ## Upgrade and rollback
 

@@ -67,6 +67,8 @@ sudo ADMIN_BOOTSTRAP_EMAIL=shop-owner@example.com \
      ADMIN_BOOTSTRAP_PASSWORD='<12+ chars>' \
      bash deploy/ecommerce/shop.sh seed
 SHOP_HOST=shop.example.com bash deploy/self-check.sh pos.example.com
+# after any Caddyfile change:
+sudo bash deploy/ecommerce/shop.sh proxy
 ```
 
 `init-shop-env.sh` refuses to overwrite an existing `.env.shop` or backup key,
@@ -176,12 +178,13 @@ into Duka's `duka` database.
 | --- | --- |
 | `SHOP_PUBLIC_HOST is required` from Compose | the overlay was loaded without `--env-file deploy/ecommerce/.env.shop` |
 | Storefront host resolves to the ERP app | Cloudflare hostname still points at the ERP route, or Caddy was not recreated (`dc up -d proxy`) |
+| Storefront host returns **JSON** `{"error":{"code":"NOT_FOUND"…}}` with `application/json` | Caddy is sending that hostname to the **API**, not to `shop-web:3100` — usually a stale compiled config: the Caddyfile on disk is right, the running container is not. Confirm with `curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: shop.example.com' http://127.0.0.1:8080/api/v1/catalog/products` (200 = shop-api answered) and `docker logs duka-shop-api-1 --tail 5` (a `GET /` 404). Fix with `bash deploy/ecommerce/shop.sh proxy`; `docker restart duka-proxy-1` alone can leave the old config |
 | `duka-shop-api-1` unhealthy | `shop.sh logs shop-api`; typical causes are a missing `.env.shop` database URL, `NODE_ENV=production` with a bad URL, or migrations not applied |
 | `shop-migrate` fails | forward-only migrations are checksummed; never edit an applied file — add a new migration |
 | `update.sh` says "configured but its database container does not exist yet" | `.env.shop` exists but `shop.sh up` never completed. The ERP upgrade proceeds without touching the shop; finish the storefront with `shop.sh up` (it is safe to re-run) |
 | image build fails in `next build` with `Cannot read properties of null (reading 'useContext')` | the Next build ran under a non-production `NODE_ENV`. The Dockerfile pins `NODE_ENV=production` for `next build`; if you edited it, put that back |
 | Empty catalogue | ERP integration disabled, or no catalogue pull has been run |
-| `self-check` storefront checks fail | the hostname is not bound in Cloudflare, or `SHOP_HOST` was not passed |
+| `self-check` storefront checks fail | the hostname is not bound in Cloudflare, or `SHOP_HOST` was not passed (`bash deploy/self-check.sh <erp-host> <shop-host>`; with no host it prints usage and exits 2) |
 | storefront returns Cloudflare **530 / 52x** | Cloudflare cannot reach the origin: the public hostname is missing from the tunnel (or its DNS record was created by hand without a tunnel entry). `self-check.sh` first probes the loopback proxy listener (`127.0.0.1:8080`) with the storefront `Host` header, so an "ok … loopback proxy" line proves Caddy and the app are fine and the fault is Cloudflare-side |
 
 ## What is NOT proven here
