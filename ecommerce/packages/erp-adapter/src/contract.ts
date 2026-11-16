@@ -1,0 +1,285 @@
+/**
+ * Verified capability inventory.
+ *
+ * Every `verified` entry cites the ERP source that implements it. Every
+ * `unsupported` entry cites the proposed contract in
+ * docs/ERP_INTEGRATION_CONTRACT.md. The adapter refuses to call anything that is
+ * not `verified`, so a missing ERP feature can never look like a success.
+ */
+export type CapabilitySupport = "verified" | "unsupported";
+
+export interface ErpCapability {
+  id: string;
+  support: CapabilitySupport;
+  endpoint: string;
+  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+  permission: string | null;
+  purpose: string;
+  evidence: string;
+  contract?: string;
+}
+
+export const ERP_CAPABILITIES: ErpCapability[] = [
+  {
+    id: "auth.session",
+    support: "verified",
+    endpoint: "/api/v1/auth/login",
+    method: "POST",
+    permission: null,
+    purpose: "Create an ERP session (cookie + CSRF) for the integration identity",
+    evidence: "apps/api/src/services/auth.ts:186",
+  },
+  {
+    id: "auth.whoami",
+    support: "verified",
+    endpoint: "/api/v1/auth/me",
+    method: "GET",
+    permission: null,
+    purpose: "Verify the session and inspect granted permissions",
+    evidence: "apps/api/src/routes/index.ts:221",
+  },
+  {
+    id: "system.health",
+    support: "verified",
+    endpoint: "/health/ready",
+    method: "GET",
+    permission: null,
+    purpose: "Readiness probe before enabling sync",
+    evidence: "apps/api/src/app.ts:114",
+  },
+  {
+    id: "catalog.metadata",
+    support: "verified",
+    endpoint: "/api/v1/metadata",
+    method: "GET",
+    permission: null,
+    purpose: "Branches, warehouses, registers, units, tax rules, payment methods",
+    evidence: "apps/api/src/services/admin.ts:345",
+  },
+  {
+    id: "catalog.products",
+    support: "verified",
+    endpoint: "/api/v1/products",
+    method: "GET",
+    permission: "catalog.read",
+    purpose: "Paged product catalogue (variants are child products)",
+    evidence: "apps/api/src/services/catalog.ts:123",
+  },
+  {
+    id: "inventory.balances",
+    support: "verified",
+    endpoint: "/api/v1/inventory/balances",
+    method: "GET",
+    permission: "inventory.read",
+    purpose: "Per-warehouse quantity, reserved and available",
+    evidence: "apps/api/src/services/inventory.ts:256",
+  },
+  {
+    id: "customers.search",
+    support: "verified",
+    endpoint: "/api/v1/customers",
+    method: "GET",
+    permission: "customers.read",
+    purpose: "Find a customer by email/name/code before creating one",
+    evidence: "apps/api/src/routes/index.ts:603",
+  },
+  {
+    id: "customers.create",
+    support: "verified",
+    endpoint: "/api/v1/customers",
+    method: "POST",
+    permission: "customers.write",
+    purpose: "Create the ERP customer for a registered shopper",
+    evidence: "apps/api/src/routes/index.ts:614",
+  },
+  {
+    id: "customers.update",
+    support: "verified",
+    endpoint: "/api/v1/customers/:id",
+    method: "PUT",
+    permission: "customers.write",
+    purpose: "Keep ERP contact details aligned",
+    evidence: "apps/api/src/routes/index.ts:622",
+  },
+  {
+    id: "orders.document.create",
+    support: "verified",
+    endpoint: "/api/v1/documents",
+    method: "POST",
+    permission: "documents.write",
+    purpose: "Create a sales_order document (optional reservation mirror)",
+    evidence: "apps/api/src/routes/index.ts:1172",
+  },
+  {
+    id: "orders.document.transition",
+    support: "verified",
+    endpoint: "/api/v1/documents/:id/transition",
+    method: "POST",
+    permission: "documents.write + sales.price_override",
+    purpose: "Approve (reserve stock) or cancel a sales_order document",
+    evidence: "apps/api/src/services/business.ts:215,247",
+  },
+  {
+    id: "sales.post",
+    support: "verified",
+    endpoint: "/api/v1/sales",
+    method: "POST",
+    permission: "sales.create",
+    purpose: "Post a sale with tenders, stock and journal",
+    evidence: "apps/api/src/services/sales.ts:26",
+  },
+  {
+    id: "sales.read",
+    support: "verified",
+    endpoint: "/api/v1/sales/:id",
+    method: "GET",
+    permission: "sales.read",
+    purpose: "Read back a mirrored sale",
+    evidence: "apps/api/src/routes/index.ts:709",
+  },
+  {
+    id: "payments.settle",
+    support: "verified",
+    endpoint: "/api/v1/customers/settlements",
+    method: "POST",
+    permission: "payments.receive",
+    purpose: "Record a customer payment and allocation",
+    evidence: "apps/api/src/routes/index.ts:645",
+  },
+  {
+    id: "refunds.return",
+    support: "verified",
+    endpoint: "/api/v1/sales/returns",
+    method: "POST",
+    permission: "sales.return",
+    purpose: "Record a capped return/refund against a sale",
+    evidence: "apps/api/src/routes/index.ts:760",
+  },
+  {
+    id: "auth.service_token",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/tokens",
+    method: "POST",
+    permission: null,
+    purpose: "Machine authentication without a browser session",
+    evidence: "No API-key/OAuth code path exists; only session cookies (auth.ts:259)",
+    contract: "G1",
+  },
+  {
+    id: "system.capabilities",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/capabilities",
+    method: "GET",
+    permission: null,
+    purpose: "Capability/version discovery for adapters",
+    evidence: "Route not present in the generated inventory",
+    contract: "G2",
+  },
+  {
+    id: "inventory.reserve",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/reservations",
+    method: "POST",
+    permission: null,
+    purpose: "TTL stock reservation for a web cart",
+    evidence: "stock_reservations only written by sales_order approval (business.ts:247)",
+    contract: "G3",
+  },
+  {
+    id: "inventory.availability",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/availability",
+    method: "GET",
+    permission: null,
+    purpose: "Batch availability for a cart",
+    evidence: "Only paged /inventory/balances exists",
+    contract: "G3",
+  },
+  {
+    id: "orders.channel",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/orders",
+    method: "POST",
+    permission: null,
+    purpose: "Post a channel order without an open cashier shift",
+    evidence: "POST /sales requires register + open shift (sales.ts:29-38)",
+    contract: "G4",
+  },
+  {
+    id: "payments.external",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/payments",
+    method: "POST",
+    permission: null,
+    purpose: "Post a provider payment by external reference",
+    evidence: "Only allocation-based settlements exist",
+    contract: "G5",
+  },
+  {
+    id: "refunds.external",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/refunds",
+    method: "POST",
+    permission: null,
+    purpose: "Refund by external payment reference",
+    evidence: "Returns are sale-line based; no external-reference refund",
+    contract: "G6",
+  },
+  {
+    id: "shipments.write",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/shipments",
+    method: "POST",
+    permission: null,
+    purpose: "Carrier + tracking shipment records",
+    evidence: "No shipment/carrier table or route exists",
+    contract: "G7",
+  },
+  {
+    id: "events.subscribe",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/subscriptions",
+    method: "POST",
+    permission: null,
+    purpose: "Signed outbound events for stock/price/order changes",
+    evidence: "No outbound webhook/outbox code exists",
+    contract: "G8",
+  },
+  {
+    id: "media.public",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/media/:id",
+    method: "GET",
+    permission: null,
+    purpose: "Public or signed product image URLs",
+    evidence: "Images are private attachments (routes/index.ts:2504)",
+    contract: "G9",
+  },
+  {
+    id: "catalog.variants",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/products",
+    method: "GET",
+    permission: null,
+    purpose: "Option/attribute matrix and per-variant images",
+    evidence: "Variants are child products; no option tables (001_core.sql:80)",
+    contract: "G10",
+  },
+  {
+    id: "catalog.incremental",
+    support: "unsupported",
+    endpoint: "/api/v1/integration/products?updated_since=…",
+    method: "GET",
+    permission: null,
+    purpose: "Cursor-based incremental catalogue sync",
+    evidence: "Only page/limit ≤ 100 (http.ts:9-38)",
+    contract: "G11",
+  },
+];
+
+export const VERIFIED_CAPABILITIES = ERP_CAPABILITIES.filter((c) => c.support === "verified");
+export const MISSING_CAPABILITIES = ERP_CAPABILITIES.filter((c) => c.support === "unsupported");
+
+export function capability(id: string): ErpCapability | undefined {
+  return ERP_CAPABILITIES.find((c) => c.id === id);
+}

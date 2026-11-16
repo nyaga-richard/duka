@@ -1,0 +1,51 @@
+:root {
+  --ink: #17140f;
+  --muted: #6b6257;
+  --paper: #fbf7f0;
+  --card: #ffffff;
+  --line: #e6ddcd;
+  --accent: #9a3412;
+  --accent-soft: #fde8dd;
+  --ok: #14532d;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: inherit; }
+header.site { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 5; }
+header.site .brand { font-weight: 700; letter-spacing: 0.02em; text-decoration: none; font-size: 1.15rem; }
+header.site nav { display: flex; gap: 1rem; font-size: 0.92rem; }
+header.site nav a { text-decoration: none; color: var(--muted); }
+header.site nav a:hover { color: var(--accent); }
+main { max-width: 1080px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+h1 { font-size: 1.9rem; margin: 0 0 0.4rem; letter-spacing: -0.01em; }
+p.lede { color: var(--muted); margin-top: 0; }
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+.card .thumb { aspect-ratio: 4/3; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 600; }
+.card .body { padding: 0.9rem 1rem 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.card h3 { margin: 0; font-size: 1rem; }
+.price { font-variant-numeric: tabular-nums; font-weight: 700; }
+.muted { color: var(--muted); font-size: 0.88rem; }
+button, .button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent); color: #fff; padding: 0.55rem 0.95rem; text-decoration: none; display: inline-block; }
+button.secondary, .button.secondary { background: transparent; color: var(--accent); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 0.93rem; }
+th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--line); }
+th { background: #f6efe2; font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+tr:last-child td { border-bottom: none; }
+input, select, textarea { font: inherit; padding: 0.55rem 0.7rem; border-radius: 10px; border: 1px solid var(--line); background: #fff; width: 100%; }
+label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; }
+.field { margin-bottom: 0.8rem; }
+.row { display: grid; gap: 0.8rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.notice { border-radius: 12px; padding: 0.8rem 1rem; font-size: 0.92rem; margin: 1rem 0; }
+.notice.error { background: #fdecec; color: #7f1d1d; border: 1px solid #f5c2c2; }
+.notice.ok { background: #ecfdf3; color: var(--ok); border: 1px solid #bbf7d0; }
+.notice.info { background: #eef2ff; color: #312e81; border: 1px solid #c7d2fe; }
+.totals { display: flex; justify-content: space-between; padding: 0.4rem 0; }
+.totals.grand { border-top: 1px solid var(--line); margin-top: 0.4rem; padding-top: 0.7rem; font-weight: 700; }
+.pill { display: inline-block; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.75rem; background: var(--accent-soft); color: var(--accent); }
+.toolbar { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin: 1rem 0; }
+.toolbar input { max-width: 260px; }
+.split { display: grid; gap: 1.5rem; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); align-items: start; }
+@media (max-width: 780px) { .split { grid-template-columns: 1fr; } }
+footer.site { border-top: 1px solid var(--line); padding: 1.5rem; color: var(--muted); font-size: 0.82rem; text-align: center; }

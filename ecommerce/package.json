@@ -1,0 +1,53 @@
+{
+  "name": "duka-ecommerce",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "engines": { "node": ">=22.9 <25" },
+  "scripts": {
+    "dev": "tsx apps/api/src/index.ts",
+    "dev:worker": "tsx apps/api/src/worker.ts",
+    "dev:web": "next dev apps/web --hostname 0.0.0.0 --port 3100",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
+    "build": "tsx scripts/build.ts",
+    "build:web": "next build apps/web",
+    "start:api": "node dist/api.mjs",
+    "start:worker": "node dist/worker.mjs",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:status": "tsx scripts/migrate.ts --status",
+    "db:seed": "tsx database/seeds/phase1.ts",
+    "test": "node --import tsx --import ./tests/env.ts --test --test-reporter=tap --test-concurrency=1 tests/unit/*.test.ts tests/integration/*.test.ts",
+    "test:unit": "node --import tsx --import ./tests/env.ts --test --test-reporter=tap tests/unit/*.test.ts",
+    "test:integration": "node --import tsx --import ./tests/env.ts --test --test-reporter=tap --test-concurrency=1 tests/integration/*.test.ts",
+    "test:pg-concurrency": "node --import tsx --import ./tests/env.ts --test --test-reporter=tap tests/postgres/reservation-concurrency.test.ts",
+    "format": "prettier --write apps packages scripts tests database docs",
+    "format:check": "prettier --check apps packages scripts tests database docs"
+  },
+  "dependencies": {
+    "cookie": "1.0.2",
+    "decimal.js": "10.6.0",
+    "dotenv": "17.2.3",
+    "express": "5.3.0",
+    "helmet": "8.3.0",
+    "pg": "8.23.1",
+    "pino": "10.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "@types/cookie": "0.6.0",
+    "@types/express": "5.0.6",
+    "@types/node": "22.19.7",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "esbuild": "0.25.12",
+    "next": "16.4.2",
+    "prettier": "3.6.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}
