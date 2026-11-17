@@ -168,6 +168,12 @@ export ERP_WAREHOUSE_ID=       # paste warehouses[].id where branch_id = ERP_BRA
 > warehouse sits in a different branch (`BRANCH_MISMATCH`), and it rejects a
 > _sales order with no warehouse at all_ (`WAREHOUSE_REQUIRED`). This is why
 > `ERP_DEFAULT_WAREHOUSE_ID` is not optional even with reservations off.
+>
+> An ERP with several branches is fine, but every web order posts to the **one**
+> pair configured here — the adapter sends `ERP_DEFAULT_BRANCH_ID` and
+> `ERP_DEFAULT_WAREHOUSE_ID` on `POST /documents` and nothing routes an order by
+> destination. If two shops must ship from two branches, that needs a code change,
+> not a second environment variable.
 
 ---
 
