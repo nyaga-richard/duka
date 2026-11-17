@@ -200,3 +200,40 @@ export function ArrowLeftIcon({ size = 14 }: IconProps) {
     </svg>
   );
 }
+
+export function UsersIcon({ size = 17 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
+      <path d="M16 5.6a3 3 0 0 1 0 5.8M17.5 19a5 5 0 0 0-2-4" />
+    </svg>
+  );
+}
+
+export function PulseIcon({ size = 17 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M3 12h3.5l2-5 3 10 2.5-5H21" />
+    </svg>
+  );
+}
+
+export function CogIcon({ size = 17 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 11.5 4a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 19.4 11a2 2 0 1 1 0 4Z" />
+    </svg>
+  );
+}
+
+export function RefreshIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M20 11a8 8 0 0 0-13.6-4.6L3 9" />
+      <path d="M4 13a8 8 0 0 0 13.6 4.6L21 15" />
+      <path d="M3 4v5h5M21 20v-5h-5" />
+    </svg>
+  );
+}
