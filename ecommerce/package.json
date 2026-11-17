@@ -3,8 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*", "packages/*"],
-  "engines": { "node": ">=22.9 <25" },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.9 <25"
+  },
   "scripts": {
     "dev": "tsx apps/api/src/index.ts",
     "dev:worker": "tsx apps/api/src/worker.ts",
@@ -17,6 +22,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:status": "tsx scripts/migrate.ts --status",
     "db:seed": "tsx database/seeds/phase1.ts",
+    "demo:catalogue": "tsx scripts/demo-catalogue.ts",
     "test": "node --import tsx --import ./tests/env.ts --test --test-reporter=tap --test-concurrency=1 tests/unit/*.test.ts tests/integration/*.test.ts",
     "test:unit": "node --import tsx --import ./tests/env.ts --test --test-reporter=tap tests/unit/*.test.ts",
     "test:integration": "node --import tsx --import ./tests/env.ts --test --test-reporter=tap --test-concurrency=1 tests/integration/*.test.ts",

@@ -16,7 +16,7 @@ Express app and drives it over HTTP with cookies and CSRF — no mocks of our ow
 code. The ERP and the payment provider are the only doubles, and both are
 protocol-faithful fakes that refuse to load in production.
 
-## What is proven (104 tests)
+## What is proven (112 tests)
 
 **Migrations and schema** (`tests/integration/migrations.test.ts`, `constraints.test.ts`)
 
@@ -93,6 +93,22 @@ protocol-faithful fakes that refuse to load in production.
   so lines and stock holds survive), signing in adopts it too when the account
   has no cart, and an account that already has a cart keeps its own lines.
 
+**Product images** (`product-images.test.ts`)
+
+- The adapter lists a product's image attachments and downloads their bytes
+  unchanged (a real PNG round-trips), and a transport without binary support
+  reports the capability as unsupported instead of returning an empty image.
+- A catalogue pull writes the ERP attachment into `product_image` as
+  `/api/v1/catalog/images/<id>` — the shop's own URL, not the ERP's host — and a
+  replacement photo in the ERP replaces the stored URL on the next pull.
+- `GET /api/v1/catalog/images/:id` serves the ERP bytes with a long cache header
+  for a published product, and `404` for an unknown id, a malformed id, a path
+  traversal attempt, or a product that is not published.
+- With the ERP unreachable the route answers a 1×1 transparent PNG with
+  `cache-control: no-store`, so a tile degrades quietly and nothing is cached.
+- An operator can set, replace and clear a product's primary image; `javascript:`,
+  `data:` and protocol-relative URLs are `422`, and a site-relative path is allowed.
+
 **Payments** (`payments-manual.test.ts`, `payments-webhook.test.ts`)
 
 - Manual mode never claims capture; the health endpoint says so.
@@ -128,15 +144,15 @@ protocol-faithful fakes that refuse to load in production.
 - Every ERP capability has evidence; unsupported ones cite a contract gap; the
   adapter refuses unsupported methods without sending a request.
 
-## What is *not* proven here
+## What is _not_ proven here
 
-| Claim | Why not | How to close it |
-| --- | --- | --- |
-| Multi-connection races on stock | PGlite is a single connection | `TEST_DATABASE_URL=… npm run test:pg-concurrency` |
-| Live M-Pesa STK/callback/refund | No Daraja sandbox credentials, no public callback URL | Run against Daraja sandbox with `MPESA_MODE=sandbox` and a tunnel |
-| Real ERP interoperability | Phase 1 must not write to the ERP | Run the adapter against a staging ERP with the integration identity |
-| Load/soak behaviour | Out of Phase 1 scope | k6/artillery against staging |
-| Email/SMS delivery | Not in Phase 1 | Provider integration + outbox pattern |
+| Claim                           | Why not                                               | How to close it                                                     |
+| ------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------- |
+| Multi-connection races on stock | PGlite is a single connection                         | `TEST_DATABASE_URL=… npm run test:pg-concurrency`                   |
+| Live M-Pesa STK/callback/refund | No Daraja sandbox credentials, no public callback URL | Run against Daraja sandbox with `MPESA_MODE=sandbox` and a tunnel   |
+| Real ERP interoperability       | Phase 1 must not write to the ERP                     | Run the adapter against a staging ERP with the integration identity |
+| Load/soak behaviour             | Out of Phase 1 scope                                  | k6/artillery against staging                                        |
+| Email/SMS delivery              | Not in Phase 1                                        | Provider integration + outbox pattern                               |
 
 The suite never marks a skipped proof as passed: the PostgreSQL test reports
 `SKIP` unless `TEST_DATABASE_URL` is set.

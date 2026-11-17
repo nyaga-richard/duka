@@ -240,6 +240,41 @@ test("variant details stay editable and validated", async () => {
   assert.equal(clash.status, 409, JSON.stringify(clash.body));
 });
 
+test("an operator can set, replace and clear the product image", async () => {
+  const created = (await createProduct({ status: "active" })).data.product;
+
+  const set = await owner.put(`/api/v1/admin/products/${created.product_id}/image`, {
+    image_url: "https://cdn.example.test/throw.jpg",
+  });
+  assert.equal(set.status, 200, JSON.stringify(set.body));
+  assert.equal(set.data.product.images.length, 1);
+  assert.equal(set.data.product.images[0].image_url, "https://cdn.example.test/throw.jpg");
+  assert.equal(set.data.product.images[0].is_primary, true);
+
+  const replaced = await owner.put(`/api/v1/admin/products/${created.product_id}/image`, {
+    image_url: "https://cdn.example.test/throw-v2.jpg",
+  });
+  assert.equal(replaced.data.product.images.length, 1, "replacing keeps one primary image");
+  assert.equal(replaced.data.product.images[0].image_url, "https://cdn.example.test/throw-v2.jpg");
+
+  const local = await owner.put(`/api/v1/admin/products/${created.product_id}/image`, {
+    image_url: "/images/throw.jpg",
+  });
+  assert.equal(local.status, 200, "a path this site serves is acceptable");
+  assert.equal(local.data.product.images[0].image_url, "/images/throw.jpg");
+
+  for (const bad of ["javascript:alert(1)", "//evil.example.test/x.jpg", "data:image/png;base64,AA"]) {
+    const refused = await owner.put(`/api/v1/admin/products/${created.product_id}/image`, {
+      image_url: bad,
+    });
+    assert.equal(refused.status, 422, `${bad} must be refused`);
+  }
+
+  const cleared = await owner.put(`/api/v1/admin/products/${created.product_id}/image`, { image_url: null });
+  assert.equal(cleared.status, 200);
+  assert.equal(cleared.data.product.images.length, 0);
+});
+
 test("duplicate slugs and SKUs are refused with 409", async () => {
   const created = (
     await createProduct({ variants: [variant({ sku: "UNIQUE-1" })] })

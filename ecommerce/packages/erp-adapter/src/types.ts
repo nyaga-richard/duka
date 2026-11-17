@@ -19,8 +19,25 @@ export interface ErpResponse<T> {
 export interface ErpTransport {
   request<T = unknown>(request: ErpRequest): Promise<ErpResponse<T>>;
   health(): Promise<{ ok: boolean; live: boolean; ready: boolean; detail?: unknown }>;
+  /** Binary download (product images). Optional: a transport may not offer it. */
+  download?(path: string): Promise<ErpBinary>;
   close?(): Promise<void>;
   readonly status?: Record<string, unknown>;
+}
+
+/** Bytes returned by `GET /api/v1/attachments/:id`. */
+export interface ErpBinary {
+  bytes: Uint8Array;
+  contentType: string;
+  filename?: string;
+}
+
+/** `GET /api/v1/products/:id/attachments` item. */
+export interface ErpAttachment {
+  id: string;
+  filename: string;
+  mime_type: string;
+  size: number;
 }
 
 /** GET /api/v1/products item (subset used by the sync). */

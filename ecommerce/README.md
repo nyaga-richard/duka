@@ -10,16 +10,16 @@ trail that explains every state change.
 
 ## What is in the box
 
-| Area | Where | State |
-| --- | --- | --- |
-| Schema (6 forward-only migrations) | `database/migrations` | Applied and tested |
-| HTTP API (49 endpoints) | `apps/api/src` | Implemented, tested |
-| Background worker | `apps/api/src/worker.ts` | Heartbeat, hold expiry, ERP retries |
-| ERP adapter (isolated) | `packages/erp-adapter` | Verified capabilities only |
-| Payments boundary | `packages/payments` | `manual` default; M-Pesa untested live |
-| Storefront + staff UI | `apps/web` | Catalogue, cart, checkout, orders, manual capture |
-| Tests | `tests` | 87 automated tests (plus a gated real-PostgreSQL proof) |
-| Deployment | `docker` | Compose: PostgreSQL, API, worker, web |
+| Area                               | Where                    | State                                                   |
+| ---------------------------------- | ------------------------ | ------------------------------------------------------- |
+| Schema (6 forward-only migrations) | `database/migrations`    | Applied and tested                                      |
+| HTTP API (49 endpoints)            | `apps/api/src`           | Implemented, tested                                     |
+| Background worker                  | `apps/api/src/worker.ts` | Heartbeat, hold expiry, ERP retries                     |
+| ERP adapter (isolated)             | `packages/erp-adapter`   | Verified capabilities only                              |
+| Payments boundary                  | `packages/payments`      | `manual` default; M-Pesa untested live                  |
+| Storefront + staff UI              | `apps/web`               | Catalogue, cart, checkout, orders, manual capture       |
+| Tests                              | `tests`                  | 87 automated tests (plus a gated real-PostgreSQL proof) |
+| Deployment                         | `docker`                 | Compose: PostgreSQL, API, worker, web                   |
 
 Read first:
 
@@ -49,9 +49,27 @@ The storefront proxies `/api/v1/*` to the API server-side, so cookies stay
 first-party. Staff UI: <http://localhost:3100/admin>.
 
 Catalogue pages stay empty until a catalogue source exists: either enable the
-ERP integration and run a pull, or insert products through SQL while the ERP
-integration is still being agreed. No sample products or orders are seeded —
-a seed that invents business data would make the tests lie.
+ERP integration and run a pull, or create products from the store desk at
+`/admin`. No sample products or orders are seeded — a seed that invents business
+data would make the tests lie. To look at the storefront with something in it:
+
+```bash
+npm run demo:catalogue           # optional: six products, two accounts, no orders
+```
+
+That script is opt-in and idempotent; it lives in `scripts/demo-catalogue.ts` and
+its photos in `apps/web/public/seed`.
+
+### Product photos
+
+The storefront shows the ERP's own product image when the ERP has one. There is
+nothing to configure: the catalogue pull stores the image attachment as
+`/api/v1/catalog/images/<attachmentId>`, and that public route streams the bytes
+from the ERP through the shop's own host (cached for ten minutes, only for
+published products). Without an ERP photo, or while the ERP is unreachable, tiles
+fall back to a monogram so the layout never shows a broken image. An operator can
+also set their own `https` image per product from the desk, or point it at a file
+in `apps/web/public`.
 
 ## Production with Compose
 
@@ -71,6 +89,15 @@ Services here: `db` (PostgreSQL 17.11, not published), one-shot `migrate`,
 `api`, `worker`, `web` (port 3100). Both `api` and `migrate` build from
 `docker/Dockerfile` target `api`; `web` uses target `web`. Only `docker` needs
 to build the images; nothing is deployed by this repository.
+
+## The storefront's look
+
+The shop borrows its visual language from apple.com — a white page, pale panels,
+hairlines instead of borders, one blue accent, a translucent 48px nav, and
+display type that carries the page. That skin lives entirely in
+`apps/web/app/storefront.css` and every selector is scoped to `.shop-layout`, so
+the store desk at `/admin` keeps the ERP design system untouched. Nothing about
+the data, routing or server actions changed to make it look that way.
 
 ## Design decisions worth knowing
 
@@ -101,17 +128,17 @@ to build the images; nothing is deployed by this repository.
 
 ## Scripts
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` / `dev:web` / `dev:worker` | Run API, storefront, worker |
-| `npm run typecheck` | API + web type check |
-| `npm run build` / `build:web` | Bundle API+worker / build Next |
-| `npm test` | Unit + integration tests (embedded PostgreSQL) |
-| `npm run test:pg-concurrency` | Real-PostgreSQL concurrency proof (needs `TEST_DATABASE_URL`) |
-| `npm run db:migrate` / `db:status` | Apply / inspect migrations |
-| `npm run db:seed` | Store settings + first administrator (no sample data) |
-| `npx tsx scripts/api-docs.ts` | Regenerate `docs/API.md` |
-| `npx tsx scripts/erp-inventory.ts` | Re-inspect the ERP routes read-only |
+| Command                                  | Purpose                                                       |
+| ---------------------------------------- | ------------------------------------------------------------- |
+| `npm run dev` / `dev:web` / `dev:worker` | Run API, storefront, worker                                   |
+| `npm run typecheck`                      | API + web type check                                          |
+| `npm run build` / `build:web`            | Bundle API+worker / build Next                                |
+| `npm test`                               | Unit + integration tests (embedded PostgreSQL)                |
+| `npm run test:pg-concurrency`            | Real-PostgreSQL concurrency proof (needs `TEST_DATABASE_URL`) |
+| `npm run db:migrate` / `db:status`       | Apply / inspect migrations                                    |
+| `npm run db:seed`                        | Store settings + first administrator (no sample data)         |
+| `npx tsx scripts/api-docs.ts`            | Regenerate `docs/API.md`                                      |
+| `npx tsx scripts/erp-inventory.ts`       | Re-inspect the ERP routes read-only                           |
 
 ## Honest status
 

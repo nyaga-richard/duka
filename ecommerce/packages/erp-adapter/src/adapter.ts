@@ -6,6 +6,8 @@
  * ERP document or payment. There is no ERP database access here, by design.
  */
 import type {
+  ErpAttachment,
+  ErpBinary,
   ErpCustomer,
   ErpInventoryRow,
   ErpMetadata,
@@ -139,6 +141,39 @@ export class ErpAdapter {
       }
     }
     return page;
+  }
+
+  /**
+   * The image attachments the ERP holds for one product.
+   *
+   * `GET /api/v1/products/:id/attachments` is `catalog.read` and returns
+   * metadata only; the bytes come from `downloadAttachment`.
+   */
+  async listProductAttachments(productId: string): Promise<ErpAttachment[]> {
+    const response = await this.transport.request<{ items: ErpAttachment[] }>({
+      method: "GET",
+      path: `/api/v1/products/${encodeURIComponent(productId)}/attachments`,
+    });
+    const items = response.data?.items;
+    if (!Array.isArray(items)) {
+      throw new ErpError("ERP_PROTOCOL", "ERP product attachments response was not a list");
+    }
+    return items.filter((item) => typeof item?.id === "string");
+  }
+
+  /**
+   * One attachment's bytes. A transport without binary support reports the
+   * capability as unsupported rather than pretending an empty image is an image.
+   */
+  async downloadAttachment(attachmentId: string): Promise<ErpBinary> {
+    if (typeof this.transport.download !== "function") {
+      throw unsupported("binary attachment download", "GET /api/v1/attachments/:id", "G10");
+    }
+    const binary = await this.transport.download(`/api/v1/attachments/${encodeURIComponent(attachmentId)}`);
+    if (!binary?.bytes?.length) {
+      throw new ErpError("ERP_PROTOCOL", "ERP returned an empty attachment body");
+    }
+    return binary;
   }
 
   /** Walks the whole catalogue using only page/limit (no updated_since exists: gap G11). */

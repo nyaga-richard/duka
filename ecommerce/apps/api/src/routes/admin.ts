@@ -39,6 +39,7 @@ import {
   createProduct,
   getAdminProduct,
   insertVariant,
+  setProductImage,
   updateProduct,
   updateVariant,
 } from "../services/catalog-admin.ts";
@@ -882,6 +883,49 @@ export function registerAdminRoutes(router: Router) {
           is_featured: product.is_featured,
           product_name: product.product_name,
         },
+      });
+      return { data: { product } };
+    },
+  );
+
+  endpoint(
+    router,
+    "put",
+    "/admin/products/:productId/image",
+    {
+      auth: "admin",
+      permissions: ["catalog.write"],
+      body: z
+        .object({
+          image_url: z
+            .string()
+            .trim()
+            .max(500)
+            .nullable()
+            .refine(
+              (value) =>
+                value === null ||
+                value === "" ||
+                /^https?:\/\/[^\s]+$/i.test(value) ||
+                /^\/(?!\/)[^\s]*$/.test(value),
+              "Use an https URL or a path this site serves",
+            ),
+        })
+        .strict(),
+      summary: "Set or clear a product's primary image (an https URL or the ERP proxy path)",
+      tags: ["admin"],
+    },
+    async ({ ctx, body, tx }) => {
+      const productId = Number((ctx.req.params as any).productId);
+      if (!Number.isInteger(productId) || productId <= 0) fail(404, "NOT_FOUND", "Product not found");
+      const product = await setProductImage(tx!, productId, body.image_url || null);
+      await audit(tx!, {
+        actorType: "admin",
+        actorId: (ctx.actor as any).adminUserId,
+        action: "catalog.image_changed",
+        entityType: "product",
+        entityId: productId,
+        after: { image_url: body.image_url || null },
       });
       return { data: { product } };
     },
