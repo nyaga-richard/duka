@@ -136,6 +136,19 @@ export async function listProducts(query = ""): Promise<ProductSummary[]> {
   return data?.items ?? [];
 }
 
+/**
+ * Products the store flagged as featured, for the landing page. Falls back to
+ * the newest published products when nothing is featured yet, so a fresh shop
+ * still has something to show above the fold.
+ */
+export async function listFeatured(limit = 8): Promise<ProductSummary[]> {
+  const featured = await listProducts(
+    `?featured=true&limit=${Math.min(limit, 48)}`,
+  );
+  if (featured.length) return featured;
+  return listProducts(`?limit=${Math.min(limit, 48)}&sort=newest`);
+}
+
 export async function getProduct(slug: string): Promise<ProductDetail | null> {
   return getJson<ProductDetail>(
     `/api/v1/catalog/products/${encodeURIComponent(slug)}`,

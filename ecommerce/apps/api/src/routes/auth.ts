@@ -12,7 +12,12 @@ import {
   revokeSession,
   setSessionCookie,
 } from "../services/auth.ts";
-import { hashPassword, rateLimit, verifyPassword } from "../services/security.ts";
+import {
+  hashPassword,
+  rateLimit,
+  verifyPassword,
+} from "../services/security.ts";
+import { adoptGuestCart } from "../services/cart.ts";
 
 export function registerAuthRoutes(router: Router) {
   endpoint(
@@ -36,7 +41,14 @@ export function registerAuthRoutes(router: Router) {
       tags: ["auth"],
     },
     async ({ ctx, body }) => {
-      if (ctx.actor?.kind === "admin") fail(403, "FORBIDDEN", "Administrators cannot register storefront accounts");
+      if (ctx.actor?.kind === "admin")
+        fail(
+          403,
+          "FORBIDDEN",
+          "Administrators cannot register storefront accounts",
+        );
+      const guestSessionId =
+        ctx.actor?.kind === "guest" ? ctx.actor.guestSessionId : null;
       const result = await registerCustomer(
         ctx.db,
         {
@@ -48,7 +60,12 @@ export function registerAuthRoutes(router: Router) {
         },
         { ip: ctx.ip, userAgent: ctx.req.header("user-agent") },
       );
+      const adopted = await adoptGuestCart(ctx.db, {
+        customerId: result.customer.customer_id,
+        guestSessionId,
+      });
       setSessionCookie(ctx.res, "customer", result.token);
+      if (adopted) clearSessionCookie(ctx.res, "guest");
       return {
         data: {
           customer: {
@@ -58,6 +75,7 @@ export function registerAuthRoutes(router: Router) {
             last_name: result.customer.last_name,
           },
           csrf_token: result.csrf,
+          cart_adopted: Boolean(adopted),
         },
       };
     },
@@ -75,8 +93,18 @@ export function registerAuthRoutes(router: Router) {
       tags: ["auth"],
     },
     async ({ ctx, body }) => {
-      const result = await loginCustomer(ctx.db, body, { ip: ctx.ip, userAgent: ctx.req.header("user-agent") });
+      const guestSessionId =
+        ctx.actor?.kind === "guest" ? ctx.actor.guestSessionId : null;
+      const result = await loginCustomer(ctx.db, body, {
+        ip: ctx.ip,
+        userAgent: ctx.req.header("user-agent"),
+      });
+      const adopted = await adoptGuestCart(ctx.db, {
+        customerId: result.customer.customer_id,
+        guestSessionId,
+      });
       setSessionCookie(ctx.res, "customer", result.token);
+      if (adopted) clearSessionCookie(ctx.res, "guest");
       return {
         data: {
           customer: {
@@ -86,6 +114,7 @@ export function registerAuthRoutes(router: Router) {
             last_name: result.customer.last_name,
           },
           csrf_token: result.csrf,
+          cart_adopted: Boolean(adopted),
         },
       };
     },
@@ -106,14 +135,31 @@ export function registerAuthRoutes(router: Router) {
     async ({ ctx, body }) => {
       if (ctx.actor) {
         // Never silently replace an existing identity's cookie.
-        return { data: { guest: false, existing: ctx.actor.kind, csrf_token: ctx.actor.kind === "admin" ? null : ctx.actor.csrf } };
+        return {
+          data: {
+            guest: false,
+            existing: ctx.actor.kind,
+            csrf_token: ctx.actor.kind === "admin" ? null : ctx.actor.csrf,
+          },
+        };
       }
-      const guest = await createGuestSession(ctx.db, { email: body.email ?? null }, {
-        ip: ctx.ip,
-        userAgent: ctx.req.header("user-agent"),
-      });
+      const guest = await createGuestSession(
+        ctx.db,
+        { email: body.email ?? null },
+        {
+          ip: ctx.ip,
+          userAgent: ctx.req.header("user-agent"),
+        },
+      );
       setSessionCookie(ctx.res, "guest", guest.token);
-      return { data: { guest: true, guest_session_id: guest.guestSessionId, email: guest.email, csrf_token: guest.csrf } };
+      return {
+        data: {
+          guest: true,
+          guest_session_id: guest.guestSessionId,
+          email: guest.email,
+          csrf_token: guest.csrf,
+        },
+      };
     },
   );
 
@@ -134,16 +180,37 @@ export function registerAuthRoutes(router: Router) {
           "SELECT customer_id, email, first_name, last_name, phone FROM customer WHERE customer_id = $1",
           [actor.customerId],
         );
-        return { data: { authenticated: true, kind: "customer", customer: customer.rows[0], csrf_token: actor.csrf } };
+        return {
+          data: {
+            authenticated: true,
+            kind: "customer",
+            customer: customer.rows[0],
+            csrf_token: actor.csrf,
+          },
+        };
       }
       if (actor.kind === "guest") {
-        return { data: { authenticated: true, kind: "guest", guest_session_id: actor.guestSessionId, email: actor.email, csrf_token: actor.csrf } };
+        return {
+          data: {
+            authenticated: true,
+            kind: "guest",
+            guest_session_id: actor.guestSessionId,
+            email: actor.email,
+            csrf_token: actor.csrf,
+          },
+        };
       }
       return {
         data: {
           authenticated: true,
           kind: "admin",
-          admin: { admin_user_id: actor.adminUserId, email: actor.email, display_name: actor.displayName, roles: actor.roles, permissions: actor.permissions },
+          admin: {
+            admin_user_id: actor.adminUserId,
+            email: actor.email,
+            display_name: actor.displayName,
+            roles: actor.roles,
+            permissions: actor.permissions,
+          },
           csrf_token: actor.csrf,
         },
       };
@@ -154,10 +221,22 @@ export function registerAuthRoutes(router: Router) {
     router,
     "post",
     "/auth/logout",
-    { auth: "any", transactional: false, summary: "Revoke the current session", tags: ["auth"] },
+    {
+      auth: "any",
+      transactional: false,
+      summary: "Revoke the current session",
+      tags: ["auth"],
+    },
     async ({ ctx }) => {
       await revokeSession(ctx.db, ctx.actor!);
-      clearSessionCookie(ctx.res, ctx.actor!.kind === "admin" ? "admin" : ctx.actor!.kind === "customer" ? "customer" : "guest");
+      clearSessionCookie(
+        ctx.res,
+        ctx.actor!.kind === "admin"
+          ? "admin"
+          : ctx.actor!.kind === "customer"
+            ? "customer"
+            : "guest",
+      );
       return { data: { signed_out: true } };
     },
   );
@@ -169,22 +248,39 @@ export function registerAuthRoutes(router: Router) {
     {
       auth: "customer",
       transactional: false,
-      body: z.object({ current_password: z.string().min(1).max(256), new_password: z.string().min(12).max(256) }).strict(),
+      body: z
+        .object({
+          current_password: z.string().min(1).max(256),
+          new_password: z.string().min(12).max(256),
+        })
+        .strict(),
       summary: "Change a customer password and revoke other sessions",
       tags: ["auth"],
     },
     async ({ ctx, body }) => {
       const actor = ctx.actor!;
-      if (actor.kind !== "customer") fail(403, "FORBIDDEN", "Customer sign-in required");
+      if (actor.kind !== "customer")
+        fail(403, "FORBIDDEN", "Customer sign-in required");
       const customerId = actor.customerId;
       await rateLimit(ctx.db, `password-change:${customerId}`, 10, 3600);
-      const row = await ctx.db.query<any>("SELECT password_hash FROM customer WHERE customer_id = $1", [customerId]);
-      if (!(await verifyPassword(row.rows[0]!.password_hash, body.current_password))) {
+      const row = await ctx.db.query<any>(
+        "SELECT password_hash FROM customer WHERE customer_id = $1",
+        [customerId],
+      );
+      if (
+        !(await verifyPassword(
+          row.rows[0]!.password_hash,
+          body.current_password,
+        ))
+      ) {
         fail(401, "UNAUTHENTICATED", "Current password is incorrect");
       }
       const hash = await hashPassword(body.new_password);
       await ctx.db.withTransaction(async (tx) => {
-        await tx.query("UPDATE customer SET password_hash = $2, updated_at = now() WHERE customer_id = $1", [customerId, hash]);
+        await tx.query(
+          "UPDATE customer SET password_hash = $2, updated_at = now() WHERE customer_id = $1",
+          [customerId, hash],
+        );
         await tx.query(
           "UPDATE customer_session SET revoked_at = now() WHERE customer_id = $1 AND session_id <> $2 AND revoked_at IS NULL",
           [customerId, actor.sessionId],
@@ -206,7 +302,10 @@ export function registerAuthRoutes(router: Router) {
       tags: ["admin"],
     },
     async ({ ctx, body }) => {
-      const result = await loginAdmin(ctx.db, body, { ip: ctx.ip, userAgent: ctx.req.header("user-agent") });
+      const result = await loginAdmin(ctx.db, body, {
+        ip: ctx.ip,
+        userAgent: ctx.req.header("user-agent"),
+      });
       setSessionCookie(ctx.res, "admin", result.token);
       return {
         data: {

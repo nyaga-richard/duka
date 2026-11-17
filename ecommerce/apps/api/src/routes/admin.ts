@@ -6,7 +6,12 @@
 import { Router } from "express";
 import { z } from "zod";
 import { endpoint } from "../http/route.ts";
-import { moneyString, slugify } from "@ecom/shared";
+import {
+  moneyString,
+  nonNegativeInt,
+  optionalText,
+  slugify,
+} from "@ecom/shared";
 import { fail } from "../errors.ts";
 import {
   adminListOrders,
@@ -15,7 +20,11 @@ import {
   transitionOrder,
   updateShipmentStatus,
 } from "../services/orders.ts";
-import { recordManualPayment, requestRefund, schedulePaymentSync } from "../services/payments.ts";
+import {
+  recordManualPayment,
+  requestRefund,
+  schedulePaymentSync,
+} from "../services/payments.ts";
 import { beginPaymentIntent } from "../services/payments.ts";
 import {
   enqueueSyncJob,
@@ -26,6 +35,13 @@ import {
   pushOrderDocument,
   syncOverview,
 } from "../services/sync.ts";
+import {
+  createProduct,
+  getAdminProduct,
+  insertVariant,
+  updateProduct,
+  updateVariant,
+} from "../services/catalog-admin.ts";
 import { getErpAdapter, erpEnabled } from "../integrations/erp.ts";
 import { ERP_CAPABILITIES } from "@ecom/erp-adapter";
 import { audit } from "../services/security.ts";
@@ -45,7 +61,12 @@ export function registerAdminRoutes(router: Router) {
     {
       auth: "admin",
       permissions: ["orders.read"],
-      query: pageQuery.extend({ status: z.string().max(30).optional(), q: z.string().max(120).optional() }).strict(),
+      query: pageQuery
+        .extend({
+          status: z.string().max(30).optional(),
+          q: z.string().max(120).optional(),
+        })
+        .strict(),
       summary: "Search orders across the store",
       tags: ["admin"],
     },
@@ -56,8 +77,15 @@ export function registerAdminRoutes(router: Router) {
     router,
     "get",
     "/admin/orders/:orderId",
-    { auth: "admin", permissions: ["orders.read"], summary: "Full order detail", tags: ["admin"] },
-    async ({ ctx }) => ({ data: await getOrderView(ctx.db, Number((ctx.req.params as any).orderId)) }),
+    {
+      auth: "admin",
+      permissions: ["orders.read"],
+      summary: "Full order detail",
+      tags: ["admin"],
+    },
+    async ({ ctx }) => ({
+      data: await getOrderView(ctx.db, Number((ctx.req.params as any).orderId)),
+    }),
   );
 
   endpoint(
@@ -67,8 +95,14 @@ export function registerAdminRoutes(router: Router) {
     {
       auth: "admin",
       permissions: ["orders.write"],
-      body: z.object({ status: z.string().trim().min(2).max(30), reason: z.string().trim().min(5).max(255) }).strict(),
-      summary: "Move an order through fulfilment (payment status is not settable here)",
+      body: z
+        .object({
+          status: z.string().trim().min(2).max(30),
+          reason: z.string().trim().min(5).max(255),
+        })
+        .strict(),
+      summary:
+        "Move an order through fulfilment (payment status is not settable here)",
       tags: ["admin"],
     },
     async ({ ctx, body, tx }) => ({
@@ -118,7 +152,12 @@ export function registerAdminRoutes(router: Router) {
       auth: "admin",
       permissions: ["payments.write"],
       transactional: false,
-      body: z.object({ transaction_id: z.uuid().optional(), phone: z.string().trim().max(20).optional() }).strict(),
+      body: z
+        .object({
+          transaction_id: z.uuid().optional(),
+          phone: z.string().trim().max(20).optional(),
+        })
+        .strict(),
       summary: "Retry the provider payment intent for a pending order",
       tags: ["admin"],
     },
@@ -131,13 +170,19 @@ export function registerAdminRoutes(router: Router) {
             [orderId],
           );
       const row = (transaction as any).rows[0];
-      if (!row) fail(409, "CONFLICT", "There is no pending payment transaction for this order");
+      if (!row)
+        fail(
+          409,
+          "CONFLICT",
+          "There is no pending payment transaction for this order",
+        );
       const payment = await beginPaymentIntent(ctx.db, {
         orderId,
         transactionId: row.transaction_id,
         phone: body.phone,
       });
-      if (payment.status === "succeeded") await schedulePaymentSync(ctx.db, orderId);
+      if (payment.status === "succeeded")
+        await schedulePaymentSync(ctx.db, orderId);
       return { data: payment };
     },
   );
@@ -156,7 +201,14 @@ export function registerAdminRoutes(router: Router) {
           tracking_number: z.string().trim().min(2).max(120).optional(),
           tracking_url: z.string().url().max(500).optional(),
           lines: z
-            .array(z.object({ order_line_id: z.coerce.number().int().positive(), quantity: z.coerce.number().int().min(1) }).strict())
+            .array(
+              z
+                .object({
+                  order_line_id: z.coerce.number().int().positive(),
+                  quantity: z.coerce.number().int().min(1),
+                })
+                .strict(),
+            )
             .min(1)
             .max(200),
         })
@@ -171,7 +223,12 @@ export function registerAdminRoutes(router: Router) {
         carrier: body.carrier,
         trackingNumber: body.tracking_number,
         trackingUrl: body.tracking_url,
-        lines: (body.lines as Array<{ order_line_id: number; quantity: number }>).map((line) => ({ orderLineId: line.order_line_id, quantity: line.quantity })),
+        lines: (
+          body.lines as Array<{ order_line_id: number; quantity: number }>
+        ).map((line) => ({
+          orderLineId: line.order_line_id,
+          quantity: line.quantity,
+        })),
       }),
     }),
   );
@@ -185,7 +242,13 @@ export function registerAdminRoutes(router: Router) {
       permissions: ["shipments.write"],
       body: z
         .object({
-          status: z.enum(["dispatched", "in_transit", "delivered", "failed", "returned"]),
+          status: z.enum([
+            "dispatched",
+            "in_transit",
+            "delivered",
+            "failed",
+            "returned",
+          ]),
           tracking_url: z.string().url().max(500).optional(),
         })
         .strict(),
@@ -224,7 +287,12 @@ export function registerAdminRoutes(router: Router) {
     },
     async ({ ctx, body }) => {
       const key = ctx.req.header("Idempotency-Key");
-      if (!key) fail(422, "IDEMPOTENCY_REQUIRED", "Idempotency-Key header is required for refunds");
+      if (!key)
+        fail(
+          422,
+          "IDEMPOTENCY_REQUIRED",
+          "Idempotency-Key header is required for refunds",
+        );
       const orderId = Number((ctx.req.params as any).orderId);
       const refund = await requestRefund(ctx.db, {
         adminUserId: ctx.actor!.kind === "admin" ? ctx.actor!.adminUserId : "",
@@ -246,7 +314,9 @@ export function registerAdminRoutes(router: Router) {
     {
       auth: "admin",
       permissions: ["payments.read"],
-      query: pageQuery.extend({ status: z.string().max(20).optional() }).strict(),
+      query: pageQuery
+        .extend({ status: z.string().max(20).optional() })
+        .strict(),
       summary: "Inspect received provider webhooks",
       tags: ["admin"],
     },
@@ -275,9 +345,24 @@ export function registerAdminRoutes(router: Router) {
     router,
     "get",
     "/admin/sync/overview",
-    { auth: "admin", permissions: ["sync.manage"], summary: "ERP sync job and log overview", tags: ["admin", "erp"] },
+    {
+      auth: "admin",
+      permissions: ["sync.manage"],
+      summary: "ERP sync job and log overview",
+      tags: ["admin", "erp"],
+    },
     async ({ ctx }) => ({
-      data: { ...(await syncOverview(ctx.db)), capabilities: ERP_CAPABILITIES.map(({ id, support, endpoint, contract }) => ({ id, support, endpoint, contract })) },
+      data: {
+        ...(await syncOverview(ctx.db)),
+        capabilities: ERP_CAPABILITIES.map(
+          ({ id, support, endpoint, contract }) => ({
+            id,
+            support,
+            endpoint,
+            contract,
+          }),
+        ),
+      },
     }),
   );
 
@@ -285,8 +370,15 @@ export function registerAdminRoutes(router: Router) {
     router,
     "get",
     "/admin/erp/capabilities",
-    { auth: "admin", permissions: ["sync.manage"], summary: "Verified vs missing ERP capabilities", tags: ["admin", "erp"] },
-    async () => ({ data: { enabled: erpEnabled(), capabilities: ERP_CAPABILITIES } }),
+    {
+      auth: "admin",
+      permissions: ["sync.manage"],
+      summary: "Verified vs missing ERP capabilities",
+      tags: ["admin", "erp"],
+    },
+    async () => ({
+      data: { enabled: erpEnabled(), capabilities: ERP_CAPABILITIES },
+    }),
   );
 
   endpoint(
@@ -314,7 +406,9 @@ export function registerAdminRoutes(router: Router) {
     {
       auth: "admin",
       permissions: ["sync.manage"],
-      query: pageQuery.extend({ entity_type: z.string().max(30).optional() }).strict(),
+      query: pageQuery
+        .extend({ entity_type: z.string().max(30).optional() })
+        .strict(),
       summary: "Local ↔ ERP entity mappings",
       tags: ["admin", "erp"],
     },
@@ -328,7 +422,12 @@ export function registerAdminRoutes(router: Router) {
         [query.entity_type ?? null, query.limit, offset],
       );
       return {
-        data: { items: rows.rows.map(({ _count, ...row }) => row), page: query.page, limit: query.limit, total: rows.rows[0]?._count ?? 0 },
+        data: {
+          items: rows.rows.map(({ _count, ...row }) => row),
+          page: query.page,
+          limit: query.limit,
+          total: rows.rows[0]?._count ?? 0,
+        },
       };
     },
   );
@@ -391,12 +490,16 @@ export function registerAdminRoutes(router: Router) {
       auth: "admin",
       permissions: ["sync.manage"],
       transactional: false,
-      body: z.object({ max: z.coerce.number().int().min(1).max(50).default(10) }).strict(),
+      body: z
+        .object({ max: z.coerce.number().int().min(1).max(50).default(10) })
+        .strict(),
       summary: "Process due ERP sync jobs now (worker also runs these)",
       tags: ["admin", "erp"],
     },
     async ({ ctx, body }) => ({
-      data: { processed: await processSyncJobs(ctx.db, getErpAdapter(), body.max) },
+      data: {
+        processed: await processSyncJobs(ctx.db, getErpAdapter(), body.max),
+      },
     }),
   );
 
@@ -404,10 +507,18 @@ export function registerAdminRoutes(router: Router) {
     router,
     "post",
     "/admin/sync/orders/:orderId",
-    { auth: "admin", permissions: ["sync.manage"], transactional: false, summary: "Push one order to the ERP now", tags: ["admin", "erp"] },
+    {
+      auth: "admin",
+      permissions: ["sync.manage"],
+      transactional: false,
+      summary: "Push one order to the ERP now",
+      tags: ["admin", "erp"],
+    },
     async ({ ctx }) => {
       const orderId = Number((ctx.req.params as any).orderId);
-      return { data: await pushOrderDocument(ctx.db, getErpAdapter(), orderId) };
+      return {
+        data: await pushOrderDocument(ctx.db, getErpAdapter(), orderId),
+      };
     },
   );
 
@@ -415,9 +526,19 @@ export function registerAdminRoutes(router: Router) {
     router,
     "post",
     "/admin/sync/customers/:customerId",
-    { auth: "admin", permissions: ["sync.manage"], transactional: false, summary: "Map and push one customer to the ERP", tags: ["admin", "erp"] },
+    {
+      auth: "admin",
+      permissions: ["sync.manage"],
+      transactional: false,
+      summary: "Map and push one customer to the ERP",
+      tags: ["admin", "erp"],
+    },
     async ({ ctx }) => ({
-      data: await pushCustomer(ctx.db, getErpAdapter(), Number((ctx.req.params as any).customerId)),
+      data: await pushCustomer(
+        ctx.db,
+        getErpAdapter(),
+        Number((ctx.req.params as any).customerId),
+      ),
     }),
   );
 
@@ -455,7 +576,12 @@ export function registerAdminRoutes(router: Router) {
     {
       auth: "admin",
       permissions: ["audit.read"],
-      query: pageQuery.extend({ entity_type: z.string().max(40).optional(), action: z.string().max(80).optional() }).strict(),
+      query: pageQuery
+        .extend({
+          entity_type: z.string().max(40).optional(),
+          action: z.string().max(80).optional(),
+        })
+        .strict(),
       summary: "Audit trail",
       tags: ["admin"],
     },
@@ -470,7 +596,12 @@ export function registerAdminRoutes(router: Router) {
         [query.entity_type ?? null, query.action ?? null, query.limit, offset],
       );
       return {
-        data: { items: rows.rows.map(({ _count, ...row }) => row), page: query.page, limit: query.limit, total: rows.rows[0]?._count ?? 0 },
+        data: {
+          items: rows.rows.map(({ _count, ...row }) => row),
+          page: query.page,
+          limit: query.limit,
+          total: rows.rows[0]?._count ?? 0,
+        },
       };
     },
   );
@@ -500,7 +631,12 @@ export function registerAdminRoutes(router: Router) {
         [search, query.limit, offset],
       );
       return {
-        data: { items: rows.rows.map(({ _count, ...row }) => row), page: query.page, limit: query.limit, total: rows.rows[0]?._count ?? 0 },
+        data: {
+          items: rows.rows.map(({ _count, ...row }) => row),
+          page: query.page,
+          limit: query.limit,
+          total: rows.rows[0]?._count ?? 0,
+        },
       };
     },
   );
@@ -512,7 +648,12 @@ export function registerAdminRoutes(router: Router) {
     {
       auth: "admin",
       permissions: ["catalog.read"],
-      query: pageQuery.extend({ q: z.string().max(120).optional(), status: z.enum(["draft", "active", "archived"]).optional() }).strict(),
+      query: pageQuery
+        .extend({
+          q: z.string().max(120).optional(),
+          status: z.enum(["draft", "active", "archived"]).optional(),
+        })
+        .strict(),
       summary: "Catalogue with sync state",
       tags: ["admin"],
     },
@@ -520,8 +661,11 @@ export function registerAdminRoutes(router: Router) {
       const offset = (query.page - 1) * query.limit;
       const search = `%${(query.q ?? "").trim()}%`;
       const rows = await ctx.db.query<any>(
-        `SELECT p.product_id, p.product_name, p.slug, p.status, p.sync_state, p.erp_updated_at, p.updated_at,
+        `SELECT p.product_id, p.product_name, p.slug, p.status, p.is_featured, p.sync_state, p.erp_updated_at, p.updated_at,
                 (SELECT count(*) FROM product_variant v WHERE v.product_id = p.product_id)::int AS variants,
+                (SELECT count(*) FROM product_variant v WHERE v.product_id = p.product_id AND v.is_active)::int AS active_variants,
+                (SELECT c.category_name FROM product_category pc JOIN category c ON c.category_id = pc.category_id
+                  WHERE pc.product_id = p.product_id ORDER BY pc.category_id LIMIT 1) AS category_name,
                 (SELECT erp_id FROM erp_entity_map m WHERE m.entity_type='product' AND m.local_id = p.product_id::text) AS erp_product_id,
                 count(*) OVER()::int AS _count
            FROM product p
@@ -530,7 +674,12 @@ export function registerAdminRoutes(router: Router) {
         [search, query.status ?? null, query.limit, offset],
       );
       return {
-        data: { items: rows.rows.map(({ _count, ...row }) => row), page: query.page, limit: query.limit, total: rows.rows[0]?._count ?? 0 },
+        data: {
+          items: rows.rows.map(({ _count, ...row }) => row),
+          page: query.page,
+          limit: query.limit,
+          total: rows.rows[0]?._count ?? 0,
+        },
       };
     },
   );
@@ -542,8 +691,11 @@ export function registerAdminRoutes(router: Router) {
     {
       auth: "admin",
       permissions: ["catalog.write"],
-      body: z.object({ status: z.enum(["draft", "active", "archived"]) }).strict(),
-      summary: "Publish or archive a product locally (ERP stays the stock/price master)",
+      body: z
+        .object({ status: z.enum(["draft", "active", "archived"]) })
+        .strict(),
+      summary:
+        "Publish or archive a product locally (ERP stays the stock/price master)",
       tags: ["admin"],
     },
     async ({ ctx, body, tx }) => {
@@ -572,7 +724,9 @@ export function registerAdminRoutes(router: Router) {
     {
       auth: "admin",
       permissions: ["catalog.write"],
-      body: z.object({ status: z.enum(["pending", "published", "rejected"]) }).strict(),
+      body: z
+        .object({ status: z.enum(["pending", "published", "rejected"]) })
+        .strict(),
       summary: "Moderate a review",
       tags: ["admin"],
     },
@@ -596,17 +750,238 @@ export function registerAdminRoutes(router: Router) {
     },
   );
 
+  // ------------------------------------------------------------------ catalogue
+  // Products and variants. The ERP owns price and stock for the products it
+  // mirrors, so these write the local merchandising layer only: what exists,
+  // what it costs on this storefront, and what is published.
+
+  const optionBody = z
+    .object({
+      option: z.string().trim().min(1).max(50),
+      value: z.string().trim().min(1).max(50),
+    })
+    .strict();
+
+  const variantBody = z
+    .object({
+      sku: z.string().trim().min(1).max(50),
+      price: moneyString,
+      qty_in_stock: nonNegativeInt,
+      compare_at_price: moneyString.optional(),
+      barcode: z.string().trim().max(64).optional(),
+      weight_grams: nonNegativeInt.optional(),
+      is_active: z.boolean().optional(),
+      is_default: z.boolean().optional(),
+      options: z.array(optionBody).max(6).optional(),
+    })
+    .strict();
+
+  // A variant patch may also *clear* the optional fields, so they accept null.
+  const variantPatch = variantBody.partial().extend({
+    compare_at_price: moneyString.nullish(),
+    barcode: z.string().trim().max(64).nullish(),
+    weight_grams: nonNegativeInt.nullish(),
+  });
+
+  const productBody = z
+    .object({
+      product_name: z.string().trim().min(2).max(255),
+      slug: z.string().trim().max(180).optional(),
+      summary: z.string().trim().max(400).optional(),
+      description: z.string().trim().max(5000).optional(),
+      status: z.enum(["draft", "active", "archived"]).optional(),
+      is_featured: z.boolean().optional(),
+      category_id: z.coerce.number().int().positive().nullish(),
+      brand_name: z.string().trim().max(100).nullish(),
+      variants: z.array(variantBody).max(50).optional(),
+    })
+    .strict();
+
+  endpoint(
+    router,
+    "post",
+    "/admin/products",
+    {
+      auth: "admin",
+      permissions: ["catalog.write"],
+      status: 201,
+      body: productBody,
+      summary: "Create a product locally with optional variants",
+      tags: ["admin"],
+    },
+    async ({ ctx, body, tx }) => {
+      const product = await createProduct(tx!, {
+        ...body,
+        summary: body.summary || undefined,
+        description: body.description || undefined,
+      });
+      await audit(tx!, {
+        actorType: "admin",
+        actorId: (ctx.actor as any).adminUserId,
+        action: "catalog.product_created",
+        entityType: "product",
+        entityId: product.product_id,
+        after: {
+          product_name: product.product_name,
+          status: product.status,
+          variants: product.variants.length,
+        },
+      });
+      return { data: { product } };
+    },
+  );
+
+  endpoint(
+    router,
+    "get",
+    "/admin/products/:productId",
+    {
+      auth: "admin",
+      permissions: ["catalog.read"],
+      summary: "One product with its variants, options and images",
+      tags: ["admin"],
+    },
+    async ({ ctx }) => {
+      const productId = Number((ctx.req.params as any).productId);
+      if (!Number.isInteger(productId) || productId <= 0)
+        fail(404, "NOT_FOUND", "Product not found");
+      return { data: { product: await getAdminProduct(ctx.db, productId) } };
+    },
+  );
+
+  endpoint(
+    router,
+    "patch",
+    "/admin/products/:productId",
+    {
+      auth: "admin",
+      permissions: ["catalog.write"],
+      body: productBody.partial(),
+      summary:
+        "Edit a product's merchandising fields, publish state or feature flag",
+      tags: ["admin"],
+    },
+    async ({ ctx, body, tx }) => {
+      const productId = Number((ctx.req.params as any).productId);
+      if (!Number.isInteger(productId) || productId <= 0)
+        fail(404, "NOT_FOUND", "Product not found");
+      const product = await updateProduct(tx!, productId, {
+        ...body,
+        summary: body.summary === undefined ? undefined : body.summary,
+        description:
+          body.description === undefined ? undefined : body.description,
+      });
+      await audit(tx!, {
+        actorType: "admin",
+        actorId: (ctx.actor as any).adminUserId,
+        action: "catalog.product_updated",
+        entityType: "product",
+        entityId: productId,
+        after: {
+          status: product.status,
+          is_featured: product.is_featured,
+          product_name: product.product_name,
+        },
+      });
+      return { data: { product } };
+    },
+  );
+
+  endpoint(
+    router,
+    "post",
+    "/admin/products/:productId/variants",
+    {
+      auth: "admin",
+      permissions: ["catalog.write"],
+      status: 201,
+      body: variantBody,
+      summary: "Add a variant (SKU, price, stock, options) to a product",
+      tags: ["admin"],
+    },
+    async ({ ctx, body, tx }) => {
+      const productId = Number((ctx.req.params as any).productId);
+      if (!Number.isInteger(productId) || productId <= 0)
+        fail(404, "NOT_FOUND", "Product not found");
+      const variant = await insertVariant(tx!, productId, body);
+      await audit(tx!, {
+        actorType: "admin",
+        actorId: (ctx.actor as any).adminUserId,
+        action: "catalog.variant_created",
+        entityType: "product_variant",
+        entityId: variant.variant_id,
+        after: {
+          sku: variant.sku,
+          price: variant.price,
+          qty_in_stock: variant.qty_in_stock,
+        },
+      });
+      return { data: { variant } };
+    },
+  );
+
+  endpoint(
+    router,
+    "patch",
+    "/admin/variants/:variantId",
+    {
+      auth: "admin",
+      permissions: ["catalog.write"],
+      body: variantPatch,
+      summary:
+        "Edit a variant, or take it off the storefront with is_active: false",
+      tags: ["admin"],
+    },
+    async ({ ctx, body, tx }) => {
+      const variantId = Number((ctx.req.params as any).variantId);
+      if (!Number.isInteger(variantId) || variantId <= 0)
+        fail(404, "NOT_FOUND", "Variant not found");
+      const variant = await updateVariant(tx!, variantId, body);
+      await audit(tx!, {
+        actorType: "admin",
+        actorId: (ctx.actor as any).adminUserId,
+        action: "catalog.variant_updated",
+        entityType: "product_variant",
+        entityId: variantId,
+        after: {
+          sku: variant.sku,
+          price: variant.price,
+          qty_in_stock: variant.qty_in_stock,
+          is_active: variant.is_active,
+        },
+      });
+      return { data: { variant } };
+    },
+  );
+
   endpoint(
     router,
     "get",
     "/admin/settings",
-    { auth: "admin", permissions: ["settings.manage"], summary: "Store, payment and ERP settings (no secrets)", tags: ["admin"] },
+    {
+      auth: "admin",
+      permissions: ["settings.manage"],
+      summary: "Store, payment and ERP settings (no secrets)",
+      tags: ["admin"],
+    },
     async ({ ctx }) => {
-      const rows = await ctx.db.query<any>("SELECT key, value, updated_at FROM app_setting ORDER BY key");
+      const rows = await ctx.db.query<any>(
+        "SELECT key, value, updated_at FROM app_setting ORDER BY key",
+      );
       return {
         data: {
-          settings: Object.fromEntries(rows.rows.map((row) => [row.key, row.value])),
-          erp: { enabled: erpEnabled(), capabilities_verified: ERP_CAPABILITIES.filter((c) => c.support === "verified").length, capabilities_missing: ERP_CAPABILITIES.filter((c) => c.support === "unsupported").length },
+          settings: Object.fromEntries(
+            rows.rows.map((row) => [row.key, row.value]),
+          ),
+          erp: {
+            enabled: erpEnabled(),
+            capabilities_verified: ERP_CAPABILITIES.filter(
+              (c) => c.support === "verified",
+            ).length,
+            capabilities_missing: ERP_CAPABILITIES.filter(
+              (c) => c.support === "unsupported",
+            ).length,
+          },
         },
       };
     },
@@ -631,9 +1006,12 @@ export function registerAdminRoutes(router: Router) {
       tags: ["admin"],
     },
     async ({ ctx, body, tx }) => {
-      const current = await tx!.query<any>("SELECT value FROM app_setting WHERE key = 'store'");
+      const current = await tx!.query<any>(
+        "SELECT value FROM app_setting WHERE key = 'store'",
+      );
       const store = { ...(current.rows[0]?.value ?? {}), name: body.name };
-      if (body.support_email !== undefined) store.support_email = body.support_email;
+      if (body.support_email !== undefined)
+        store.support_email = body.support_email;
       await tx!.query(
         `INSERT INTO app_setting(key, value) VALUES('store', $1)
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,

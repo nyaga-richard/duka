@@ -3,7 +3,7 @@
 Generated from the runtime route registry by `npx tsx scripts/api-docs.ts`.
 Do not edit by hand.
 
-**49 endpoints.** Base path `/api/v1`. Interactive docs: `GET /api/v1/docs`, machine readable: `GET /api/v1/openapi.json`.
+**56 endpoints.** Base path `/api/v1`. Interactive docs: `GET /api/v1/docs`, machine readable: `GET /api/v1/openapi.json`.
 
 ## Conventions
 
@@ -31,7 +31,11 @@ Do not edit by hand.
 | PATCH | `/api/v1/admin/orders/:orderId/status` | administrator session | `orders.write` | — | Move an order through fulfilment (payment status is not settable here) |
 | GET | `/api/v1/admin/payments/webhooks` | administrator session | `payments.read` | — | Inspect received provider webhooks |
 | GET | `/api/v1/admin/products` | administrator session | `catalog.read` | — | Catalogue with sync state |
+| POST | `/api/v1/admin/products` | administrator session | `catalog.write` | — | Create a product locally with optional variants |
+| GET | `/api/v1/admin/products/:productId` | administrator session | `catalog.read` | — | One product with its variants, options and images |
+| PATCH | `/api/v1/admin/products/:productId` | administrator session | `catalog.write` | — | Edit a product's merchandising fields, publish state or feature flag |
 | PATCH | `/api/v1/admin/products/:productId/status` | administrator session | `catalog.write` | — | Publish or archive a product locally (ERP stays the stock/price master) |
+| POST | `/api/v1/admin/products/:productId/variants` | administrator session | `catalog.write` | — | Add a variant (SKU, price, stock, options) to a product |
 | PATCH | `/api/v1/admin/reviews/:reviewId` | administrator session | `catalog.write` | — | Moderate a review |
 | GET | `/api/v1/admin/settings` | administrator session | `settings.manage` | — | Store, payment and ERP settings (no secrets) |
 | PUT | `/api/v1/admin/settings/store` | administrator session | `settings.manage` | — | Update storefront settings |
@@ -42,6 +46,7 @@ Do not edit by hand.
 | POST | `/api/v1/admin/sync/process` | administrator session | `sync.manage` | — | Process due ERP sync jobs now (worker also runs these) |
 | POST | `/api/v1/admin/sync/pull-catalog` | administrator session | `sync.manage` | — | Pull the ERP catalogue now (idempotent by nature) |
 | POST | `/api/v1/admin/sync/pull-inventory` | administrator session | `sync.manage` | — | Pull ERP stock balances now |
+| PATCH | `/api/v1/admin/variants/:variantId` | administrator session | `catalog.write` | — | Edit a variant, or take it off the storefront with is_active: false |
 | POST | `/api/v1/auth/change-password` | customer session | — | — | Change a customer password and revoke other sessions |
 | POST | `/api/v1/auth/guest` | public | — | — | Start a guest checkout identity |
 | POST | `/api/v1/auth/login` | public | — | — | Customer sign-in |
@@ -63,7 +68,7 @@ Do not edit by hand.
 | POST | `/api/v1/orders` | customer or guest session | — | required | Place an order from the current cart (idempotent, reserves and consumes stock) |
 | GET | `/api/v1/orders/:orderId` | customer or guest session | — | — | Order detail (own orders only) |
 | POST | `/api/v1/orders/:orderId/cancel` | customer or guest session | — | — | Cancel an unpaid order and restore stock |
-| POST | `/api/v1/orders/lookup` | public | — | — | Find one order by number + checkout email (rate limited, 10 per 15 min per address) |
+| POST | `/api/v1/orders/lookup` | public | — | — | Find one order by its number and the email used at checkout |
 | POST | `/api/v1/reviews` | customer session | — | — | Review a purchased item (one review per order line) |
 | POST | `/api/v1/webhooks/payments/:provider` | public | — | — | Provider payment webhook (HMAC-verified, deduplicated by event id) |
 

@@ -16,7 +16,7 @@ Express app and drives it over HTTP with cookies and CSRF — no mocks of our ow
 code. The ERP and the payment provider are the only doubles, and both are
 protocol-faithful fakes that refuse to load in production.
 
-## What is proven (93 tests)
+## What is proven (104 tests)
 
 **Migrations and schema** (`tests/integration/migrations.test.ts`, `constraints.test.ts`)
 
@@ -72,6 +72,26 @@ protocol-faithful fakes that refuse to load in production.
   with the same message, so neither half can be probed.
 - Malformed or extra fields are `422` before the database is touched.
 - Repeated misses from one address hit the rate limit (`429 RATE_LIMITED`).
+
+**Catalogue administration** (`admin-catalog.test.ts`)
+
+- A product is created with variants, a generated slug, a brand and a category;
+  the first variant is the default one.
+- Publishing is a real gate: a draft is `404` on the storefront until it is
+  published, and a product with no active variant cannot be published (`422`),
+  whether by editing or by creating it as active.
+- `is_featured` moves a product on and off the landing-page query, and only
+  featured products answer `?featured=true`.
+- Variants are added individually (with options) and unpublished one at a time;
+  an unpublished variant disappears from the product page and cannot be added to
+  a cart. Prices are editable, a negative price or a compare-at below the price is
+  `422`, a compare-at can be cleared with `null`, and a duplicate SKU or slug is
+  `409`.
+- `catalog.write` is required to create or change anything; `catalog.read` is
+  enough to look (a `support` admin is refused with `403`).
+- A guest cart follows the shopper into a new account (the cart row is adopted,
+  so lines and stock holds survive), signing in adopts it too when the account
+  has no cart, and an account that already has a cart keeps its own lines.
 
 **Payments** (`payments-manual.test.ts`, `payments-webhook.test.ts`)
 
