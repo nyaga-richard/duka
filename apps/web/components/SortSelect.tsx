@@ -14,7 +14,13 @@ const OPTIONS = [
  * current filters arrive as props, so this component needs no `useSearchParams`
  * and no Suspense boundary.
  */
-export function SortSelect({ value, filters }: { value: string; filters: Record<string, string | undefined> }) {
+export function SortSelect({
+  value,
+  filters,
+}: {
+  value: string;
+  filters: Record<string, string | undefined>;
+}) {
   const router = useRouter();
 
   function change(next: string) {
@@ -28,15 +34,17 @@ export function SortSelect({ value, filters }: { value: string; filters: Record<
   }
 
   return (
-    <label className="small" style={{ display: "flex", alignItems: "center", gap: "0.45rem", margin: 0 }}>
-      <span className="muted">Sort</span>
-      <select value={value} onChange={(event) => change(event.target.value)} aria-label="Sort products">
-        {OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <select
+      value={value}
+      onChange={(event) => change(event.target.value)}
+      aria-label="Sort products"
+      title="Sort products"
+    >
+      {OPTIONS.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   );
 }
