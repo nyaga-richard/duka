@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { ReviewForm } from "@/components/ReviewForm";
 import { api, ApiError } from "@/lib/api-client";
 
 interface OrderView {
@@ -13,7 +14,14 @@ interface OrderView {
   placed_at: string;
   totals: { subtotal: string; shipping: string; discount: string; tax: string; total: string };
   shipping: { method: string | null; name: string; address_line1: string; city: string; country: string };
-  items: Array<{ product_name: string; sku: string; quantity: number; unit_price: string; line_total: string }>;
+  items: Array<{
+    order_line_id: number;
+    product_name: string;
+    sku: string;
+    quantity: number;
+    unit_price: string;
+    line_total: string;
+  }>;
   payments: Array<{ amount: string; payment_status: string; provider_reference: string; created_at: string }>;
 }
 
@@ -122,6 +130,33 @@ export default function OrderPage() {
           </table>
         </div>
 
+        {order.status === "delivered" ? (
+          <div className="panel" style={{ marginTop: "1rem" }}>
+            <h3>Review what you bought</h3>
+            <p className="small muted">
+              Only verified purchases can be reviewed, once per item. Reviews appear on the product page after
+              the store publishes them.
+            </p>
+            {order.items.map((item) => (
+              <div
+                key={item.order_line_id}
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.6rem",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  borderTop: "1px solid var(--line)",
+                  paddingTop: "0.6rem",
+                  marginTop: "0.6rem",
+                }}
+              >
+                <span style={{ fontSize: "0.92rem" }}>{item.product_name}</span>
+                <ReviewForm orderLineId={item.order_line_id} productName={item.product_name} />
+              </div>
+            ))}
+          </div>
+        ) : null}
         <aside className="panel sticky">
           <h3>Summary</h3>
           <div className="totals">
