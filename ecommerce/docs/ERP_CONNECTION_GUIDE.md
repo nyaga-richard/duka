@@ -459,12 +459,21 @@ Then confirm both are up and the API is ready:
 ```bash
 sudo bash deploy/ecommerce/shop.sh status
 sudo docker inspect duka-shop-api-1 duka-shop-worker-1 \
-  --format '{{.Name}} {{.State.Health.Status}}'
+  --format '{{.Name}} {{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}} (no healthcheck){{end}}'
 ```
 
-Expect `ready 200`, `duka-shop-api-1 healthy`, `duka-shop-worker-1 healthy`.
-`/health/ready` also reports `checks.erp_enabled` — if it still says `false`, the
-container was not recreated or `.env.shop` was not the file Compose read.
+Expect `ready 200`, `duka-shop-api-1 healthy`, and `duka-shop-worker-1 running (no
+healthcheck)` — the worker deliberately has none, so treat its heartbeat as the
+health signal:
+
+```bash
+sudo docker exec duka-shop-api-1 node -e \
+  "fetch('http://127.0.0.1:4100/health/ready').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.checks.worker)))"
+```
+
+Expect `stale: false` with an `age_seconds` under 120. `/health/ready` also
+reports `checks.erp_enabled` — if it still says `false`, the container was not
+recreated or `.env.shop` was not the file Compose read.
 
 ---
 
