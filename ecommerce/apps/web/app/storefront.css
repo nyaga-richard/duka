@@ -803,6 +803,25 @@
   font-size: 15px;
 }
 
+/* Related-products heading on a product page (same shape as .sf-section-head). */
+.shop-layout .shop-section-head {
+  margin: 72px 0 20px;
+  align-items: flex-end;
+}
+.shop-layout .shop-section-head h2 {
+  font-size: clamp(26px, 2.6vw, 36px);
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+.shop-layout .shop-section-head p {
+  font-size: 15px;
+  color: var(--sf-ink-2);
+  margin: 8px 0 0;
+}
+.shop-layout .shop-section-head .text-link {
+  font-size: 15px;
+}
+
 /* Category row: plain text links, like Apple's "Shop by category" strip. */
 .sf-categories {
   display: flex;
