@@ -99,29 +99,27 @@ Rules:
 
 ## Enabling the ERP integration
 
-Only after the ERP operator has reviewed
-[`ERP_INTEGRATION_CONTRACT.md`](ERP_INTEGRATION_CONTRACT.md) and agreed the gaps
-that matter for your flow.
+Follow [`ERP_CONNECTION_GUIDE.md`](ERP_CONNECTION_GUIDE.md). It is the ordered,
+copy-pasteable procedure — ERP role and identity, the origin rule, the six
+`SHOP_ERP_*` values in `deploy/ecommerce/.env.shop`, the probe, the first
+catalogue and stock pulls, one customer and one order document, plus a
+symptom→cause table. Read [`ERP_INTEGRATION_CONTRACT.md`](ERP_INTEGRATION_CONTRACT.md)
+before promising anything beyond it: those additions (G1–G9) are proposals, and
+the guide only uses capabilities the ERP already implements.
 
-1. Create a dedicated ERP identity (never an owner account) with the minimum
-   permissions: `catalog.read`, `inventory.read`, `customers.read`,
-   `customers.write`, `documents.write`, `sales.read`, `payments.receive`.
-2. Add the API origin to the ERP `ALLOWED_ORIGINS`; set `ERP_ALLOWED_ORIGIN` to
-   the same value.
-3. Set `ERP_ENABLED=true`, `ERP_BASE_URL`, `ERP_INTEGRATION_EMAIL`,
-   `ERP_INTEGRATION_PASSWORD`, `ERP_DEFAULT_BRANCH_ID`,
-   `ERP_DEFAULT_WAREHOUSE_ID`.
-4. Restart the API and worker.
-5. Verify from the staff UI or with the service account:
-   `GET /api/v1/admin/erp/capabilities`, then `POST /api/v1/admin/erp/probe`,
-   then `POST /api/v1/admin/sync/pull-catalog` (and `pull-inventory`).
-6. Watch `GET /api/v1/admin/sync/overview` and the `erp_sync_log` table until the
-   catalogue and inventory pulls report `succeeded`; `POST
-   /api/v1/admin/sync/process` drains the queue on demand.
+In short: create a dedicated ERP identity (never an owner account, never with
+MFA enrolled) holding `catalog.read`, `inventory.read`, `customers.read`,
+`customers.write` and `documents.write`; set `SHOP_ERP_ENABLED=true`,
+`SHOP_ERP_BASE_URL=https://<erp public host>`, `SHOP_ERP_EMAIL`,
+`SHOP_ERP_PASSWORD`, `SHOP_ERP_BRANCH_ID` and `SHOP_ERP_WAREHOUSE_ID`; recreate
+`shop-api` and `shop-worker` (a restart does not re-read the file); then
+`POST /admin/erp/probe`, `POST /admin/sync/pull-catalog`,
+`POST /admin/sync/pull-inventory`, and watch `GET /admin/sync/overview`.
 
-Leave `ERP_RESERVE_ORDERS_IN_ERP=false` until the ERP can reserve stock for web
-orders (contract gap G1/G2). Orders are then pushed as sales-order documents in
-`draft`, which does **not** move ERP stock.
+Leave `ERP_RESERVE_ORDERS_IN_ERP=false` until the ERP implements a reservation
+contract (gap G3): approving a document is a POS-shaped action with no release
+path for abandoned carts. Orders are pushed as sales-order documents in `draft`,
+which does **not** move ERP stock.
 
 ## Payments
 
