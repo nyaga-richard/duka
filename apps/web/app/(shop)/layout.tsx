@@ -5,10 +5,11 @@ import { SiteNav } from "@/components/SiteNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 /**
- * The shop chrome: the ERP's `.topbar` (sticky, hairline, brand on the left,
- * actions on the right) and `.app-footer`, with the catalogue measure centred
- * inside. Staff screens render their own sidebar shell instead — see
- * `/admin`.
+ * The shop chrome: a 48px translucent nav — wordmark left, links centred,
+ * actions right — and a hairline footer, with the shop measure centred inside.
+ * Layout only; the apple-inspired skin lives in `app/storefront.css` and is
+ * scoped to `.shop-layout`, so staff screens (which render their own shell) are
+ * untouched by it.
  */
 export default function ShopLayout({
   children,
@@ -19,12 +20,10 @@ export default function ShopLayout({
     <div className="app-layout shop-layout">
       <div className="app-main">
         <header className="topbar">
-          <div className="topbar-left">
-            <Link href="/" aria-label="Duka shop home" style={{ flex: "none" }}>
-              <Brand />
-            </Link>
-            <SiteNav />
-          </div>
+          <Link href="/" aria-label="Duka shop home" className="topbar-brand">
+            <Brand />
+          </Link>
+          <SiteNav />
           <div className="topbar-right">
             <CartSheet />
             <ThemeToggle />

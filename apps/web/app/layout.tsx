@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
+import "./storefront.css";
 
 export const metadata: Metadata = {
   title: { default: "Duka — shop", template: "%s · Duka" },

@@ -10,6 +10,7 @@ import type { Database, Queryable } from "../db/index.ts";
 import type { ErpAdapter } from "@ecom/erp-adapter";
 import { ErpError } from "@ecom/erp-adapter";
 import { config } from "../config.ts";
+import { erpImageUrl, isErpImageUrl } from "./product-images.ts";
 import { logger } from "../logger.ts";
 import { audit } from "./security.ts";
 import { slugify, toMoney } from "@ecom/shared";
@@ -221,6 +222,11 @@ export async function pullCatalog(db: Database, adapter: ErpAdapter) {
           productId = inserted.rows[0]!.product_id;
           products += 1;
         }
+        await syncProductImage(tx, {
+          productId,
+          attachmentId: erpProduct.image_attachment_id ?? null,
+          productName: erpProduct.name,
+        });
         await tx.query(
           `INSERT INTO erp_entity_map(entity_type, local_id, erp_id, metadata, last_synced_at)
            VALUES('product',$1,$2,$3,now())
@@ -272,6 +278,41 @@ export async function pullCatalog(db: Database, adapter: ErpAdapter) {
     [runId.slice(0, 160), JSON.stringify(summary)],
   );
   return { run_id: runId, ...summary };
+}
+
+/**
+ * Record (or refresh) the ERP photo as the product's primary image.
+ *
+ * The URL is the shop's own proxy path, so the browser loads it from the shop
+ * and this API fetches the bytes from the ERP on demand. Images an operator set
+ * by hand (absolute http(s) URLs) are left alone: the ERP only replaces its own.
+ */
+async function syncProductImage(
+  tx: Queryable,
+  input: { productId: number; attachmentId: string | null; productName: string },
+): Promise<void> {
+  if (!input.attachmentId) return;
+  const url = erpImageUrl(input.attachmentId);
+  const primary = await tx.query<{ image_id: number; image_url: string }>(
+    "SELECT image_id, image_url FROM product_image WHERE product_id = $1 ORDER BY is_primary DESC, sort_order, image_id LIMIT 1",
+    [input.productId],
+  );
+  const current = primary.rows[0];
+  if (!current) {
+    await tx.query(
+      `INSERT INTO product_image(product_id, image_url, alt_text, is_primary, sort_order)
+       VALUES($1,$2,$3,true,1)`,
+      [input.productId, url, input.productName.slice(0, 255)],
+    );
+    return;
+  }
+  if (current.image_url !== url && isErpImageUrl(current.image_url)) {
+    await tx.query("UPDATE product_image SET image_url = $2, alt_text = $3 WHERE image_id = $1", [
+      current.image_id,
+      url,
+      input.productName.slice(0, 255),
+    ]);
+  }
 }
 
 async function syncVariant(

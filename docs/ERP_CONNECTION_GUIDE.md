@@ -27,6 +27,7 @@ you promise anybody reservations or webhooks.
 | ---------- | -------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------- |
 | ERP → shop | products, variants, barcodes, brands, categories, prices | worker every 5 min, or `POST /admin/sync/pull-catalog`              | `catalog.read`                      |
 | ERP → shop | stock on hand per warehouse                              | worker every 5 min, or `POST /admin/sync/pull-inventory`            | `inventory.read`                    |
+| ERP → shop | product photos, on demand (not copied)                   | the storefront, when a product page renders                         | `catalog.read`                      |
 | shop → ERP | customers (created or matched by `WEB-<id>` / email)     | `POST /admin/sync/customers/:id`, or the desk's "Push to ERP"       | `customers.read`, `customers.write` |
 | shop → ERP | one `sales_order` document per web order, status `draft` | automatic on order placement, or `POST /admin/sync/orders/:orderId` | `documents.write`                   |
 
@@ -37,6 +38,15 @@ endpoint for it (contract gaps G1–G9):
 - order status write-back after the document exists (no `integration/orders`);
 - payment mirroring that survives (G5, plus an adapter payload gap — step 13.3);
 - refunds by external reference (G6), shipments, subscriptions, media, webhooks.
+
+Product photos are the one piece of media that _is_ wired, because the ERP
+already stores them: the catalogue pull records the product's image attachment id
+as `/api/v1/catalog/images/<attachmentId>` in `product_image`, and the shop's API
+fetches `GET /api/v1/attachments/:id` with its own integration session when a
+browser asks for that URL. The bytes are never copied into the shop's database,
+the ERP host is never exposed to the browser, and a photo replaced in the ERP
+appears after the next pull (or immediately, once the ten-minute cache expires).
+No new ERP permission is needed beyond the `catalog.read` the pull already uses.
 
 The shop keeps its own PostgreSQL. It never writes to the ERP database, and the
 ERP is never a datastore for the shop.
@@ -592,6 +602,19 @@ not empty) — the shop will not invent products.
 
 The pull also records `erp.last_catalog_sync` in `app_setting`, which is what the
 desk's ERP sync tab shows as "last catalogue".
+
+If a product has an image attachment in the ERP, the pull also records it as the
+product's primary image, at a URL the shop serves itself:
+
+```bash
+curl -sS -H "origin: https://$SHOP_HOST" \
+  "https://$SHOP_HOST/api/v1/catalog/products/$SLUG" \
+  | jq '.data.images'
+# [{"image_url":"/api/v1/catalog/images/1f0c…","is_primary":true,"alt_text":"…"}]
+```
+
+Open that path in a browser (no session needed, only published products answer),
+and the shop streams the ERP's bytes with `cache-control: public, max-age=600`.
 
 ---
 
