@@ -271,6 +271,13 @@ hr {
   display: flex;
   flex-direction: column;
 }
+/* The sidebar is fixed, so the shell that owns one has to reserve its width —
+   otherwise the staff screens sit underneath it. The shop layout shares
+   .app-layout but has no sidebar, hence the explicit modifier. */
+.app-layout.with-sidebar > .app-main {
+  margin-left: var(--sidebar);
+  width: calc(100% - var(--sidebar));
+}
 .page-content {
   padding: 31px 31px 25px;
   flex: 1;
@@ -2115,6 +2122,7 @@ dialog.dialog[open] {
     z-index: 60;
     backdrop-filter: blur(2px);
   }
+  .app-layout.with-sidebar > .app-main,
   .app-main {
     margin-left: 0;
     width: 100%;
