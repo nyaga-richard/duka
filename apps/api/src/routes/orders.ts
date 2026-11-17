@@ -6,12 +6,17 @@ import type { RequestContext } from "../http/context.ts";
 import {
   actorOwnsOrder,
   cancelOrder,
+  findOrderByNumberAndEmail,
   getOrderView,
   listOrdersForActor,
   placeOrder,
   scheduleOrderSync,
 } from "../services/orders.ts";
-import { beginPaymentIntent, schedulePaymentSync } from "../services/payments.ts";
+import { rateLimit } from "../services/security.ts";
+import {
+  beginPaymentIntent,
+  schedulePaymentSync,
+} from "../services/payments.ts";
 import { fail } from "../errors.ts";
 
 const checkoutBody = z
@@ -32,7 +37,8 @@ const checkoutBody = z
   .strict();
 
 async function assertOwnership(ctx: RequestContext, orderId: number) {
-  if (!Number.isInteger(orderId) || orderId <= 0) fail(422, "VALIDATION_ERROR", "Invalid order id");
+  if (!Number.isInteger(orderId) || orderId <= 0)
+    fail(422, "VALIDATION_ERROR", "Invalid order id");
   if (!(await actorOwnsOrder(ctx.db, ctx.actor!, orderId))) {
     fail(404, "NOT_FOUND", "Order not found");
   }
@@ -48,13 +54,19 @@ export function registerOrderRoutes(router: Router) {
       idempotent: true,
       status: 201,
       body: checkoutBody,
-      summary: "Place an order from the current cart (idempotent, reserves and consumes stock)",
+      summary:
+        "Place an order from the current cart (idempotent, reserves and consumes stock)",
       tags: ["orders"],
     },
     async ({ ctx, body, tx }) => {
-      if (ctx.actor!.kind === "admin") fail(403, "FORBIDDEN", "Use the admin order tools for manual orders");
+      if (ctx.actor!.kind === "admin")
+        fail(403, "FORBIDDEN", "Use the admin order tools for manual orders");
       const key = ctx.req.header("Idempotency-Key")!;
-      const placed = await placeOrder(tx!, { actor: ctx.actor!, body, idempotencyKey: key });
+      const placed = await placeOrder(tx!, {
+        actor: ctx.actor!,
+        body,
+        idempotencyKey: key,
+      });
       const orderId = placed.order.order_id;
 
       return {
@@ -90,12 +102,20 @@ export function registerOrderRoutes(router: Router) {
     "/orders",
     {
       auth: "customer_or_guest",
-      query: z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(50).default(10) }).strict(),
+      query: z
+        .object({
+          page: z.coerce.number().int().min(1).default(1),
+          limit: z.coerce.number().int().min(1).max(50).default(10),
+        })
+        .strict(),
       summary: "List the signed-in customer's or guest's orders",
       tags: ["orders"],
     },
     async ({ ctx, query }) => ({
-      data: await listOrdersForActor(ctx.db, ctx.actor!, { page: query.page, limit: query.limit }),
+      data: await listOrdersForActor(ctx.db, ctx.actor!, {
+        page: query.page,
+        limit: query.limit,
+      }),
     }),
   );
 
@@ -103,11 +123,52 @@ export function registerOrderRoutes(router: Router) {
     router,
     "get",
     "/orders/:orderId",
-    { auth: "customer_or_guest", summary: "Order detail (own orders only)", tags: ["orders"] },
+    {
+      auth: "customer_or_guest",
+      summary: "Order detail (own orders only)",
+      tags: ["orders"],
+    },
     async ({ ctx }) => {
       const orderId = Number((ctx.req.params as any).orderId);
       await assertOwnership(ctx, orderId);
       return { data: await getOrderView(ctx.db, orderId) };
+    },
+  );
+
+  // Order lookup for people who are not signed in and may have lost the guest
+  // cookie: the order number plus the address used at checkout. Both must match;
+  // a miss is indistinguishable from a wrong email, and the attempt is rate
+  // limited before the query runs.
+  endpoint(
+    router,
+    "post",
+    "/orders/lookup",
+    {
+      auth: "public",
+      transactional: false,
+      body: z
+        .object({
+          order_number: z.string().trim().min(4).max(40),
+          email,
+        })
+        .strict(),
+      summary: "Find one order by its number and the email used at checkout",
+      tags: ["orders"],
+    },
+    async ({ ctx, body }) => {
+      await rateLimit(ctx.db, `order-lookup:${ctx.ip}`, 10, 900);
+      const order = await findOrderByNumberAndEmail(ctx.db, {
+        orderNumber: body.order_number,
+        email: body.email,
+      });
+      if (!order) {
+        fail(
+          404,
+          "NOT_FOUND",
+          "No order matches that number and email address",
+        );
+      }
+      return { data: { order } };
     },
   );
 
@@ -123,7 +184,13 @@ export function registerOrderRoutes(router: Router) {
     },
     async ({ ctx, body, tx }) => {
       const orderId = Number((ctx.req.params as any).orderId);
-      return { data: await cancelOrder(tx!, { actor: ctx.actor!, orderId, reason: body.reason }) };
+      return {
+        data: await cancelOrder(tx!, {
+          actor: ctx.actor!,
+          orderId,
+          reason: body.reason,
+        }),
+      };
     },
   );
 }

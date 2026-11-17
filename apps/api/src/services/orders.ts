@@ -12,7 +12,11 @@ import { fail } from "../errors.ts";
 import { config } from "../config.ts";
 import { audit } from "./security.ts";
 import { cartLinesForCheckout, loadCartForCheckout } from "./cart.ts";
-import { consumeForOrder, releaseCartReservations, restockOrder } from "./reservations.ts";
+import {
+  consumeForOrder,
+  releaseCartReservations,
+  restockOrder,
+} from "./reservations.ts";
 import { enqueueSyncJob } from "./sync.ts";
 import { toMoney } from "@ecom/shared";
 
@@ -78,19 +82,36 @@ export async function placeOrder(
     "SELECT shipping_method_id, method_name, price::text AS price FROM shipping_method WHERE shipping_method_id = $1 AND is_active",
     [body.shipping_method_id],
   );
-  if (!shipping.rows[0]) fail(422, "VALIDATION_ERROR", "Unknown or inactive shipping method");
+  if (!shipping.rows[0])
+    fail(422, "VALIDATION_ERROR", "Unknown or inactive shipping method");
 
-  const subtotal = lines.reduce((sum, line) => sum + Number(line.price) * Number(line.quantity), 0);
+  const subtotal = lines.reduce(
+    (sum, line) => sum + Number(line.price) * Number(line.quantity),
+    0,
+  );
   const shippingCost = Number(shipping.rows[0].price);
   const discount = 0;
   const total = subtotal - discount + shippingCost;
 
-  const email = body.email ?? (actor.kind === "customer" ? actor.email : actor.kind === "guest" ? actor.email : null);
+  const email =
+    body.email ??
+    (actor.kind === "customer"
+      ? actor.email
+      : actor.kind === "guest"
+        ? actor.email
+        : null);
   if (actor.kind === "guest" && !email) {
-    fail(422, "VALIDATION_ERROR", "An email address is required for guest checkout");
+    fail(
+      422,
+      "VALIDATION_ERROR",
+      "An email address is required for guest checkout",
+    );
   }
   if (actor.kind === "guest" && body.email && !actor.email) {
-    await tx.query("UPDATE guest_session SET email = $2 WHERE guest_session_id = $1", [actor.guestSessionId, body.email]);
+    await tx.query(
+      "UPDATE guest_session SET email = $2 WHERE guest_session_id = $1",
+      [actor.guestSessionId, body.email],
+    );
   }
 
   const orderNumber = await nextOrderNumber(tx);
@@ -161,7 +182,8 @@ export async function placeOrder(
     })),
   });
 
-  const provider = config.payments.mode === "disabled" ? "manual" : config.payments.mode;
+  const provider =
+    config.payments.mode === "disabled" ? "manual" : config.payments.mode;
   const transaction = await tx.query<{ transaction_id: string }>(
     `INSERT INTO payment_transaction(order_id, provider, amount, status, idempotency_key, request_payload)
      VALUES($1,$2,$3,'pending',$4,$5) RETURNING transaction_id`,
@@ -170,22 +192,34 @@ export async function placeOrder(
       provider,
       total.toFixed(2),
       idempotencyKey,
-      JSON.stringify({ order_number: orderNumber, phone: body.phone ?? body.payment_phone ?? null }),
+      JSON.stringify({
+        order_number: orderNumber,
+        phone: body.phone ?? body.payment_phone ?? null,
+      }),
     ],
   );
 
-  await tx.query("UPDATE cart SET status = 'converted', converted_order_id = $2 WHERE cart_id = $1", [
-    cart.cart_id,
-    orderRow.order_id,
-  ]);
+  await tx.query(
+    "UPDATE cart SET status = 'converted', converted_order_id = $2 WHERE cart_id = $1",
+    [cart.cart_id, orderRow.order_id],
+  );
 
   await audit(tx, {
     actorType: actor.kind,
-    actorId: actor.kind === "admin" ? actor.adminUserId : actor.kind === "customer" ? String(actor.customerId) : actor.guestSessionId,
+    actorId:
+      actor.kind === "admin"
+        ? actor.adminUserId
+        : actor.kind === "customer"
+          ? String(actor.customerId)
+          : actor.guestSessionId,
     action: "order.placed",
     entityType: "customer_order",
     entityId: orderRow.order_id,
-    after: { order_number: orderNumber, total: total.toFixed(2), lines: lines.length },
+    after: {
+      order_number: orderNumber,
+      total: total.toFixed(2),
+      lines: lines.length,
+    },
   });
 
   return {
@@ -204,7 +238,11 @@ export async function placeOrder(
 }
 
 /** Queue the ERP projection of a new order (no-op when integration is disabled). */
-export async function scheduleOrderSync(db: Database, orderId: number, orderNumber: string) {
+export async function scheduleOrderSync(
+  db: Database,
+  orderId: number,
+  orderNumber: string,
+) {
   if (!config.erp.enabled) return null;
   return enqueueSyncJob(db, {
     entityType: "order",
@@ -284,15 +322,53 @@ export async function getOrderView(db: Queryable, orderId: number) {
       line_total: toMoney(line.line_total),
       tax_amount: toMoney(line.tax_amount),
     })),
-    payments: payments.rows.map((payment) => ({ ...payment, amount: toMoney(payment.amount) })),
+    payments: payments.rows.map((payment) => ({
+      ...payment,
+      amount: toMoney(payment.amount),
+    })),
     shipments: shipments.rows,
   };
 }
 
-export async function listOrdersForActor(db: Queryable, actor: Actor, query: { page: number; limit: number }) {
-  const ownerClause = actor.kind === "customer" ? "o.customer_id = $1" : "o.guest_session_id = $1";
-  const ownerValue = actor.kind === "customer" ? actor.customerId : actor.kind === "guest" ? actor.guestSessionId : null;
-  if (!ownerValue) fail(403, "FORBIDDEN", "Only a customer or guest can list their orders");
+/**
+ * Resolve one order from its number plus the email used at checkout.
+ *
+ * This is the only unauthenticated way to read an order, so it is deliberately
+ * narrow: both halves must match, the caller learns nothing about which half
+ * was wrong, and the route applies a rate limit before calling it. The full view
+ * is returned because the email has already proved ownership of that order.
+ */
+export async function findOrderByNumberAndEmail(
+  db: Queryable,
+  input: { orderNumber: string; email: string },
+): Promise<Awaited<ReturnType<typeof getOrderView>> | null> {
+  const row = await db.query<{ order_id: number }>(
+    `SELECT order_id FROM customer_order
+      WHERE upper(order_number) = upper($1) AND lower(email) = lower($2)
+      ORDER BY order_id DESC LIMIT 1`,
+    [input.orderNumber.trim(), input.email.trim()],
+  );
+  if (!row.rows[0]) return null;
+  return getOrderView(db, row.rows[0].order_id);
+}
+
+export async function listOrdersForActor(
+  db: Queryable,
+  actor: Actor,
+  query: { page: number; limit: number },
+) {
+  const ownerClause =
+    actor.kind === "customer"
+      ? "o.customer_id = $1"
+      : "o.guest_session_id = $1";
+  const ownerValue =
+    actor.kind === "customer"
+      ? actor.customerId
+      : actor.kind === "guest"
+        ? actor.guestSessionId
+        : null;
+  if (!ownerValue)
+    fail(403, "FORBIDDEN", "Only a customer or guest can list their orders");
   const offset = (query.page - 1) * query.limit;
   const rows = await db.query<any>(
     `SELECT o.order_id, o.order_number, o.order_total::text AS order_total, o.placed_at, o.payment_status,
@@ -305,18 +381,30 @@ export async function listOrdersForActor(db: Queryable, actor: Actor, query: { p
     [ownerValue, query.limit, offset],
   );
   return {
-    items: rows.rows.map((row) => ({ ...row, order_total: toMoney(row.order_total), status: row.status_name })),
+    items: rows.rows.map((row) => ({
+      ...row,
+      order_total: toMoney(row.order_total),
+      status: row.status_name,
+    })),
     page: query.page,
     limit: query.limit,
     total: rows.rows[0]?._count ?? 0,
   };
 }
 
-export async function actorOwnsOrder(db: Queryable, actor: Actor, orderId: number) {
+export async function actorOwnsOrder(
+  db: Queryable,
+  actor: Actor,
+  orderId: number,
+) {
   if (actor.kind === "admin") return true;
   const column = actor.kind === "customer" ? "customer_id" : "guest_session_id";
-  const value = actor.kind === "customer" ? actor.customerId : actor.guestSessionId;
-  const rows = await db.query(`SELECT 1 FROM customer_order WHERE order_id = $1 AND ${column} = $2`, [orderId, value]);
+  const value =
+    actor.kind === "customer" ? actor.customerId : actor.guestSessionId;
+  const rows = await db.query(
+    `SELECT 1 FROM customer_order WHERE order_id = $1 AND ${column} = $2`,
+    [orderId, value],
+  );
   return rows.rowCount > 0;
 }
 
@@ -336,20 +424,34 @@ export async function cancelOrder(
   const order = orders.rows[0];
   if (!order) fail(404, "NOT_FOUND", "Order not found");
   if (!["placed", "payment_failed"].includes(order.status_name)) {
-    fail(409, "INVALID_STATE_TRANSITION", `An order in status "${order.status_name}" cannot be cancelled`);
+    fail(
+      409,
+      "INVALID_STATE_TRANSITION",
+      `An order in status "${order.status_name}" cannot be cancelled`,
+    );
   }
   const paid = await tx.query(
     "SELECT 1 FROM payment_transaction WHERE order_id = $1 AND status IN ('succeeded','partially_refunded') LIMIT 1",
     [input.orderId],
   );
   if (paid.rowCount > 0) {
-    fail(409, "INVALID_STATE_TRANSITION", "This order has a captured payment. Refund it instead of cancelling.");
+    fail(
+      409,
+      "INVALID_STATE_TRANSITION",
+      "This order has a captured payment. Refund it instead of cancelling.",
+    );
   }
 
-  const lines = await tx.query<any>("SELECT variant_id, quantity FROM order_line WHERE order_id = $1", [input.orderId]);
+  const lines = await tx.query<any>(
+    "SELECT variant_id, quantity FROM order_line WHERE order_id = $1",
+    [input.orderId],
+  );
   await restockOrder(tx, {
     orderId: input.orderId,
-    lines: lines.rows.map((line) => ({ variantId: line.variant_id, quantity: line.quantity })),
+    lines: lines.rows.map((line) => ({
+      variantId: line.variant_id,
+      quantity: line.quantity,
+    })),
     reason: "order_cancelled",
   });
 
@@ -371,7 +473,13 @@ export async function cancelOrder(
   );
   await audit(tx, {
     actorType: input.actor.kind,
-    actorId: input.actor.kind === "admin" ? input.actor.adminUserId : String((input.actor as any).customerId ?? (input.actor as any).guestSessionId),
+    actorId:
+      input.actor.kind === "admin"
+        ? input.actor.adminUserId
+        : String(
+            (input.actor as any).customerId ??
+              (input.actor as any).guestSessionId,
+          ),
     action: "order.cancelled",
     entityType: "customer_order",
     entityId: input.orderId,
@@ -398,7 +506,11 @@ export async function adminListOrders(
     [query.status ?? null, search, query.limit, offset],
   );
   return {
-    items: rows.rows.map((row) => ({ ...row, order_total: toMoney(row.order_total), status: row.status_name })),
+    items: rows.rows.map((row) => ({
+      ...row,
+      order_total: toMoney(row.order_total),
+      status: row.status_name,
+    })),
     page: query.page,
     limit: query.limit,
     total: rows.rows[0]?._count ?? 0,
@@ -419,33 +531,49 @@ export async function transitionOrder(
   if (!order) fail(404, "NOT_FOUND", "Order not found");
   const allowed = ALLOWED_TRANSITIONS[order.status_name] ?? [];
   if (!allowed.includes(input.to)) {
-    fail(409, "INVALID_STATE_TRANSITION", `Cannot move an order from "${order.status_name}" to "${input.to}"`);
+    fail(
+      409,
+      "INVALID_STATE_TRANSITION",
+      `Cannot move an order from "${order.status_name}" to "${input.to}"`,
+    );
   }
   if (input.to === "paid") {
-    fail(422, "VALIDATION_ERROR", "Record a payment instead of setting the order to paid directly");
+    fail(
+      422,
+      "VALIDATION_ERROR",
+      "Record a payment instead of setting the order to paid directly",
+    );
   }
-  const status = await tx.query<{ order_status_id: number }>("SELECT order_status_id FROM order_status WHERE status_name = $1", [
-    input.to,
-  ]);
-  if (!status.rows[0]) fail(422, "VALIDATION_ERROR", `Unknown order status: ${input.to}`);
+  const status = await tx.query<{ order_status_id: number }>(
+    "SELECT order_status_id FROM order_status WHERE status_name = $1",
+    [input.to],
+  );
+  if (!status.rows[0])
+    fail(422, "VALIDATION_ERROR", `Unknown order status: ${input.to}`);
 
   if (input.to === "cancelled") {
-    const lines = await tx.query<any>("SELECT variant_id, quantity FROM order_line WHERE order_id = $1", [input.orderId]);
+    const lines = await tx.query<any>(
+      "SELECT variant_id, quantity FROM order_line WHERE order_id = $1",
+      [input.orderId],
+    );
     await restockOrder(tx, {
       orderId: input.orderId,
-      lines: lines.rows.map((line) => ({ variantId: line.variant_id, quantity: line.quantity })),
+      lines: lines.rows.map((line) => ({
+        variantId: line.variant_id,
+        quantity: line.quantity,
+      })),
       reason: "order_cancelled",
     });
-    await tx.query("UPDATE customer_order SET cancelled_at = now(), cancellation_reason = $2 WHERE order_id = $1", [
-      input.orderId,
-      input.reason,
-    ]);
+    await tx.query(
+      "UPDATE customer_order SET cancelled_at = now(), cancellation_reason = $2 WHERE order_id = $1",
+      [input.orderId, input.reason],
+    );
   }
 
-  await tx.query("UPDATE customer_order SET order_status_id = $2, updated_at = now() WHERE order_id = $1", [
-    input.orderId,
-    status.rows[0].order_status_id,
-  ]);
+  await tx.query(
+    "UPDATE customer_order SET order_status_id = $2, updated_at = now() WHERE order_id = $1",
+    [input.orderId, status.rows[0].order_status_id],
+  );
 
   await audit(tx, {
     actorType: "admin",
@@ -478,35 +606,61 @@ export async function createShipment(
   const order = orders.rows[0];
   if (!order) fail(404, "NOT_FOUND", "Order not found");
   if (!["paid", "processing", "shipped"].includes(order.status_name)) {
-    fail(409, "INVALID_STATE_TRANSITION", "Only paid or processing orders can be shipped");
+    fail(
+      409,
+      "INVALID_STATE_TRANSITION",
+      "Only paid or processing orders can be shipped",
+    );
   }
 
-  const orderLines = await tx.query<any>("SELECT order_line_id, quantity FROM order_line WHERE order_id = $1", [
-    input.orderId,
-  ]);
-  const available = new Map(orderLines.rows.map((line) => [Number(line.order_line_id), Number(line.quantity)]));
+  const orderLines = await tx.query<any>(
+    "SELECT order_line_id, quantity FROM order_line WHERE order_id = $1",
+    [input.orderId],
+  );
+  const available = new Map(
+    orderLines.rows.map((line) => [
+      Number(line.order_line_id),
+      Number(line.quantity),
+    ]),
+  );
   for (const line of input.lines) {
     const remaining = available.get(line.orderLineId);
-    if (remaining === undefined) fail(422, "VALIDATION_ERROR", `Order line ${line.orderLineId} is not on this order`);
+    if (remaining === undefined)
+      fail(
+        422,
+        "VALIDATION_ERROR",
+        `Order line ${line.orderLineId} is not on this order`,
+      );
     if (line.quantity <= 0 || line.quantity > remaining) {
-      fail(422, "VALIDATION_ERROR", "Shipment quantity exceeds the ordered quantity");
+      fail(
+        422,
+        "VALIDATION_ERROR",
+        "Shipment quantity exceeds the ordered quantity",
+      );
     }
   }
 
   const shipment = await tx.query<{ shipment_id: string }>(
     `INSERT INTO shipment(order_id, carrier, tracking_number, tracking_url, status, shipped_at)
      VALUES($1,$2,$3,$4,'dispatched', now()) RETURNING shipment_id`,
-    [input.orderId, input.carrier, input.trackingNumber ?? null, input.trackingUrl ?? null],
+    [
+      input.orderId,
+      input.carrier,
+      input.trackingNumber ?? null,
+      input.trackingUrl ?? null,
+    ],
   );
   for (const line of input.lines) {
-    await tx.query("INSERT INTO shipment_item(shipment_id, order_line_id, quantity) VALUES($1,$2,$3)", [
-      shipment.rows[0]!.shipment_id,
-      line.orderLineId,
-      line.quantity,
-    ]);
+    await tx.query(
+      "INSERT INTO shipment_item(shipment_id, order_line_id, quantity) VALUES($1,$2,$3)",
+      [shipment.rows[0]!.shipment_id, line.orderLineId, line.quantity],
+    );
   }
   if (order.status_name !== "shipped") {
-    await tx.query("UPDATE customer_order SET order_status_id = 5, updated_at = now() WHERE order_id = $1", [input.orderId]);
+    await tx.query(
+      "UPDATE customer_order SET order_status_id = 5, updated_at = now() WHERE order_id = $1",
+      [input.orderId],
+    );
   }
   await audit(tx, {
     actorType: "admin",
@@ -514,17 +668,36 @@ export async function createShipment(
     action: "shipment.created",
     entityType: "shipment",
     entityId: shipment.rows[0]!.shipment_id,
-    after: { order_id: input.orderId, carrier: input.carrier, tracking_number: input.trackingNumber ?? null },
+    after: {
+      order_id: input.orderId,
+      carrier: input.carrier,
+      tracking_number: input.trackingNumber ?? null,
+    },
   });
-  return { shipment_id: shipment.rows[0]!.shipment_id, order: await getOrderView(tx, input.orderId) };
+  return {
+    shipment_id: shipment.rows[0]!.shipment_id,
+    order: await getOrderView(tx, input.orderId),
+  };
 }
 
 export async function updateShipmentStatus(
   tx: Queryable,
-  input: { adminUserId: string; shipmentId: string; status: string; trackingUrl?: string },
+  input: {
+    adminUserId: string;
+    shipmentId: string;
+    status: string;
+    trackingUrl?: string;
+  },
 ) {
-  const allowed = ["dispatched", "in_transit", "delivered", "failed", "returned"];
-  if (!allowed.includes(input.status)) fail(422, "VALIDATION_ERROR", "Unsupported shipment status");
+  const allowed = [
+    "dispatched",
+    "in_transit",
+    "delivered",
+    "failed",
+    "returned",
+  ];
+  if (!allowed.includes(input.status))
+    fail(422, "VALIDATION_ERROR", "Unsupported shipment status");
   const shipments = await tx.query<any>(
     "SELECT shipment_id, order_id FROM shipment WHERE shipment_id = $1 FOR UPDATE",
     [input.shipmentId],
@@ -540,7 +713,10 @@ export async function updateShipmentStatus(
     [input.shipmentId, input.status, input.trackingUrl ?? null],
   );
   if (input.status === "delivered") {
-    await tx.query("UPDATE customer_order SET order_status_id = 6, updated_at = now() WHERE order_id = $1", [shipment.order_id]);
+    await tx.query(
+      "UPDATE customer_order SET order_status_id = 6, updated_at = now() WHERE order_id = $1",
+      [shipment.order_id],
+    );
   }
   await audit(tx, {
     actorType: "admin",
@@ -556,5 +732,8 @@ export async function updateShipmentStatus(
 /** Release an abandoned cart's reservations when a customer abandons checkout. */
 export async function abandonCart(tx: Queryable, cartId: string) {
   await releaseCartReservations(tx, cartId, "checkout_abandoned");
-  await tx.query("UPDATE cart SET status = 'abandoned' WHERE cart_id = $1 AND status = 'active'", [cartId]);
+  await tx.query(
+    "UPDATE cart SET status = 'abandoned' WHERE cart_id = $1 AND status = 'active'",
+    [cartId],
+  );
 }
