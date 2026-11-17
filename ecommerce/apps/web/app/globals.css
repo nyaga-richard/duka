@@ -2081,6 +2081,174 @@ dialog.dialog[open] {
   display: none;
 }
 
+/* ------------------------------------------------------ storefront layout */
+
+/* The shop is catalogue-first: one hero band that states what the store is and
+   carries the only search box, a labelled filter strip, one chip row for what is
+   currently applied, then the grid. Everything below reuses the ERP vocabulary
+   (.badge, .card, .category-tabs, .product-grid) — no new primitives. */
+
+.shop-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+  padding: 26px 28px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 100% 0%, var(--green-light), transparent 58%),
+    var(--surface);
+  margin-bottom: 6px;
+}
+.shop-hero-copy {
+  min-width: 0;
+  max-width: 560px;
+}
+.shop-hero h1 {
+  font-size: 27px;
+  letter-spacing: -0.01em;
+  margin: 8px 0 0;
+}
+.shop-hero p {
+  color: var(--muted);
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.hero-points {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.shop-hero-search {
+  flex: 1 1 320px;
+  min-width: 260px;
+  max-width: 460px;
+}
+.shop-hero-search .eyebrow {
+  display: block;
+  margin-bottom: 7px;
+}
+.shop-hero-search .search-box {
+  width: 100%;
+}
+
+.filter-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 16px 0 0;
+}
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.filter-row > .eyebrow {
+  flex: none;
+  width: 58px;
+  color: var(--muted);
+}
+.filter-row .category-tabs {
+  margin: 0;
+  padding: 4px 0;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0 12px;
+  min-height: 34px;
+}
+.filter-bar > .grow {
+  flex: 1;
+}
+.filter-bar select {
+  font-size: 11px;
+  padding: 8px 12px;
+  min-height: 34px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 10px;
+  color: var(--text);
+  text-decoration: none;
+  max-width: 260px;
+}
+.chip strong {
+  font-weight: 550;
+  /* A long search term must not push the "×" out of the chip. */
+  display: inline-block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.chip span {
+  color: var(--muted);
+}
+.chip:hover {
+  border-color: #cdddbb;
+  color: var(--green);
+}
+.chip-clear {
+  color: var(--muted);
+}
+
+.shop-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 26px 0 12px;
+  flex-wrap: wrap;
+}
+.shop-section-head h2 {
+  font-size: 14px;
+  margin: 0;
+}
+.shop-section-head p {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 3px 0 0;
+}
+
+@media (max-width: 760px) {
+  .shop-hero {
+    padding: 20px;
+    gap: 18px;
+  }
+  .shop-hero h1 {
+    font-size: 22px;
+  }
+  .shop-hero-search {
+    max-width: none;
+    min-width: 0;
+    flex-basis: 100%;
+  }
+  .filter-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .filter-row > .eyebrow {
+    width: auto;
+  }
+}
+
 /* --------------------------------------------------------------- responsive */
 
 @media (max-width: 1180px) {

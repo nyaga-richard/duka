@@ -1,8 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddToCart } from "@/components/AddToCart";
+import { ProductCard } from "@/components/ProductCard";
 import { ChevronRightIcon } from "@/components/icons";
-import { getProduct, listReviews, money, priceFrom } from "@/lib/server-api";
+import {
+  getProduct,
+  listCatalogue,
+  listReviews,
+  money,
+  priceFrom,
+} from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +33,14 @@ export default async function ProductPage({
   if (!product) notFound();
 
   const reviews = await listReviews(slug, 8);
+  // Siblings from the same category, fetched only when the product has one.
+  // Deliberately unfiltered by stock: a sold-out sibling is still a valid
+  // destination, and the tile renders its own "Sold out" badge.
+  const related = product.category_slug
+    ? (await listCatalogue({ category: product.category_slug, limit: 5 })).items
+        .filter((entry) => entry.product_id !== product.product_id)
+        .slice(0, 4)
+    : [];
   const images = product.images ?? [];
   const primary = images.find((image) => image.is_primary) ?? images[0] ?? null;
   const price = priceFrom(product);
@@ -125,6 +140,11 @@ export default async function ProductPage({
             ) : null}
           </div>
 
+          <p className="notice">
+            Stock and price are the ERP&apos;s. Choose an option to hold it for 15
+            minutes; delivery or store pickup is confirmed after checkout.
+          </p>
+
           <div className="card">
             <div className="card-heading">
               <div>
@@ -212,6 +232,28 @@ export default async function ProductPage({
           ) : null}
         </div>
       </div>
+
+      {related.length > 0 ? (
+        <section aria-labelledby="related-heading" style={{ marginTop: 26 }}>
+          <div className="shop-section-head">
+            <div>
+              <h2 id="related-heading">More in {product.category}</h2>
+              <p>Same category, live ERP stock and prices.</p>
+            </div>
+            <Link
+              className="text-link"
+              href={`/?category=${encodeURIComponent(product.category_slug ?? "")}`}
+            >
+              See all
+            </Link>
+          </div>
+          <div className="product-grid">
+            {related.map((entry) => (
+              <ProductCard key={entry.product_id} product={entry} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className="card" style={{ marginTop: 22 }}>
         <div className="card-heading">
