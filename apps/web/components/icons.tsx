@@ -193,6 +193,14 @@ export function ArrowUpRightIcon({ size = 14 }: IconProps) {
   );
 }
 
+export function ArrowRightIcon({ size = 14 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M5 12h14m-6-7 7 7-7 7" />
+    </svg>
+  );
+}
+
 export function ArrowLeftIcon({ size = 14 }: IconProps) {
   return (
     <svg {...base(size)}>

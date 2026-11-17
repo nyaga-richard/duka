@@ -57,7 +57,7 @@ export default function OrderPage() {
           Looking for an order you placed as a guest?{" "}
           <Link href="/orders">Find it by number and email</Link>.
         </p>
-        <Link className="btn secondary" href="/">
+        <Link className="btn secondary" href="/shop">
           Back to the shop
         </Link>
       </main>

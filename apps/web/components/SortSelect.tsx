@@ -17,9 +17,11 @@ const OPTIONS = [
 export function SortSelect({
   value,
   filters,
+  basePath = "/shop",
 }: {
   value: string;
   filters: Record<string, string | undefined>;
+  basePath?: string;
 }) {
   const router = useRouter();
 
@@ -30,7 +32,7 @@ export function SortSelect({
     }
     if (next !== "newest") search.set("sort", next);
     const query = search.toString();
-    router.push(query ? `/?${query}` : "/", { scroll: false });
+    router.push(query ? `${basePath}?${query}` : basePath, { scroll: false });
   }
 
   return (

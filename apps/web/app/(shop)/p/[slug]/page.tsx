@@ -61,7 +61,7 @@ export default async function ProductPage({
         aria-label="Breadcrumb"
         style={{ marginBottom: 16 }}
       >
-        <Link href="/">Shop</Link>
+        <Link href="/shop">Shop</Link>
         {product.category ? (
           <>
             <ChevronRightIcon size={12} />

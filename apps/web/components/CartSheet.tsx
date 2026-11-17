@@ -150,7 +150,7 @@ export function CartSheet() {
             <p>Add an item and it will be held while you check out.</p>
             <Link
               className="btn outline sm"
-              href="/"
+              href="/shop"
               onClick={() => setOpen(false)}
             >
               Browse the shop
