@@ -17,6 +17,16 @@ interface OrderView {
   payments: Array<{ amount: string; payment_status: string; provider_reference: string; created_at: string }>;
 }
 
+const money = (value: string | number) => `KES ${Number(value).toLocaleString("en-KE")}`;
+
+function tone(status: string): string {
+  const value = status.toLowerCase();
+  if (["paid", "fulfilled", "delivered", "completed", "captured"].some((word) => value.includes(word))) return "ok";
+  if (["cancel", "refund", "fail", "void"].some((word) => value.includes(word))) return "danger";
+  if (["pending", "await", "partial", "hold", "unpaid"].some((word) => value.includes(word))) return "warn";
+  return "accent";
+}
+
 export default function OrderPage() {
   const params = useParams<{ orderId: string }>();
   const [order, setOrder] = useState<OrderView | null>(null);
@@ -48,66 +58,106 @@ export default function OrderPage() {
     }
   }
 
-  if (error) return <main><div className="notice error">{error}</div></main>;
-  if (!order) return <main><p className="muted">Loading…</p></main>;
+  if (error) {
+    return (
+      <main className="narrow">
+        <div className="notice error">{error}</div>
+        <Link className="button secondary" href="/">
+          Back to the shop
+        </Link>
+      </main>
+    );
+  }
+
+  if (!order) {
+    return (
+      <main>
+        <div className="skeleton line" style={{ width: "30%", marginBottom: "1rem" }} />
+        <div className="split">
+          <div className="skeleton" style={{ height: "12rem" }} />
+          <div className="skeleton" style={{ height: "10rem" }} />
+        </div>
+      </main>
+    );
+  }
 
   const cancellable = ["placed", "payment_failed"].includes(order.status) && order.payment_status !== "paid";
 
   return (
     <main>
-      <p className="muted"><Link href="/">← Back to the shop</Link></p>
-      <h1>Order {order.order_number}</h1>
-      <p className="lede">
-        Placed {new Date(order.placed_at).toLocaleString()} · <span className="pill">{order.status}</span> · payment {order.payment_status}
+      <p className="small muted" style={{ marginBottom: "0.8rem" }}>
+        <Link href="/">← Back to the shop</Link>
       </p>
+      <div className="toolbar">
+        <h1 style={{ margin: 0 }}>Order {order.order_number}</h1>
+        <span className={`badge ${tone(order.status)}`}>{order.status.replace(/_/g, " ")}</span>
+        <span className={`badge ${tone(order.payment_status)}`}>payment {order.payment_status.replace(/_/g, " ")}</span>
+      </div>
+      <p className="lede">Placed {new Date(order.placed_at).toLocaleString()}</p>
 
       <div className="split">
-        <div>
+        <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Item</th><th>Qty</th><th>Unit</th><th>Total</th></tr>
+              <tr>
+                <th>Item</th>
+                <th className="num">Qty</th>
+                <th className="num">Unit</th>
+                <th className="num">Total</th>
+              </tr>
             </thead>
             <tbody>
               {order.items.map((item) => (
                 <tr key={`${item.sku}-${item.product_name}`}>
-                  <td>{item.product_name}<div className="muted">{item.sku}</div></td>
-                  <td>{item.quantity}</td>
-                  <td className="price">KES {Number(item.unit_price).toLocaleString("en-KE")}</td>
-                  <td className="price">KES {Number(item.line_total).toLocaleString("en-KE")}</td>
+                  <td>
+                    {item.product_name}
+                    <div className="small muted">{item.sku}</div>
+                  </td>
+                  <td className="num">{item.quantity}</td>
+                  <td className="num price">{money(item.unit_price)}</td>
+                  <td className="num price">{money(item.line_total)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {order.payments.length ? (
-            <>
-              <h2 style={{ fontSize: "1.05rem", marginTop: "1.5rem" }}>Payments</h2>
-              <table>
-                <thead><tr><th>Reference</th><th>Status</th><th>Amount</th></tr></thead>
-                <tbody>
-                  {order.payments.map((payment) => (
-                    <tr key={payment.provider_reference}>
-                      <td>{payment.provider_reference}</td>
-                      <td>{payment.payment_status}</td>
-                      <td className="price">KES {Number(payment.amount).toLocaleString("en-KE")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          ) : null}
         </div>
 
-        <aside className="card" style={{ padding: "1.1rem" }}>
-          <h3 style={{ marginTop: 0 }}>Summary</h3>
-          <div className="totals"><span>Subtotal</span><span>KES {Number(order.totals.subtotal).toLocaleString("en-KE")}</span></div>
-          <div className="totals"><span>Delivery</span><span>KES {Number(order.totals.shipping).toLocaleString("en-KE")}</span></div>
-          <div className="totals grand"><span>Total</span><span>KES {Number(order.totals.total).toLocaleString("en-KE")}</span></div>
-          <p className="muted" style={{ marginTop: "1rem" }}>
-            Delivering to {order.shipping.name}, {order.shipping.address_line1}, {order.shipping.city}, {order.shipping.country}.
+        <aside className="panel sticky">
+          <h3>Summary</h3>
+          <div className="totals">
+            <span>Subtotal</span>
+            <span className="price">{money(order.totals.subtotal)}</span>
+          </div>
+          <div className="totals">
+            <span>Delivery</span>
+            <span className="price">{money(order.totals.shipping)}</span>
+          </div>
+          <div className="totals grand">
+            <span>Total</span>
+            <span className="price">{money(order.totals.total)}</span>
+          </div>
+          <p className="small muted" style={{ marginTop: "0.9rem" }}>
+            Delivering to {order.shipping.name}, {order.shipping.address_line1}, {order.shipping.city},{" "}
+            {order.shipping.country}.
             {order.shipping.method ? ` (${order.shipping.method})` : ""}
           </p>
+
+          {order.payments.length ? (
+            <>
+              <h4 style={{ fontSize: "0.9rem", marginTop: "1rem" }}>Payments</h4>
+              {order.payments.map((payment) => (
+                <div className="totals" key={payment.provider_reference}>
+                  <span className="small">
+                    {payment.provider_reference} · {payment.payment_status.replace(/_/g, " ")}
+                  </span>
+                  <span className="price small">{money(payment.amount)}</span>
+                </div>
+              ))}
+            </>
+          ) : null}
+
           {cancellable ? (
-            <button className="secondary" style={{ width: "100%" }} disabled={cancelling} onClick={cancelOrder}>
+            <button className="danger block" type="button" disabled={cancelling} onClick={cancelOrder} style={{ marginTop: "1rem" }}>
               {cancelling ? "Cancelling…" : "Cancel order"}
             </button>
           ) : null}
