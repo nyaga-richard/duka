@@ -11,7 +11,11 @@ type Filters = {
 };
 
 /** Same URL builder as the page, kept local so this component stays standalone. */
-function href(current: Filters, overrides: Partial<Filters>): string {
+function href(
+  current: Filters,
+  overrides: Partial<Filters>,
+  basePath: string,
+): string {
   const merged: Filters = { ...current, ...overrides };
   const search = new URLSearchParams();
   for (const key of ["q", "category", "brand", "sort", "page"] as const) {
@@ -19,7 +23,7 @@ function href(current: Filters, overrides: Partial<Filters>): string {
     if (value) search.set(key, String(value));
   }
   const query = search.toString();
-  return query ? `/?${query}` : "/";
+  return query ? `${basePath}?${query}` : basePath;
 }
 
 /**
@@ -32,9 +36,12 @@ function href(current: Filters, overrides: Partial<Filters>): string {
 export async function CatalogueGrid({
   query,
   filters,
+  basePath = "/shop",
 }: {
   query: CatalogueQuery;
   filters: Filters;
+  /** The catalogue route; pagination links are built against it. */
+  basePath?: string;
 }) {
   const { items, total, pages, page } = await listCatalogue(query);
   const filtered = Boolean(filters.q || filters.category || filters.brand);
@@ -54,7 +61,7 @@ export async function CatalogueGrid({
               : "No published products yet. An administrator must enable the ERP integration and run a catalogue pull, or create products locally."}
           </p>
           {filtered ? (
-            <Link className="btn primary sm" href="/">
+            <Link className="btn primary sm" href={basePath}>
               Browse everything
             </Link>
           ) : (
@@ -91,9 +98,11 @@ export async function CatalogueGrid({
           {page > 1 ? (
             <Link
               className="btn secondary"
-              href={href(filters, {
-                page: page - 1 === 1 ? undefined : String(page - 1),
-              })}
+              href={href(
+                filters,
+                { page: page - 1 === 1 ? undefined : String(page - 1) },
+                basePath,
+              )}
             >
               ← Previous
             </Link>
@@ -112,7 +121,7 @@ export async function CatalogueGrid({
           {page < pages ? (
             <Link
               className="btn secondary"
-              href={href(filters, { page: String(page + 1) })}
+              href={href(filters, { page: String(page + 1) }, basePath)}
             >
               Next →
             </Link>

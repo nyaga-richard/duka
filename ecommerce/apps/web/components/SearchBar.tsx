@@ -12,15 +12,18 @@ export function SearchBar({
   brand,
   sort,
   id = "search",
+  action = "/shop",
 }: {
   q?: string;
   category?: string;
   brand?: string;
   sort?: string;
   id?: string;
+  /** Where the catalogue lives; the landing page points its own box here too. */
+  action?: string;
 }) {
   return (
-    <form className="search-box" action="/" method="get" role="search">
+    <form className="search-box" action={action} method="get" role="search">
       <SearchIcon size={15} />
       <input
         id={id}

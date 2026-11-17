@@ -2,13 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { EmptyRow, Panel, Status } from "@/components/admin/atoms";
+import { ProductSheet } from "@/components/admin/ProductSheet";
 import { when, type AdminProduct } from "@/components/admin/types";
 import { useToast } from "@/components/ui/Toast";
 import { api, ApiError } from "@/lib/api-client";
 
 /**
- * Catalogue: what the storefront publishes. Stock and prices stay ERP-owned, so
- * the only local lever is the product status — publish, unpublish, archive.
+ * Catalogue: what the storefront publishes.
+ *
+ * Three decisions live here — is it published, is it featured on the landing
+ * page, and what does it cost / how many are on hand per variant. All three are
+ * local merchandising: an ERP-mirrored product keeps taking its price and stock
+ * from the next sync.
  */
 export function CatalogueTab({ refreshToken }: { refreshToken: number }) {
   const { toast } = useToast();
@@ -16,6 +21,7 @@ export function CatalogueTab({ refreshToken }: { refreshToken: number }) {
   const [query, setQuery] = useState({ q: "", status: "" });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
+  const [editing, setEditing] = useState<number | "new" | null>(null);
 
   const load = useCallback(
     async (next: { q: string; status: string }) => {
@@ -52,7 +58,7 @@ export function CatalogueTab({ refreshToken }: { refreshToken: number }) {
   ) {
     setBusy(product.product_id);
     try {
-      await api(`/admin/products/${product.product_id}/status`, {
+      await api(`/admin/products/${product.product_id}`, {
         method: "PATCH",
         body: { status },
       });
@@ -73,9 +79,42 @@ export function CatalogueTab({ refreshToken }: { refreshToken: number }) {
     }
   }
 
+  async function toggleFeatured(product: AdminProduct) {
+    const next = !product.is_featured;
+    setBusy(product.product_id);
+    try {
+      await api(`/admin/products/${product.product_id}`, {
+        method: "PATCH",
+        body: { is_featured: next },
+      });
+      setProducts((current) =>
+        current.map((row) =>
+          row.product_id === product.product_id
+            ? { ...row, is_featured: next }
+            : row,
+        ),
+      );
+      toast({
+        title: next
+          ? "Featured on the front page"
+          : "Removed from the front page",
+        description: next ? product.product_name : undefined,
+      });
+    } catch (caught) {
+      toast({
+        title: "Could not change the feature flag",
+        description: caught instanceof ApiError ? caught.message : undefined,
+        variant: "error",
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const published = products.filter(
     (product) => product.status === "active",
   ).length;
+  const featured = products.filter((product) => product.is_featured).length;
 
   return (
     <section
@@ -120,10 +159,17 @@ export function CatalogueTab({ refreshToken }: { refreshToken: number }) {
             <button className="btn secondary sm" type="submit">
               Search
             </button>
+            <button
+              className="btn primary sm"
+              type="button"
+              onClick={() => setEditing("new")}
+            >
+              New product
+            </button>
             <span className="muted small">
               {loading
                 ? "Loading…"
-                : `${products.length} shown · ${published} published`}
+                : `${products.length} shown · ${published} published · ${featured} featured`}
             </span>
           </div>
         </form>
@@ -134,7 +180,7 @@ export function CatalogueTab({ refreshToken }: { refreshToken: number }) {
               <tr>
                 <th>Product</th>
                 <th>Status</th>
-                <th>Sync</th>
+                <th>Featured</th>
                 <th className="num">Variants</th>
                 <th>Updated</th>
                 <th />
@@ -145,14 +191,23 @@ export function CatalogueTab({ refreshToken }: { refreshToken: number }) {
                 <EmptyRow colSpan={6}>
                   {loading
                     ? "Loading the catalogue…"
-                    : "No products match. Pull the catalogue from the ERP or create products locally."}
+                    : "No products match. Create one here, or pull the catalogue from the ERP."}
                 </EmptyRow>
               ) : (
                 products.map((product) => (
                   <tr key={product.product_id}>
                     <td>
-                      <strong>{product.product_name}</strong>
+                      <button
+                        className="link-button"
+                        type="button"
+                        onClick={() => setEditing(product.product_id)}
+                      >
+                        <strong>{product.product_name}</strong>
+                      </button>
                       <div className="muted tiny">
+                        {product.category_name
+                          ? `${product.category_name} · `
+                          : ""}
                         /{product.slug}
                         {product.erp_product_id
                           ? ` · ERP #${product.erp_product_id}`
@@ -161,18 +216,39 @@ export function CatalogueTab({ refreshToken }: { refreshToken: number }) {
                     </td>
                     <td>
                       <Status value={product.status} />
+                      {product.sync_state ? (
+                        <div className="muted tiny">{product.sync_state}</div>
+                      ) : null}
                     </td>
                     <td>
-                      {product.sync_state ? (
-                        <Status value={product.sync_state} />
-                      ) : (
-                        <span className="muted small">—</span>
-                      )}
+                      <button
+                        className="feature-flag"
+                        type="button"
+                        aria-pressed={product.is_featured}
+                        disabled={busy === product.product_id}
+                        onClick={() => toggleFeatured(product)}
+                        title={
+                          product.is_featured
+                            ? "Remove from the landing page"
+                            : "Feature on the landing page"
+                        }
+                      >
+                        {product.is_featured ? "★ Featured" : "☆ Feature"}
+                      </button>
                     </td>
-                    <td className="num">{product.variants}</td>
+                    <td className="num">
+                      {product.active_variants}/{product.variants}
+                    </td>
                     <td className="muted small">{when(product.updated_at)}</td>
                     <td className="num">
                       <span className="row-actions">
+                        <button
+                          className="btn ghost sm"
+                          type="button"
+                          onClick={() => setEditing(product.product_id)}
+                        >
+                          Edit
+                        </button>
                         {product.status !== "active" ? (
                           <button
                             className="btn primary sm"
@@ -192,16 +268,6 @@ export function CatalogueTab({ refreshToken }: { refreshToken: number }) {
                             Unpublish
                           </button>
                         )}
-                        {product.status !== "archived" ? (
-                          <button
-                            className="btn ghost sm"
-                            type="button"
-                            disabled={busy === product.product_id}
-                            onClick={() => setStatus(product, "archived")}
-                          >
-                            Archive
-                          </button>
-                        ) : null}
                       </span>
                     </td>
                   </tr>
@@ -211,10 +277,19 @@ export function CatalogueTab({ refreshToken }: { refreshToken: number }) {
           </table>
         </div>
         <p className="card-note">
-          Stock and prices stay owned by the ERP; this only controls what the
-          storefront publishes.
+          Publishing controls what the shop lists; featuring controls what the
+          landing page leads with. Variants carry their own price, stock and
+          publish flag.
         </p>
       </Panel>
+
+      <ProductSheet
+        productId={editing}
+        onClose={() => setEditing(null)}
+        onChanged={async () => {
+          await load(query);
+        }}
+      />
     </section>
   );
 }

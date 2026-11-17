@@ -111,6 +111,9 @@ export default function CartPage() {
   const [placed, setPlaced] = useState<{ order: any; payment: any } | null>(
     null,
   );
+  const [identityKind, setIdentityKind] = useState<"customer" | "guest" | null>(
+    null,
+  );
   const [saved, setSaved] = useState<SavedAddress | null>(null);
   const [prefilled, setPrefilled] = useState(false);
   const [methods, setMethods] = useState<ShippingMethod[]>(FALLBACK_METHODS);
@@ -132,6 +135,13 @@ export default function CartPage() {
   const refresh = useCallback(async () => {
     try {
       const identity = await loadIdentity();
+      setIdentityKind(
+        identity?.kind === "customer"
+          ? "customer"
+          : identity?.kind === "guest"
+            ? "guest"
+            : null,
+      );
       if (identity?.kind === "customer" && identity.customer?.email) {
         setForm((current) =>
           current.email
@@ -326,6 +336,13 @@ export default function CartPage() {
               Keep the number <strong>{placed.order.order_number}</strong> — you
               can find this order again under Orders with the email you used.
             </p>
+            {identityKind !== "customer" ? (
+              <p className="muted small">
+                <Link href="/account/register">Create an account</Link> to keep
+                your orders in one place, or{" "}
+                <Link href="/orders">look this one up</Link> any time.
+              </p>
+            ) : null}
             <div className="row" style={{ justifyContent: "center" }}>
               <Link
                 className="btn primary"
@@ -333,7 +350,7 @@ export default function CartPage() {
               >
                 View order
               </Link>
-              <Link className="btn secondary" href="/">
+              <Link className="btn secondary" href="/shop">
                 Keep shopping
               </Link>
             </div>
@@ -364,7 +381,7 @@ export default function CartPage() {
         aria-label="Breadcrumb"
         style={{ marginBottom: 14 }}
       >
-        <Link href="/">Shop</Link>
+        <Link href="/shop">Shop</Link>
         <ChevronRightIcon size={12} />
         <strong>Cart</strong>
       </nav>
@@ -420,7 +437,7 @@ export default function CartPage() {
             <p>
               Everything you add is held for 15 minutes while you check out.
             </p>
-            <Link className="btn primary sm" href="/">
+            <Link className="btn primary sm" href="/shop">
               Browse the shop
             </Link>
           </div>
@@ -699,6 +716,14 @@ export default function CartPage() {
                 <strong>{money(total)}</strong>
               </div>
 
+              {identityKind !== "customer" ? (
+                <p className="muted tiny" style={{ marginBottom: 10 }}>
+                  Checking out as a guest.{" "}
+                  <Link href="/account/login?next=/cart">Sign in</Link> or{" "}
+                  <Link href="/account/register">create an account</Link> and
+                  this cart comes with you.
+                </p>
+              ) : null}
               <p className="muted tiny" style={{ marginBottom: 12 }}>
                 Payment is collected on delivery or by bank transfer and
                 confirmed by our team.

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AccountLink } from "@/components/AccountLink";
 
 const LINKS = [
   {
-    href: "/",
+    href: "/shop",
     label: "Shop",
     icon: "store",
-    match: (path: string) => path === "/" || path.startsWith("/p/"),
+    match: (path: string) => path === "/shop" || path.startsWith("/p/"),
   },
   {
     href: "/cart",
@@ -48,6 +49,7 @@ export function SiteNav() {
           <span className="label">{link.label}</span>
         </Link>
       ))}
+      <AccountLink />
     </nav>
   );
 }

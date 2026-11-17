@@ -112,7 +112,7 @@ export default function OrdersPage() {
         aria-label="Breadcrumb"
         style={{ marginBottom: 14 }}
       >
-        <Link href="/">Shop</Link>
+        <Link href="/shop">Shop</Link>
         <ChevronRightIcon size={12} />
         <strong>Orders</strong>
       </nav>

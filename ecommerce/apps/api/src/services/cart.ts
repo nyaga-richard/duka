@@ -3,10 +3,14 @@
  * guest session (never both, enforced by a database CHECK).
  */
 import { fail } from "../errors.ts";
-import type { Queryable } from "../db/index.ts";
+import type { Database, Queryable } from "../db/index.ts";
 import type { Actor } from "../http/context.ts";
 import { config } from "../config.ts";
-import { releaseCartReservations, releaseCartVariant, reserveStock } from "./reservations.ts";
+import {
+  releaseCartReservations,
+  releaseCartVariant,
+  reserveStock,
+} from "./reservations.ts";
 import { toMoney } from "@ecom/shared";
 
 export interface Cart {
@@ -18,7 +22,10 @@ export interface Cart {
   reservation_expires_at: string | null;
 }
 
-export function ownerOf(actor: Actor): { customerId?: number; guestSessionId?: string } {
+export function ownerOf(actor: Actor): {
+  customerId?: number;
+  guestSessionId?: string;
+} {
   if (actor.kind === "customer") return { customerId: actor.customerId };
   if (actor.kind === "guest") return { guestSessionId: actor.guestSessionId };
   fail(403, "FORBIDDEN", "Only a customer or guest session can own a cart");
@@ -43,7 +50,10 @@ export async function ensureCart(tx: Queryable, actor: Actor): Promise<Cart> {
   return inserted.rows[0]!;
 }
 
-export async function findCart(db: Queryable, actor: Actor): Promise<Cart | null> {
+export async function findCart(
+  db: Queryable,
+  actor: Actor,
+): Promise<Cart | null> {
   const owner = ownerOf(actor);
   const column = owner.customerId ? "customer_id" : "guest_session_id";
   const value = owner.customerId ?? owner.guestSessionId;
@@ -53,6 +63,47 @@ export async function findCart(db: Queryable, actor: Actor): Promise<Cart | null
     [value],
   );
   return rows.rows[0] ?? null;
+}
+
+/**
+ * Hand a guest's cart to the customer who just signed in.
+ *
+ * A shopper who fills a cart and then registers would otherwise be dropped into
+ * an empty cart: the guest cart belongs to the guest session, and the customer
+ * cart starts blank. The cart row is re-pointed instead of copied, so its lines
+ * and their stock reservations (which hang off the cart id) stay exactly as
+ * they were. Nothing moves when the customer already has an active cart of
+ * their own, and an empty guest cart is simply left to expire.
+ */
+export async function adoptGuestCart(
+  db: Database,
+  input: { customerId: number; guestSessionId: string | null },
+): Promise<string | null> {
+  if (!input.guestSessionId) return null;
+  return db.withTransaction(async (tx) => {
+    const guestCart = await tx.query<{ cart_id: string }>(
+      `SELECT cart_id FROM cart
+        WHERE guest_session_id = $1 AND status = 'active'
+          AND EXISTS (SELECT 1 FROM cart_item i WHERE i.cart_id = cart.cart_id)
+        FOR UPDATE`,
+      [input.guestSessionId],
+    );
+    const cartId = guestCart.rows[0]?.cart_id;
+    if (!cartId) return null;
+
+    const owned = await tx.query(
+      "SELECT 1 FROM cart WHERE customer_id = $1 AND status = 'active'",
+      [input.customerId],
+    );
+    if (owned.rows[0]) return null;
+
+    await tx.query(
+      `UPDATE cart SET customer_id = $1, guest_session_id = NULL, updated_at = now()
+        WHERE cart_id = $2`,
+      [input.customerId, cartId],
+    );
+    return cartId;
+  });
 }
 
 export async function getCartView(db: Queryable, cartId: string) {
@@ -85,7 +136,10 @@ export async function getCartView(db: Queryable, cartId: string) {
   );
 
   const mapped = items.rows.map((row) => {
-    const available = Math.max(0, Number(row.qty_in_stock) - Number(row.reserved));
+    const available = Math.max(
+      0,
+      Number(row.qty_in_stock) - Number(row.reserved),
+    );
     const price = toMoney(row.price);
     return {
       cart_item_id: row.cart_item_id,
@@ -106,7 +160,10 @@ export async function getCartView(db: Queryable, cartId: string) {
     };
   });
 
-  const subtotal = mapped.reduce((sum, item) => sum + Number(item.line_total), 0);
+  const subtotal = mapped.reduce(
+    (sum, item) => sum + Number(item.line_total),
+    0,
+  );
   return {
     cart_id: cart.rows[0].cart_id,
     currency: cart.rows[0].currency,
@@ -143,11 +200,15 @@ export async function addItem(
                    updated_at = now()`,
     [cart.cart_id, input.variantId, input.quantity, variant.rows[0].price],
   );
-  await tx.query("UPDATE cart SET reservation_expires_at = now() + ($2 || ' minutes')::interval WHERE cart_id = $1", [
-    cart.cart_id,
-    String(config.cartReservationMinutes),
-  ]);
-  return { cartId: cart.cart_id, reservation, view: await getCartView(tx, cart.cart_id) };
+  await tx.query(
+    "UPDATE cart SET reservation_expires_at = now() + ($2 || ' minutes')::interval WHERE cart_id = $1",
+    [cart.cart_id, String(config.cartReservationMinutes)],
+  );
+  return {
+    cartId: cart.cart_id,
+    reservation,
+    view: await getCartView(tx, cart.cart_id),
+  };
 }
 
 export async function updateItem(
@@ -164,7 +225,10 @@ export async function updateItem(
 
   if (input.quantity === 0) {
     await releaseCartVariant(tx, cart.cart_id, input.variantId);
-    await tx.query("DELETE FROM cart_item WHERE cart_id = $1 AND variant_id = $2", [cart.cart_id, input.variantId]);
+    await tx.query(
+      "DELETE FROM cart_item WHERE cart_id = $1 AND variant_id = $2",
+      [cart.cart_id, input.variantId],
+    );
   } else {
     await reserveStock(tx, {
       owner: { cartId: cart.cart_id },
@@ -178,18 +242,24 @@ export async function updateItem(
       [cart.cart_id, input.variantId, input.quantity],
     );
   }
-  await tx.query("UPDATE cart SET reservation_expires_at = now() + ($2 || ' minutes')::interval WHERE cart_id = $1", [
-    cart.cart_id,
-    String(config.cartReservationMinutes),
-  ]);
+  await tx.query(
+    "UPDATE cart SET reservation_expires_at = now() + ($2 || ' minutes')::interval WHERE cart_id = $1",
+    [cart.cart_id, String(config.cartReservationMinutes)],
+  );
   return { view: await getCartView(tx, cart.cart_id) };
 }
 
-export async function removeItem(tx: Queryable, input: { actor: Actor; variantId: number }) {
+export async function removeItem(
+  tx: Queryable,
+  input: { actor: Actor; variantId: number },
+) {
   const cart = await findCart(tx, input.actor);
   if (!cart) fail(404, "NOT_FOUND", "Your cart is empty");
   await releaseCartVariant(tx, cart.cart_id, input.variantId);
-  await tx.query("DELETE FROM cart_item WHERE cart_id = $1 AND variant_id = $2", [cart.cart_id, input.variantId]);
+  await tx.query(
+    "DELETE FROM cart_item WHERE cart_id = $1 AND variant_id = $2",
+    [cart.cart_id, input.variantId],
+  );
   return { view: await getCartView(tx, cart.cart_id) };
 }
 
@@ -198,7 +268,10 @@ export async function clearCart(tx: Queryable, input: { actor: Actor }) {
   if (!cart) return { view: null };
   await releaseCartReservations(tx, cart.cart_id, "cart_cleared");
   await tx.query("DELETE FROM cart_item WHERE cart_id = $1", [cart.cart_id]);
-  await tx.query("UPDATE cart SET reservation_expires_at = NULL WHERE cart_id = $1", [cart.cart_id]);
+  await tx.query(
+    "UPDATE cart SET reservation_expires_at = NULL WHERE cart_id = $1",
+    [cart.cart_id],
+  );
   return { view: await getCartView(tx, cart.cart_id) };
 }
 

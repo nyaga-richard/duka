@@ -52,10 +52,55 @@ export interface AdminProduct {
   product_name: string;
   slug: string;
   status: "draft" | "active" | "archived";
+  is_featured: boolean;
   sync_state: string | null;
   variants: number;
+  active_variants: number;
+  category_name: string | null;
   erp_product_id: string | null;
   updated_at: string;
+}
+
+export interface AdminVariant {
+  variant_id: number;
+  product_id: number;
+  sku: string;
+  price: string;
+  compare_at_price: string | null;
+  qty_in_stock: number;
+  barcode: string | null;
+  weight_grams: number | null;
+  is_default: boolean;
+  is_active: boolean;
+  reserved: number;
+  available: number;
+  options: Array<{ option: string; value: string }>;
+  updated_at: string;
+}
+
+export interface AdminProductDetail {
+  product_id: number;
+  product_name: string;
+  slug: string;
+  summary: string | null;
+  description: string | null;
+  status: "draft" | "active" | "archived";
+  is_featured: boolean;
+  brand: string | null;
+  brand_name: string | null;
+  brand_id: number | null;
+  category_id: number | null;
+  category_name: string | null;
+  sync_state: string | null;
+  created_at: string;
+  updated_at: string;
+  variants: AdminVariant[];
+  images: Array<{
+    image_id: number;
+    image_url: string;
+    alt_text: string | null;
+    is_primary: boolean;
+  }>;
 }
 
 export interface Customer {
