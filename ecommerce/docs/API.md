@@ -58,10 +58,12 @@ Do not edit by hand.
 | GET | `/api/v1/catalog/products` | public | — | — | Browse published products with live availability |
 | GET | `/api/v1/catalog/products/:slug` | public | — | — | Product detail by slug or numeric id |
 | GET | `/api/v1/catalog/products/:slug/reviews` | public | — | — | Published reviews for a product |
+| GET | `/api/v1/catalog/shipping-methods` | public | — | — | Active delivery options with their fees and estimates |
 | GET | `/api/v1/orders` | customer or guest session | — | — | List the signed-in customer's or guest's orders |
 | POST | `/api/v1/orders` | customer or guest session | — | required | Place an order from the current cart (idempotent, reserves and consumes stock) |
 | GET | `/api/v1/orders/:orderId` | customer or guest session | — | — | Order detail (own orders only) |
 | POST | `/api/v1/orders/:orderId/cancel` | customer or guest session | — | — | Cancel an unpaid order and restore stock |
+| POST | `/api/v1/orders/lookup` | public | — | — | Find one order by number + checkout email (rate limited, 10 per 15 min per address) |
 | POST | `/api/v1/reviews` | customer session | — | — | Review a purchased item (one review per order line) |
 | POST | `/api/v1/webhooks/payments/:provider` | public | — | — | Provider payment webhook (HMAC-verified, deduplicated by event id) |
 

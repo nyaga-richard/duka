@@ -17,6 +17,12 @@ const LINKS = [
     match: (path: string) => path.startsWith("/cart"),
   },
   {
+    href: "/orders",
+    label: "Orders",
+    icon: "receipt",
+    match: (path: string) => path.startsWith("/orders"),
+  },
+  {
     href: "/admin",
     label: "Staff",
     icon: "receipt",
