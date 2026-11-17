@@ -14,6 +14,7 @@ import {
   loadIdentity,
   newIdempotencyKey,
 } from "@/lib/api-client";
+import { HoldTimer } from "@/components/HoldTimer";
 
 interface CartLine {
   variant_id: number;
@@ -33,11 +34,54 @@ interface CartView {
   reservation_expires_at?: string | null;
 }
 
-const SHIPPING = [
-  { id: 1, label: "Nairobi standard delivery — KES 300", fee: 300 },
-  { id: 2, label: "Countrywide courier — KES 500", fee: 500 },
-  { id: 3, label: "Pickup at store — free", fee: 0 },
+interface ShippingMethod {
+  shipping_method_id: number;
+  method_name: string;
+  price: string;
+  code: string;
+  min_days: number;
+  max_days: number;
+}
+
+/**
+ * Shown until `GET /catalog/shipping-methods` answers, so the checkout form is
+ * never empty. The API re-reads the fee from the same table when the order is
+ * placed, so a stale label can misprice the preview but never the order.
+ */
+const FALLBACK_METHODS: ShippingMethod[] = [
+  {
+    shipping_method_id: 1,
+    method_name: "Nairobi standard delivery",
+    price: "300.00",
+    code: "nairobi-standard",
+    min_days: 1,
+    max_days: 2,
+  },
+  {
+    shipping_method_id: 2,
+    method_name: "Countrywide courier",
+    price: "500.00",
+    code: "countrywide",
+    min_days: 2,
+    max_days: 5,
+  },
+  {
+    shipping_method_id: 3,
+    method_name: "Pickup at store",
+    price: "0.00",
+    code: "pickup",
+    min_days: 0,
+    max_days: 0,
+  },
 ];
+
+function estimate(method: ShippingMethod) {
+  if (method.code === "pickup") return "Ready for collection at the store";
+  if (method.max_days === 0) return "Same day";
+  if (method.min_days === method.max_days)
+    return `${method.max_days} day${method.max_days === 1 ? "" : "s"}`;
+  return `${method.min_days}–${method.max_days} days`;
+}
 
 const money = (value: string | number) =>
   `KES ${Number(value).toLocaleString("en-KE")}`;
@@ -50,6 +94,16 @@ function monogram(name: string) {
     .join("");
 }
 
+const ADDRESS_KEY = "duka:last-address";
+
+interface SavedAddress {
+  ship_name: string;
+  ship_address_line1: string;
+  ship_city: string;
+  ship_region: string;
+  phone: string;
+}
+
 export default function CartPage() {
   const [cart, setCart] = useState<CartView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +111,11 @@ export default function CartPage() {
   const [placed, setPlaced] = useState<{ order: any; payment: any } | null>(
     null,
   );
+  const [saved, setSaved] = useState<SavedAddress | null>(null);
+  const [prefilled, setPrefilled] = useState(false);
+  const [methods, setMethods] = useState<ShippingMethod[]>(FALLBACK_METHODS);
   const [shippingMethodId, setShippingMethodId] = useState(1);
+  const [methodsLoaded, setMethodsLoaded] = useState(false);
   const [form, setForm] = useState({
     email: "",
     ship_name: "",
@@ -98,6 +156,61 @@ export default function CartPage() {
     void refresh();
   }, [refresh]);
 
+  // The last address typed on this device is offered again instead of asking
+  // people to retype a delivery address they used a week ago. It stays on the
+  // device: the API holds no "saved addresses" record.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(ADDRESS_KEY);
+      if (!raw) return;
+      const address = JSON.parse(raw) as SavedAddress;
+      if (!address?.ship_name || !address?.ship_address_line1) return;
+      setSaved(address);
+      setForm((current) =>
+        current.ship_name || current.ship_address_line1
+          ? current
+          : {
+              ...current,
+              ship_name: address.ship_name,
+              ship_address_line1: address.ship_address_line1,
+              ship_city: address.ship_city || current.ship_city,
+              ship_region: address.ship_region || current.ship_region,
+              phone: address.phone ?? current.phone,
+            },
+      );
+      setPrefilled(true);
+    } catch {
+      // Ignore unreadable storage; the form just starts empty.
+    }
+  }, []);
+
+  // Delivery options come from the store's own configuration, not from a copy
+  // baked into this page.
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const result = await api<{ items: ShippingMethod[] }>(
+          "/catalog/shipping-methods",
+        );
+        if (!live || !result.items?.length) return;
+        setMethods(result.items);
+        setShippingMethodId((current) =>
+          result.items.some((method) => method.shipping_method_id === current)
+            ? current
+            : result.items[0]!.shipping_method_id,
+        );
+      } catch {
+        // Keep the fallback list; the order is priced server-side anyway.
+      } finally {
+        if (live) setMethodsLoaded(true);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+
   async function setQuantity(variantId: number, quantity: number) {
     setError(null);
     try {
@@ -130,11 +243,37 @@ export default function CartPage() {
     }
   }
 
+  function forgetAddress() {
+    window.localStorage.removeItem(ADDRESS_KEY);
+    setSaved(null);
+    setPrefilled(false);
+    setForm((current) => ({
+      ...current,
+      ship_name: "",
+      ship_address_line1: "",
+      phone: "",
+    }));
+  }
+
   async function placeOrder(event: React.FormEvent) {
     event.preventDefault();
     setPlacing(true);
     setError(null);
     try {
+      try {
+        window.localStorage.setItem(
+          ADDRESS_KEY,
+          JSON.stringify({
+            ship_name: form.ship_name,
+            ship_address_line1: form.ship_address_line1,
+            ship_city: form.ship_city,
+            ship_region: form.ship_region,
+            phone: form.phone,
+          }),
+        );
+      } catch {
+        // Private browsing can refuse storage; the order still goes through.
+      }
       const result = await api<{ order: any; payment: any }>("/orders", {
         method: "POST",
         idempotencyKey: newIdempotencyKey(),
@@ -183,6 +322,10 @@ export default function CartPage() {
               <span>Total</span>
               <strong>{money(placed.order.total)}</strong>
             </div>
+            <p className="muted small">
+              Keep the number <strong>{placed.order.order_number}</strong> — you
+              can find this order again under Orders with the email you used.
+            </p>
             <div className="row" style={{ justifyContent: "center" }}>
               <Link
                 className="btn primary"
@@ -201,13 +344,26 @@ export default function CartPage() {
   }
 
   const subtotal = Number(cart?.subtotal ?? 0);
-  const shippingFee =
-    SHIPPING.find((method) => method.id === shippingMethodId)?.fee ?? 0;
+  const method =
+    methods.find((entry) => entry.shipping_method_id === shippingMethodId) ??
+    methods[0];
+  const shippingFee = Number(method?.price ?? 0);
   const total = subtotal + shippingFee;
+
+  // Stock can move between adding to the cart and checking out, so the lines
+  // are checked again here rather than trusted from the add-to-cart response.
+  const shortLines = (cart?.items ?? []).filter(
+    (item) => item.available < item.quantity,
+  );
+  const stockBlocked = shortLines.length > 0;
 
   return (
     <main>
-      <nav className="breadcrumbs" aria-label="Breadcrumb" style={{ marginBottom: 14 }}>
+      <nav
+        className="breadcrumbs"
+        aria-label="Breadcrumb"
+        style={{ marginBottom: 14 }}
+      >
         <Link href="/">Shop</Link>
         <ChevronRightIcon size={12} />
         <strong>Cart</strong>
@@ -304,12 +460,26 @@ export default function CartPage() {
                             .join(" / ") || item.sku}{" "}
                           · {money(item.unit_price)} each
                         </div>
-                        {item.available <= item.quantity ? (
+                        {item.available <= 0 ? (
+                          <div
+                            className="tiny"
+                            style={{ color: "var(--danger)", marginTop: 3 }}
+                          >
+                            Sold out — remove this line to continue
+                          </div>
+                        ) : item.available < item.quantity ? (
+                          <div
+                            className="tiny"
+                            style={{ color: "var(--danger)", marginTop: 3 }}
+                          >
+                            Only {item.available} left — reduce the quantity
+                          </div>
+                        ) : item.available <= 2 ? (
                           <div
                             className="tiny"
                             style={{ color: "var(--warning)", marginTop: 3 }}
                           >
-                            Only {item.available} in stock
+                            Only {item.available} left
                           </div>
                         ) : null}
                         <div className="quantity-stepper">
@@ -355,11 +525,10 @@ export default function CartPage() {
                   ))}
                 </div>
                 {cart.reservation_expires_at ? (
-                  <p className="muted tiny" style={{ marginTop: 12 }}>
-                    Stock is held until{" "}
-                    {new Date(cart.reservation_expires_at).toLocaleTimeString()}
-                    .
-                  </p>
+                  <HoldTimer
+                    expiresAt={cart.reservation_expires_at}
+                    onExpired={() => void refresh()}
+                  />
                 ) : null}
               </div>
             </div>
@@ -371,10 +540,13 @@ export default function CartPage() {
                     <TruckIcon size={16} />
                   </span>
                   <div>
-                    <span className="stat-label">Delivery</span>
+                    <span className="stat-label">
+                      Delivery{method ? ` · ${money(shippingFee)}` : ""}
+                    </span>
                     <span className="stat-sub">
-                      Nairobi next day, countrywide 2–3 days. Pickup is
-                      available at the store.
+                      {method
+                        ? `${method.method_name} · ${estimate(method)}. You can change this at checkout.`
+                        : "Choose a delivery option at checkout."}
                     </span>
                   </div>
                 </div>
@@ -388,6 +560,15 @@ export default function CartPage() {
                 <h3>Checkout</h3>
                 <p>We only need a delivery address to place the order.</p>
               </div>
+              {prefilled && saved ? (
+                <button
+                  type="button"
+                  className="btn ghost sm"
+                  onClick={forgetAddress}
+                >
+                  Clear saved address
+                </button>
+              ) : null}
             </div>
             <div className="card-content">
               <div className="field">
@@ -461,13 +642,45 @@ export default function CartPage() {
                     setShippingMethodId(Number(event.target.value))
                   }
                 >
-                  {SHIPPING.map((method) => (
-                    <option key={method.id} value={method.id}>
-                      {method.label}
+                  {methods.map((option) => (
+                    <option
+                      key={option.shipping_method_id}
+                      value={option.shipping_method_id}
+                    >
+                      {option.method_name} —{" "}
+                      {Number(option.price) === 0
+                        ? "free"
+                        : money(option.price)}{" "}
+                      · {estimate(option)}
                     </option>
                   ))}
                 </select>
+                {!methodsLoaded ? (
+                  <p className="muted tiny" style={{ marginTop: 4 }}>
+                    Refreshing delivery options…
+                  </p>
+                ) : method ? (
+                  <p className="muted tiny" style={{ marginTop: 4 }}>
+                    {estimate(method)}
+                  </p>
+                ) : null}
               </div>
+
+              {stockBlocked ? (
+                <div className="error-card" style={{ marginBottom: 12 }}>
+                  <div>
+                    <strong>Stock changed while you were shopping.</strong>
+                    <br />
+                    {shortLines
+                      .map(
+                        (item) =>
+                          `${item.name} — ${item.available} available of ${item.quantity}`,
+                      )
+                      .join("; ")}
+                    . Adjust the quantities above to place this order.
+                  </div>
+                </div>
+              ) : null}
 
               <hr className="separator" />
 
@@ -493,9 +706,13 @@ export default function CartPage() {
               <button
                 type="submit"
                 className="btn primary lg block"
-                disabled={placing}
+                disabled={placing || stockBlocked}
               >
-                {placing ? "Placing order…" : "Place order"}
+                {placing
+                  ? "Placing order…"
+                  : stockBlocked
+                    ? "Adjust quantities to continue"
+                    : "Place order"}
               </button>
             </div>
           </form>

@@ -16,7 +16,7 @@ Express app and drives it over HTTP with cookies and CSRF — no mocks of our ow
 code. The ERP and the payment provider are the only doubles, and both are
 protocol-faithful fakes that refuse to load in production.
 
-## What is proven (87 tests)
+## What is proven (93 tests)
 
 **Migrations and schema** (`tests/integration/migrations.test.ts`, `constraints.test.ts`)
 
@@ -60,6 +60,18 @@ protocol-faithful fakes that refuse to load in production.
 - Ownership: a stranger receives `404`, not someone else's order.
 - Cancellation restores stock and is terminal.
 - The last unit cannot be held twice.
+
+**Order lookup and delivery options** (`order-lookup.test.ts`)
+
+- `GET /catalog/shipping-methods` is public, returns the seeded fees, and drops
+  options the store deactivates (old orders keep the name they were placed with).
+- An order is found from a fresh client with no cookie and no CSRF token, using
+  only the order number and the checkout email; the number matches
+  case-insensitively and ignores surrounding whitespace.
+- A wrong email, a wrong number and an unknown number all return the same `404`
+  with the same message, so neither half can be probed.
+- Malformed or extra fields are `422` before the database is touched.
+- Repeated misses from one address hit the rate limit (`429 RATE_LIMITED`).
 
 **Payments** (`payments-manual.test.ts`, `payments-webhook.test.ts`)
 

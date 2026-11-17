@@ -1,8 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
 import { endpoint } from "../http/route.ts";
-import { getProduct, listBrands, listCategories, listProducts } from "../services/catalog.ts";
-import { reviewSchema, createReview, listPublishedReviews } from "../services/reviews.ts";
+import {
+  getProduct,
+  listBrands,
+  listCategories,
+  listProducts,
+} from "../services/catalog.ts";
+import {
+  reviewSchema,
+  createReview,
+  listPublishedReviews,
+} from "../services/reviews.ts";
 
 const listQuery = z
   .object({
@@ -21,7 +30,11 @@ export function registerCatalogRoutes(router: Router) {
     router,
     "get",
     "/catalog/products",
-    { query: listQuery, summary: "Browse published products with live availability", tags: ["catalog"] },
+    {
+      query: listQuery,
+      summary: "Browse published products with live availability",
+      tags: ["catalog"],
+    },
     async ({ ctx, query }) => ({
       data: await listProducts(ctx.db, {
         q: query.q,
@@ -50,7 +63,12 @@ export function registerCatalogRoutes(router: Router) {
     "get",
     "/catalog/products/:slug/reviews",
     {
-      query: z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(50).default(10) }).strict(),
+      query: z
+        .object({
+          page: z.coerce.number().int().min(1).default(1),
+          limit: z.coerce.number().int().min(1).max(50).default(10),
+        })
+        .strict(),
       summary: "Published reviews for a product",
       tags: ["catalog"],
     },
@@ -77,6 +95,29 @@ export function registerCatalogRoutes(router: Router) {
     "/catalog/brands",
     { summary: "Active brands", tags: ["catalog"] },
     async ({ ctx }) => ({ data: { items: await listBrands(ctx.db) } }),
+  );
+
+  // Delivery options are store configuration, not catalogue content, but they
+  // are public in the same way: the checkout needs the real names and fees the
+  // ERP-side shipping_method table holds, instead of a copy in the browser.
+  endpoint(
+    router,
+    "get",
+    "/catalog/shipping-methods",
+    {
+      summary: "Active delivery options with their fees and estimates",
+      tags: ["catalog"],
+    },
+    async ({ ctx }) => ({
+      data: {
+        items: (
+          await ctx.db.query(
+            `SELECT shipping_method_id, method_name, price::text AS price, code, min_days, max_days
+               FROM shipping_method WHERE is_active ORDER BY shipping_method_id`,
+          )
+        ).rows,
+      },
+    }),
   );
 
   endpoint(
