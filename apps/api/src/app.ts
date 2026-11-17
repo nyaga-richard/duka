@@ -38,16 +38,22 @@ export function createApp({ db }: AppDependencies) {
   app.disable("etag");
   app.set("trust proxy", config.trustProxy);
 
+  // Nobody may frame the API in production. In development it has to be framable
+  // by the sandbox preview viewer, whose origin is a *.e2b.app host — the same
+  // exception `originAllowed` already makes for state changes.
   app.use(
     helmet({
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'none'"],
           styleSrc: ["'unsafe-inline'"],
-          frameAncestors: ["'none'"],
+          frameAncestors: config.isProduction
+            ? ["'none'"]
+            : ["'self'", "https://*.e2b.app", "http://localhost:*"],
         },
       },
       crossOriginResourcePolicy: { policy: "same-origin" },
+      frameguard: config.isProduction ? { action: "sameorigin" } : false,
     }),
   );
 
@@ -150,6 +156,10 @@ export function createApp({ db }: AppDependencies) {
 
   app.get("/api/v1/openapi.json", (_req, res) => res.json(openApiDocument()));
   app.get("/api/v1/docs", (_req, res) => res.type("html").send(docsHtml()));
+
+  // A browser landing on the origin — or a preview pane opening it — gets the
+  // route index instead of a bare 404.
+  app.get("/", (_req, res) => res.type("html").send(docsHtml()));
 
   app.use("/api/v1", api);
 
