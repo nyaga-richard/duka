@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { CloseIcon } from "@/components/icons";
 
 interface OverlayProps {
   open: boolean;
@@ -9,16 +10,25 @@ interface OverlayProps {
   description?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  /** `modal` is a centred dialog, `sheet` a right-hand drawer. */
+  /** `modal` is the ERP's centred `.dialog`; `sheet` is its right-hand drawer. */
   variant?: "modal" | "sheet";
 }
 
 /**
  * Native `<dialog>` in modal mode, so focus trapping, Escape-to-close, inert
- * background and the backdrop come from the platform — the behaviour Radix's
- * Dialog/Sheet provide, without the dependency.
+ * background and the backdrop come from the platform. The markup matches the
+ * ERP's `.dialog` (`heading / content / foot`) and the sheet variant adds the
+ * drawer edge.
  */
-export function Overlay({ open, onClose, title, description, children, footer, variant = "modal" }: OverlayProps) {
+export function Overlay({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  footer,
+  variant = "modal",
+}: OverlayProps) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -31,7 +41,7 @@ export function Overlay({ open, onClose, title, description, children, footer, v
   return (
     <dialog
       ref={ref}
-      className={variant === "sheet" ? "sheet" : "modal"}
+      className={`dialog ${variant === "sheet" ? "sheet" : ""}`}
       onClose={onClose}
       onClick={(event) => {
         // Clicking the backdrop (the dialog element itself) closes it.
@@ -39,18 +49,22 @@ export function Overlay({ open, onClose, title, description, children, footer, v
       }}
       aria-label={title}
     >
-      <div className="overlay-head">
+      <div className="dialog-heading">
         <div style={{ minWidth: 0 }}>
           <h2>{title}</h2>
-          {description ? <p className="small muted" style={{ margin: "0.15rem 0 0" }}>{description}</p> : null}
+          {description ? <p>{description}</p> : null}
         </div>
-        <span style={{ marginLeft: "auto" }} />
-        <button type="button" className="btn btn--ghost btn--sm" onClick={onClose} aria-label="Close">
-          ✕
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={onClose}
+          aria-label="Close"
+        >
+          <CloseIcon size={17} />
         </button>
       </div>
-      <div className="overlay-body">{children}</div>
-      {footer ? <div className="overlay-foot">{footer}</div> : null}
+      <div className="dialog-content">{children}</div>
+      {footer ? <div className="dialog-foot">{footer}</div> : null}
     </dialog>
   );
 }

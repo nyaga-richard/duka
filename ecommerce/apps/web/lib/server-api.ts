@@ -114,42 +114,80 @@ export function cataloguePath(query: CatalogueQuery): string {
   return `/api/v1/catalog/products?${search.toString()}`;
 }
 
-export async function listCatalogue(query: CatalogueQuery = {}): Promise<Page<ProductSummary>> {
+export async function listCatalogue(
+  query: CatalogueQuery = {},
+): Promise<Page<ProductSummary>> {
   const data = await getJson<Page<ProductSummary>>(cataloguePath(query));
-  return data ?? { items: [], page: query.page ?? 1, limit: query.limit ?? 24, total: 0, pages: 1 };
+  return (
+    data ?? {
+      items: [],
+      page: query.page ?? 1,
+      limit: query.limit ?? 24,
+      total: 0,
+      pages: 1,
+    }
+  );
 }
 
 export async function listProducts(query = ""): Promise<ProductSummary[]> {
-  const data = await getJson<Page<ProductSummary>>(`/api/v1/catalog/products${query}`);
+  const data = await getJson<Page<ProductSummary>>(
+    `/api/v1/catalog/products${query}`,
+  );
   return data?.items ?? [];
 }
 
 export async function getProduct(slug: string): Promise<ProductDetail | null> {
-  return getJson<ProductDetail>(`/api/v1/catalog/products/${encodeURIComponent(slug)}`);
+  return getJson<ProductDetail>(
+    `/api/v1/catalog/products/${encodeURIComponent(slug)}`,
+  );
+}
+
+/** The API wraps list payloads as `{ data: { items: [] } }`; older builds
+ *  returned a bare array, so both shapes are accepted. */
+function listItems<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+  const items = (data as { items?: unknown } | null)?.items;
+  return Array.isArray(items) ? (items as T[]) : [];
 }
 
 export async function listCategories(): Promise<Category[]> {
-  const data = await getJson<Category[]>("/api/v1/catalog/categories");
-  return Array.isArray(data) ? data : [];
+  return listItems<Category>(
+    await getJson<unknown>("/api/v1/catalog/categories"),
+  );
 }
 
 export async function listBrands(): Promise<Brand[]> {
-  const data = await getJson<Brand[]>("/api/v1/catalog/brands");
-  return Array.isArray(data) ? data : [];
+  return listItems<Brand>(await getJson<unknown>("/api/v1/catalog/brands"));
 }
 
-export async function listReviews(slug: string, limit = 10): Promise<ReviewPage> {
+export async function listReviews(
+  slug: string,
+  limit = 10,
+): Promise<ReviewPage> {
   const data = await getJson<ReviewPage>(
     `/api/v1/catalog/products/${encodeURIComponent(slug)}/reviews?limit=${limit}`,
   );
-  return data ?? { items: [], page: 1, limit, total: 0, pages: 1, average_rating: null };
+  return (
+    data ?? {
+      items: [],
+      page: 1,
+      limit,
+      total: 0,
+      pages: 1,
+      average_rating: null,
+    }
+  );
 }
 
 /** Cheapest variant price, formatted for display; `null` when there are none. */
 export function priceFrom(product: ProductSummary): string | null {
-  const priced = (product.variants ?? []).filter((variant) => variant.price != null);
+  const priced = (product.variants ?? []).filter(
+    (variant) => variant.price != null,
+  );
   if (priced.length) {
-    const cheapest = priced.reduce((min, variant) => (Number(variant.price) < Number(min.price) ? variant : min));
+    const cheapest = priced.reduce((min, variant) =>
+      Number(variant.price) < Number(min.price) ? variant : min,
+    );
     return cheapest.price;
   }
   return product.price_from ?? null;
@@ -157,7 +195,10 @@ export function priceFrom(product: ProductSummary): string | null {
 
 /** Total units available across variants — drives the stock badge. */
 export function stockOf(product: ProductSummary): number {
-  return (product.variants ?? []).reduce((sum, variant) => sum + (variant.available ?? 0), 0);
+  return (product.variants ?? []).reduce(
+    (sum, variant) => sum + (variant.available ?? 0),
+    0,
+  );
 }
 
 export function primaryImage(product: ProductSummary): ProductImage | null {
