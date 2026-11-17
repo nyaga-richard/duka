@@ -237,3 +237,14 @@ Everything in it was read out of the code rather than remembered, and several of
 Also corrected: `/admin/erp/capabilities` **does** exist on the shop API (`sync.manage`) — it returns the adapter's compiled table (15 verified / 12 missing) and is not a live probe, which is what the guide tells the reader to do with it, and `/health/ready` reports the ERP mode as `checks.erp_enabled`.
 
 Verified here: every bash block in the guide passes `bash -n` (28 blocks; the four `<paste …>` placeholders were replaced with empty assignments plus a comment precisely because they were the only parse failures), the doc is prettier-clean at the repository's pinned 3.6.2, and each endpoint, permission, header and response shape was cross-checked against `packages/erp-adapter/src/{adapter,http-transport,contract}.ts`, `apps/api/src/{config,routes/admin,services/sync}.ts` on the shop side and `apps/api/src/{app,routes/index,services/{auth,admin,business}}.ts` on the ERP side. Not verified: any of it executed against a live pair of hosts — this environment has no Docker and no second ERP, so every "Expect" line is the contract, and the two-host run is still an operator's job.
+
+### Follow-up: two first-run corrections from the real host
+
+The first operator run (Debian host `mail`, ERP `duka.trustedsystems.co.ke`, shop `shop.trustedsystems.co.ke`) hit two problems in the guide, both now fixed:
+
+- **`docker exec -T` does not exist.** `-T` belongs to `docker compose exec`; plain `docker exec` rejects it (`unknown shorthand flag: 'T' in -T`). Both occurrences (step 1.1 and the step 7 diagnostic) lost the flag — `docker exec` with no `-t` already runs without a TTY, which is what `-T` was reaching for.
+- **`jq` is a hard requirement, not a nicety.** The host had `curl` and `docker` but no `jq`, and step 0's `command -v curl jq docker || echo …` was too quiet to catch it before three steps of `bash: jq: command not found` and `curl: Failed writing body`. Step 0 now loops over the three tools and prints `missing: <tool>` per tool, with the `apt-get install -y jq` line beside it, and the troubleshooting table carries both symptoms verbatim.
+
+Also corrected while there: the `ERP_UNAVAILABLE` row still said to keep `ERP_BASE_URL=http://api:4000`, which contradicts the production `https://` rule documented in step 4.
+
+The run confirmed the origin half of the guide on real infrastructure: `ALLOWED_ORIGINS=https://duka.trustedsystems.co.ke` on the ERP container and `ERP_ALLOWED_ORIGIN=https://duka.trustedsystems.co.ke` on the shop container — no allowlist edit needed, exactly as step 1.2 predicts.

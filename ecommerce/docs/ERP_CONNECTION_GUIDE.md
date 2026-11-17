@@ -51,8 +51,12 @@ lives in the same project, see `deploy/ecommerce/README.md`):
 ```bash
 cd /opt/duka
 
-# Tools the commands below use.
-command -v curl jq docker || echo 'install curl, jq and docker first'
+# Tools the commands below use. jq is not optional: steps 1.3 onwards build
+# JSON bodies with it and read ids out of responses.
+for tool in curl jq docker; do
+  command -v "$tool" >/dev/null || echo "missing: $tool"
+done
+# On a Debian/Ubuntu host:  sudo apt-get update && sudo apt-get install -y jq
 
 # The ERP's public host and the storefront's public host.
 export ERP_HOST=$(sudo sed -n 's/^PUBLIC_HOST=//p' deploy/docker/.env.production | head -n1)
@@ -89,7 +93,7 @@ possible:
 **1.1 — ERP health, from inside its own container** (no TLS, no proxy):
 
 ```bash
-sudo docker exec -T duka-api-1 node -e \
+sudo docker exec duka-api-1 node -e \
   "fetch('http://127.0.0.1:4000/health/ready').then(async r=>{console.log(r.status, await r.text());process.exit(r.ok?0:1)})"
 ```
 
@@ -164,6 +168,12 @@ export ERP_WAREHOUSE_ID=       # paste warehouses[].id where branch_id = ERP_BRA
 > warehouse sits in a different branch (`BRANCH_MISMATCH`), and it rejects a
 > _sales order with no warehouse at all_ (`WAREHOUSE_REQUIRED`). This is why
 > `ERP_DEFAULT_WAREHOUSE_ID` is not optional even with reservations off.
+>
+> An ERP with several branches is fine, but every web order posts to the **one**
+> pair configured here — the adapter sends `ERP_DEFAULT_BRANCH_ID` and
+> `ERP_DEFAULT_WAREHOUSE_ID` on `POST /documents` and nothing routes an order by
+> destination. If two shops must ship from two branches, that needs a code change,
+> not a second environment variable.
 
 ---
 
@@ -405,6 +415,24 @@ Expect `ERP_ENABLED: "true"`, `ERP_BASE_URL: https://$ERP_HOST`,
 `docker restart` would not help: container environments are fixed at creation, so
 the two ERP-aware services must be **recreated**.
 
+First a pre-flight, because with an `https://` base URL the shop reaches the ERP
+over its public name, through whatever sits in front of it (Caddy, or a Cloudflare
+tunnel). Run this from **inside the shop API container**:
+
+```bash
+sudo docker exec duka-shop-api-1 node -e \
+  "fetch('https://$ERP_HOST/health/ready').then(r=>console.log(r.status)).catch(e=>console.log('ERR', e.message))"
+```
+
+`200` and you are ready to recreate. Two failure modes are worth naming:
+
+- `ERR …` — no egress, or DNS inside the container cannot resolve the public host.
+  That is the case the private-hop note above exists for.
+- `403`, a `text/html` body, or an access-login page instead of JSON — something
+  in front of the ERP (Cloudflare Access, a WAF rule) is intercepting
+  server-to-server calls. The shop's adapter cannot answer an HTML challenge; put
+  a bypass rule in place for the shop's egress or use the private hop.
+
 ```bash
 sudo bash deploy/ecommerce/shop.sh up
 ```
@@ -431,12 +459,21 @@ Then confirm both are up and the API is ready:
 ```bash
 sudo bash deploy/ecommerce/shop.sh status
 sudo docker inspect duka-shop-api-1 duka-shop-worker-1 \
-  --format '{{.Name}} {{.State.Health.Status}}'
+  --format '{{.Name}} {{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}} (no healthcheck){{end}}'
 ```
 
-Expect `ready 200`, `duka-shop-api-1 healthy`, `duka-shop-worker-1 healthy`.
-`/health/ready` also reports `checks.erp_enabled` — if it still says `false`, the
-container was not recreated or `.env.shop` was not the file Compose read.
+Expect `ready 200`, `duka-shop-api-1 healthy`, and `duka-shop-worker-1 running (no
+healthcheck)` — the worker deliberately has none, so treat its heartbeat as the
+health signal:
+
+```bash
+sudo docker exec duka-shop-api-1 node -e \
+  "fetch('http://127.0.0.1:4100/health/ready').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.checks.worker)))"
+```
+
+Expect `stale: false` with an `age_seconds` under 120. `/health/ready` also
+reports `checks.erp_enabled` — if it still says `false`, the container was not
+recreated or `.env.shop` was not the file Compose read.
 
 ---
 
@@ -499,7 +536,7 @@ Read it in three parts:
   `ERP_ENABLED=false`. Go back to step 5.
 - `health.ok: false` → the container cannot reach `ERP_BASE_URL`. Test the same
   URL from inside it, substituting your value:
-  `sudo docker exec -T duka-shop-api-1 node -e "fetch('https://$ERP_HOST/health/ready').then(r=>console.log(r.status))"`.
+  `sudo docker exec duka-shop-api-1 node -e "fetch('https://$ERP_HOST/health/ready').then(r=>console.log(r.status))"`.
   A DNS failure here means the container has no route to the public name — the
   reason the private-hop variant exists at all (see the defect note in step 4).
 - `error` non-null with `identity: null` → the credential or origin handshake
@@ -769,8 +806,10 @@ Every row is a real code path: the shop's error code first, then the ERP's.
 | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | probe `enabled:false`                                                                                   | the API container still has `ERP_ENABLED=false`                          | step 4, then **recreate** (not restart) `shop-api`                                                                   |
 | `shop-api` restarts in a loop, log says `Production ERP integration requires ERP_BASE_URL to use https` | `SHOP_ERP_BASE_URL` is `http://…`                                        | set it to `https://$ERP_HOST` (step 4) and recreate                                                                  |
+| `jq: command not found`, or `curl: Failed writing body` after a pipe into jq                            | `jq` is not installed on the host                                        | `sudo apt-get update && sudo apt-get install -y jq` (step 0)                                                         |
+| `unknown shorthand flag: 'T' in -T`                                                                     | `docker exec` has no `-T`; that flag belongs to `docker compose exec`    | drop it: `docker exec duka-api-1 node -e …`                                                                          |
 | probe answers but `health.ok:false` while every other call works                                        | `/health/*` not routed on the base URL you chose                         | use `https://$ERP_HOST`; its Caddy site routes `/api/*` and `/health/*`                                              |
-| `ERP_UNAVAILABLE` on every job                                                                          | `ERP_BASE_URL` unreachable, or it carries a path                         | keep it `http://api:4000`; test from inside the shop API container                                                   |
+| `ERP_UNAVAILABLE` on every job                                                                          | `ERP_BASE_URL` unreachable, or it carries a path                         | keep it `https://$ERP_HOST` with no path; test the same URL from inside the container                                |
 | `ERP_TIMEOUT`                                                                                           | ERP slow or the first login blocking on something                        | check ERP `/health/ready`; timeouts default to 15 s (`ERP_REQUEST_TIMEOUT_MS`)                                       |
 | `ERP_AUTH_FAILED` (`INVALID_CREDENTIALS`)                                                               | wrong password, or the identity is `inactive`/`suspended`                | sign in as the identity with curl (step 3); re-activate via `/users/:id/access`                                      |
 | `ERP_AUTH_FAILED` (`MFA_REQUIRED`)                                                                      | the identity has MFA enrolled                                            | create a fresh identity without `mfa.enable`, or add `ERP_INTEGRATION_TOTP_SECRET` support to the Compose file first |
