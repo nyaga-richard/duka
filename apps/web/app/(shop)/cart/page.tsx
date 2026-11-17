@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { BagIcon, CheckIcon, TruckIcon } from "@/components/icons";
+import {
+  BagIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  TruckIcon,
+} from "@/components/icons";
 import {
   api,
   ApiError,
@@ -202,6 +207,12 @@ export default function CartPage() {
 
   return (
     <main>
+      <nav className="breadcrumbs" aria-label="Breadcrumb" style={{ marginBottom: 14 }}>
+        <Link href="/">Shop</Link>
+        <ChevronRightIcon size={12} />
+        <strong>Cart</strong>
+      </nav>
+
       <div className="page-heading">
         <div>
           <span className="eyebrow">Checkout</span>

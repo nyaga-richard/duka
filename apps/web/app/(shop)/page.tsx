@@ -44,17 +44,16 @@ export default async function HomePage({
 
   // Facets are small and fast; the catalogue itself streams in below so the
   // page shell and filters paint without waiting for it.
-  const [categories, brands] = await Promise.all([
-    listCategories(),
-    listBrands(),
-  ]);
+  const [categories, brands] = await Promise.all([listCategories(), listBrands()]);
 
   const filtered = Boolean(q || category || brand);
+  // `sort` only rides along when it is not the default, so a chip that removes
+  // the search does not leave `?sort=newest` behind.
   const currentFilters: Search = {
     q,
-    category,
     brand,
-    sort,
+    category,
+    sort: sort === "newest" ? undefined : sort,
     page: page > 1 ? String(page) : undefined,
   };
   const visibleCategories = categories
@@ -64,21 +63,36 @@ export default async function HomePage({
     .filter((entry) => entry.product_count > 0)
     .slice(0, 8);
 
+  // The chips name the filter a shopper applied, not the slug in the URL.
+  const categoryName =
+    visibleCategories.find((entry) => entry.slug === category)?.category_name ??
+    category;
+  const brandName =
+    visibleBrands.find((entry) => entry.slug === brand)?.brand_name ?? brand;
+
   return (
     <main>
-      <div className="page-heading">
-        <div>
+      <section className="shop-hero">
+        <div className="shop-hero-copy">
           <span className="eyebrow">Duka storefront</span>
           <h1>Shop the collection</h1>
           <p>
             Live stock and prices straight from the ERP. Adding an item holds it
-            for 15 minutes, and delivery is arranged by our team.
+            for 15 minutes, and our team arranges delivery after checkout.
           </p>
+          <div className="hero-points">
+            <span className="badge ok">
+              <span className="status-dot" />
+              Live ERP stock
+            </span>
+            <span className="badge">15-minute hold</span>
+            <span className="badge">Nairobi delivery</span>
+          </div>
         </div>
-        <div
-          className="heading-actions"
-          style={{ flex: 1, justifyContent: "flex-end" }}
-        >
+        <div className="shop-hero-search">
+          <label className="eyebrow" htmlFor="hero-search">
+            Find something
+          </label>
           <SearchBar
             q={q}
             category={category}
@@ -86,87 +100,112 @@ export default async function HomePage({
             sort={sort === "newest" ? undefined : sort}
             id="hero-search"
           />
-          <SortSelect value={sort} filters={{ q, category, brand }} />
         </div>
-      </div>
+      </section>
 
-      {q ? (
-        <p className="muted small" style={{ marginBottom: 12 }}>
-          Searching for “{q}” ·{" "}
-          <Link
-            className="text-link"
-            href={href(currentFilters, { q: undefined, page: undefined })}
-          >
-            clear
-          </Link>
-        </p>
+      {visibleCategories.length > 0 || visibleBrands.length > 0 ? (
+        <section className="filter-strip" aria-label="Browse by category or brand">
+          {visibleCategories.length > 0 ? (
+            <div className="filter-row">
+              <span className="eyebrow">Category</span>
+              <div className="category-tabs" role="group" aria-label="Categories">
+                <Link
+                  href={href(currentFilters, {
+                    category: undefined,
+                    page: undefined,
+                  })}
+                  aria-pressed={!category}
+                >
+                  All products
+                </Link>
+                {visibleCategories.map((entry) => (
+                  <Link
+                    key={entry.category_id}
+                    href={href(currentFilters, {
+                      category: entry.slug,
+                      page: undefined,
+                    })}
+                    aria-pressed={category === entry.slug}
+                  >
+                    {entry.category_name}
+                    <span className="count">{entry.product_count}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {visibleBrands.length > 0 ? (
+            <div className="filter-row">
+              <span className="eyebrow">Brand</span>
+              <div className="category-tabs" role="group" aria-label="Brands">
+                {visibleBrands.map((entry) => (
+                  <Link
+                    key={entry.brand_id}
+                    href={href(currentFilters, {
+                      brand: brand === entry.slug ? undefined : entry.slug,
+                      page: undefined,
+                    })}
+                    aria-pressed={brand === entry.slug}
+                  >
+                    {entry.brand_name}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
-      {visibleCategories.length > 0 ? (
-        <div className="category-tabs" role="group" aria-label="Categories">
-          <Link
-            href={href(currentFilters, {
-              category: undefined,
-              page: undefined,
-            })}
-            aria-pressed={!category}
-          >
-            All products
-          </Link>
-          {visibleCategories.map((entry) => (
-            <Link
-              key={entry.category_id}
-              href={href(currentFilters, {
-                category: entry.slug,
-                page: undefined,
-              })}
-              aria-pressed={category === entry.slug}
-            >
-              {entry.category_name}
-              <span className="count">{entry.product_count}</span>
+      {/* One place for what is applied, one way to remove each piece: a chip
+          per filter. The old layout said the same thing twice ("Searching for …
+          clear" and a "Clear filters" block) and neither could remove a single
+          filter. */}
+      <div className="filter-bar">
+        {filtered ? (
+          <>
+            {q ? (
+              <Link
+                className="chip"
+                href={href(currentFilters, { q: undefined, page: undefined })}
+                title="Remove search"
+              >
+                <span>Search</span> <strong>“{q}”</strong> ×
+              </Link>
+            ) : null}
+            {category ? (
+              <Link
+                className="chip"
+                href={href(currentFilters, {
+                  category: undefined,
+                  page: undefined,
+                })}
+                title="Remove category filter"
+              >
+                <span>Category</span> <strong>{categoryName}</strong> ×
+              </Link>
+            ) : null}
+            {brand ? (
+              <Link
+                className="chip"
+                href={href(currentFilters, { brand: undefined, page: undefined })}
+                title="Remove brand filter"
+              >
+                <span>Brand</span> <strong>{brandName}</strong> ×
+              </Link>
+            ) : null}
+            <Link className="chip chip-clear" href="/">
+              Clear all
             </Link>
-          ))}
-        </div>
-      ) : null}
-
-      {visibleBrands.length > 0 ? (
-        <div
-          className="category-tabs"
-          style={{ marginTop: -8 }}
-          role="group"
-          aria-label="Brands"
-        >
-          {visibleBrands.map((entry) => (
-            <Link
-              key={entry.brand_id}
-              href={href(currentFilters, {
-                brand: brand === entry.slug ? undefined : entry.slug,
-                page: undefined,
-              })}
-              aria-pressed={brand === entry.slug}
-            >
-              {entry.brand_name}
-            </Link>
-          ))}
-        </div>
-      ) : null}
-
-      {filtered ? (
-        <div className="toolbar-filters" style={{ marginBottom: 14 }}>
-          <Link className="btn ghost sm" href="/">
-            Clear filters
-          </Link>
+          </>
+        ) : (
           <span className="muted small">
-            {[
-              q ? `“${q}”` : null,
-              category ? `category: ${category}` : null,
-              brand ? `brand: ${brand}` : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
+            Every published product, newest first.
           </span>
-        </div>
-      ) : null}
+        )}
+        <span className="grow" />
+        <SortSelect value={sort} filters={{ q, category, brand }} />
+      </div>
 
       <Suspense fallback={<GridSkeleton />}>
         <CatalogueGrid
