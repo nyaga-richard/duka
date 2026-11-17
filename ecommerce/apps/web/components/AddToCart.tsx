@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { api, ApiError } from "@/lib/api-client";
 
 export function AddToCart({
@@ -14,6 +15,7 @@ export function AddToCart({
 }) {
   const [state, setState] = useState<"idle" | "adding" | "added">("idle");
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   async function add() {
     setState("adding");
@@ -23,10 +25,13 @@ export function AddToCart({
       setState("added");
       // Let the header counter (and anything else) know without a reload.
       window.dispatchEvent(new Event("cart:updated"));
+      toast({ title: "Added to cart", description: "Held for 15 minutes while you check out." });
       window.setTimeout(() => setState("idle"), 2500);
     } catch (caught) {
       setState("idle");
-      setError(caught instanceof ApiError ? caught.message : "Could not add this item");
+      const message = caught instanceof ApiError ? caught.message : "Could not add this item";
+      setError(message);
+      toast({ title: "Could not add that item", description: message, variant: "error" });
     }
   }
 
