@@ -1198,3 +1198,477 @@ th.num {
     padding: 0.7rem 0.75rem 0.85rem;
   }
 }
+
+/* ===========================================================================
+   Component layer — anatomy inspired by shadcn/ui
+   Same ideas (variant + size props, card sections, slots, overlay primitives)
+   implemented with plain classes and native HTML semantics: <dialog> gives us
+   focus trapping, Escape and a ::backdrop for free, so no Radix dependency and
+   no change to the build.
+   =========================================================================== */
+
+/* ---- button: variant × size ---- */
+
+.btn {
+  --btn-bg: var(--accent);
+  --btn-ink: var(--accent-ink);
+  --btn-border: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 2.35rem;
+  padding: 0 0.95rem;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  color: var(--btn-ink);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.btn:hover {
+  background: color-mix(in oklab, var(--btn-bg) 88%, var(--ink));
+  color: var(--btn-ink);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn[disabled],
+.btn[aria-disabled="true"] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.btn--outline {
+  --btn-bg: transparent;
+  --btn-ink: var(--ink);
+  --btn-border: var(--line);
+}
+
+.btn--outline:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.btn--ghost {
+  --btn-bg: transparent;
+  --btn-ink: var(--ink-soft);
+  --btn-border: transparent;
+}
+
+.btn--ghost:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.btn--destructive {
+  --btn-bg: transparent;
+  --btn-ink: var(--danger);
+  --btn-border: color-mix(in oklab, var(--danger) 40%, var(--line));
+}
+
+.btn--destructive:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.btn--sm {
+  height: 2rem;
+  padding: 0 0.7rem;
+  font-size: 0.82rem;
+  border-radius: var(--r-xs);
+}
+
+.btn--lg {
+  height: 2.75rem;
+  padding: 0 1.3rem;
+  font-size: 0.98rem;
+}
+
+.btn--icon {
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+}
+
+/* ---- card: header / content / footer ---- */
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem 0;
+}
+
+.card-head > div {
+  min-width: 0;
+}
+
+.card-title {
+  font-size: 0.98rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.card-desc {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.15rem 0 0;
+}
+
+.card-content {
+  padding: 0.85rem 1.1rem 1.1rem;
+}
+
+.card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.85rem 1.1rem;
+  border-top: 1px solid var(--line);
+  background: color-mix(in oklab, var(--surface-2) 45%, var(--surface));
+  border-radius: 0 0 var(--r) var(--r);
+}
+
+/* ---- separator ---- */
+
+.separator {
+  height: 1px;
+  border: 0;
+  margin: 0.9rem 0;
+  background: var(--line);
+}
+
+.separator--vertical {
+  width: 1px;
+  height: auto;
+  align-self: stretch;
+  margin: 0 0.6rem;
+}
+
+/* ---- tabs ---- */
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--step);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  appearance: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 550;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.tab:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.tab .count {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  padding: 0 0.35rem;
+  color: var(--muted);
+}
+
+/* ---- overlay primitives (native dialog) ---- */
+
+/* A closed native dialog must stay hidden even though the sheet lays out as
+   a grid — the browser only sets display for [open]. */
+dialog.sheet:not([open]),
+dialog.modal:not([open]) {
+  display: none;
+}
+
+dialog.sheet,
+dialog.modal {
+  border: 0;
+  padding: 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-2);
+  max-height: min(90dvh, 52rem);
+  overflow: auto;
+}
+
+dialog.sheet::backdrop,
+dialog.modal::backdrop {
+  background: color-mix(in oklab, #05070b 55%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+dialog.modal {
+  width: min(40rem, calc(100vw - 2rem));
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+}
+
+dialog.sheet {
+  margin: 0 0 0 auto;
+  height: 100dvh;
+  width: min(26rem, 92vw);
+  max-height: 100dvh;
+  border-left: 1px solid var(--line);
+  border-radius: var(--r-lg) 0 0 var(--r-lg);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+dialog.sheet[open],
+dialog.modal[open] {
+  animation: overlay-in 0.18s ease-out;
+}
+
+dialog.sheet[open] {
+  animation: sheet-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateX(16px);
+    opacity: 0.6;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.overlay-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+
+.overlay-head h2,
+.overlay-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.overlay-body {
+  padding: 1.1rem;
+  overflow: auto;
+}
+
+.overlay-foot {
+  padding: 0.9rem 1.1rem;
+  border-top: 1px solid var(--line);
+  background: color-mix(in oklab, var(--surface-2) 45%, var(--surface));
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* ---- toast ---- */
+
+.toaster {
+  position: fixed;
+  z-index: 90;
+  bottom: 1.1rem;
+  right: 1.1rem;
+  left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 16rem;
+  max-width: min(24rem, 100%);
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  font-size: 0.9rem;
+  animation: toast-in 0.18s ease-out;
+}
+
+.toast--success {
+  border-color: color-mix(in oklab, var(--ok) 35%, var(--line));
+}
+
+.toast--error {
+  border-color: color-mix(in oklab, var(--danger) 40%, var(--line));
+  color: var(--danger);
+}
+
+.toast .spark {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--r-full);
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.toast--error .spark {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- cart sheet internals ---- */
+
+.sheet-line {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.sheet-line:first-child {
+  border-top: 0;
+}
+
+.sheet-line .thumb {
+  aspect-ratio: 1;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, var(--surface-2)), var(--surface-2));
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: color-mix(in oklab, var(--accent) 70%, var(--ink));
+}
+
+/* ---- badges: extra variants ---- */
+
+.badge.outline {
+  background: transparent;
+  border-color: var(--line-strong);
+  color: var(--muted);
+}
+
+/* ---- empty state (shadcn "Empty" pattern) ---- */
+
+.empty .icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0 auto 0.75rem;
+  border-radius: var(--r-full);
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+/* ---- data list rows ---- */
+
+.list {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.list-row:first-child {
+  border-top: 0;
+}
+
+.list-row:hover {
+  background: color-mix(in oklab, var(--accent) 4%, transparent);
+}
+
+@media (max-width: 620px) {
+  .toaster {
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    align-items: stretch;
+  }
+
+  .toast {
+    min-width: 0;
+  }
+}

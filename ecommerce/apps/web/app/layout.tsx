@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
-import { CartCount } from "@/components/CartCount";
+import { CartSheet } from "@/components/CartSheet";
 import { SearchBar } from "@/components/SearchBar";
 import { SiteNav } from "@/components/SiteNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -29,23 +30,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body>
-        <header className="site">
-          <Link className="brand" href="/">
-            <span className="mark" aria-hidden="true">
-              D
-            </span>
-            Duka
-          </Link>
-          <SearchBar />
-          <span className="spacer" />
-          <SiteNav />
-          <Link className="cart-link" href="/cart" aria-label="Cart">
-            Cart
-            <CartCount />
-          </Link>
-          <ThemeToggle />
-        </header>
-        {children}
+        <ToastProvider>
+          <header className="site">
+            <Link className="brand" href="/">
+              <span className="mark" aria-hidden="true">
+                D
+              </span>
+              Duka
+            </Link>
+            <SearchBar />
+            <span className="spacer" />
+            <SiteNav />
+            <CartSheet />
+            <ThemeToggle />
+          </header>
+          {children}
+        </ToastProvider>
         <footer className="site">
           <div className="wrap">
             <span>Prices and stock come from the Duka ERP. Payments are collected manually in Phase 1.</span>
