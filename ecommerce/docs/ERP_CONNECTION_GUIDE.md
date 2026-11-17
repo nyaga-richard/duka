@@ -415,6 +415,24 @@ Expect `ERP_ENABLED: "true"`, `ERP_BASE_URL: https://$ERP_HOST`,
 `docker restart` would not help: container environments are fixed at creation, so
 the two ERP-aware services must be **recreated**.
 
+First a pre-flight, because with an `https://` base URL the shop reaches the ERP
+over its public name, through whatever sits in front of it (Caddy, or a Cloudflare
+tunnel). Run this from **inside the shop API container**:
+
+```bash
+sudo docker exec duka-shop-api-1 node -e \
+  "fetch('https://$ERP_HOST/health/ready').then(r=>console.log(r.status)).catch(e=>console.log('ERR', e.message))"
+```
+
+`200` and you are ready to recreate. Two failure modes are worth naming:
+
+- `ERR …` — no egress, or DNS inside the container cannot resolve the public host.
+  That is the case the private-hop note above exists for.
+- `403`, a `text/html` body, or an access-login page instead of JSON — something
+  in front of the ERP (Cloudflare Access, a WAF rule) is intercepting
+  server-to-server calls. The shop's adapter cannot answer an HTML challenge; put
+  a bypass rule in place for the shop's egress or use the private hop.
+
 ```bash
 sudo bash deploy/ecommerce/shop.sh up
 ```
