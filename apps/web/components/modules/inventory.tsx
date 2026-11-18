@@ -19,6 +19,7 @@ import {
   D,
   draftDecimal,
   useQuery,
+  printDocument,
 } from "../lib";
 import {
   Button,
@@ -371,15 +372,14 @@ export function InventoryPage() {
                   key: "print",
                   title: "",
                   render: (r: any) => (
-                    <a
+                    <Button
+                      variant="secondary"
                       className="icon-btn"
                       aria-label="Print stock document"
-                      target="_blank"
-                      rel="noreferrer"
-                      href={"/api/v1/print/stock-document/" + r.id}
+                      onClick={() => printDocument("stock-document", r.id)}
                     >
                       <Printer size={16} />
-                    </a>
+                    </Button>
                   ),
                 },
               ];

@@ -457,6 +457,261 @@ export async function printReceipt(receipt: any) {
   }
 }
 
+export async function printDocument(kind: string, id: string) {
+  const res = await fetch("/api/v1/print/" + kind + "/" + id, {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => null);
+    throw new Error(e?.error?.message ?? "Unable to load document for printing.");
+  }
+  const data: any = await res.json();
+  const company = data.company ?? {};
+  const cur = company.currency ?? "KES";
+
+  const metaHtml = (data.meta ?? [])
+    .map(
+      ([label, value]: [string, string]) => `
+    <div class="print-meta-row"><span class="print-meta-label">${escapeHtml(label)}</span> <span class="print-meta-value">${escapeHtml(String(value))}</span></div>
+  `,
+    )
+    .join("");
+
+  const linesHtml = (data.lines ?? [])
+    .map(
+      (l: any) => `
+    <div class="print-line">
+      <span class="print-line-description">${escapeHtml(
+        l.description ?? l.name ?? l.account ?? l.code ?? "Item",
+      )}</span>
+      ${
+        l.quantity !== undefined
+          ? `<span class="print-line-qty">${escapeHtml(
+              String(l.quantity).replace(/\.?0+$/, "") || "0",
+            )}${l.unit ? " " + escapeHtml(l.unit) : ""}</span>`
+          : ""
+      }
+      ${
+        l.unit_price !== undefined || l.unit_cost !== undefined
+          ? `<span class="print-line-unit">${cur} ${money(
+              l.unit_price ?? l.unit_cost,
+            )}</span>`
+          : ""
+      }
+      <span class="print-line-amount">${cur} ${money(
+        l.total ?? l.amount ?? l.value ?? l.balance ?? 0,
+      )}</span>
+    </div>
+  `,
+    )
+    .join("");
+
+  const totalsHtml = Object.entries(data.totals ?? {})
+    .map(
+      ([label, value]) => `
+    <div class="print-total-row"><span class="print-total-label">${escapeHtml(String(label))}</span> <span class="print-total-value">${cur} ${money(String(value))}</span></div>
+  `,
+    )
+    .join("");
+
+  const partyHtml = data.party
+    ? `
+    <div class="print-party">
+      <div class="print-party-label">${escapeHtml(data.party.label ?? "Party")}</div>
+      <div class="print-party-name">${escapeHtml(data.party.name ?? "")}</div>
+      ${
+        data.party.sub
+          ? `<div class="print-party-sub">${escapeHtml(data.party.sub)}</div>`
+          : ""
+      }
+    </div>
+  `
+    : "";
+
+  const referenceHtml = data.reference
+    ? `
+    <div class="print-reference-row"><span class="print-reference-label">${escapeHtml(data.reference.label ?? "Reference")}</span> <span class="print-reference-value">${escapeHtml(data.reference.name ?? "")}</span></div>
+  `
+    : "";
+
+  const containerId = "duka-document-print";
+  let container = document.getElementById(containerId);
+  if (!container) {
+    container = document.createElement("div");
+    container.id = containerId;
+    container.setAttribute("aria-hidden", "true");
+    container.style.position = "fixed";
+    container.style.left = "-10000px";
+    container.style.top = "0";
+    container.style.width = "0";
+    container.style.height = "0";
+    container.style.overflow = "hidden";
+    document.body.appendChild(container);
+  }
+
+  container.innerHTML = `
+    <div class="print-document">
+      <div class="print-header">
+        <div class="print-title">${escapeHtml(data.title)}</div>
+        <div class="print-company">${escapeHtml(company.name ?? "")}</div>
+        ${
+          company.address
+            ? `<div class="print-company-line">${escapeHtml(company.address)}</div>`
+            : ""
+        }
+      </div>
+      <div class="print-meta">
+        ${metaHtml}
+      </div>
+      ${
+        data.number
+          ? `<div class="print-number-row"><span class="print-number-label">Document no.</span> <span class="print-number-value">${escapeHtml(data.number)}</span></div>`
+          : ""
+      }
+      ${
+        data.date
+          ? `<div class="print-date-row"><span class="print-date-label">Date</span> <span class="print-date-value">${escapeHtml(data.date)}</span></div>`
+          : ""
+      }
+      <hr class="print-rule" />
+      ${partyHtml}
+      ${referenceHtml}
+      <hr class="print-rule" />
+      <div class="print-items">
+        ${linesHtml}
+      </div>
+      <hr class="print-rule" />
+      <div class="print-totals">
+        ${totalsHtml}
+      </div>
+      ${
+        data.notes
+          ? `<div class="print-notes">${escapeHtml(data.notes)}</div>`
+          : ""
+      }
+      <div class="print-footer">
+        ${escapeHtml(company.settings?.receiptFooter ?? "Thank you for your business!")}
+      </div>
+    </div>
+  `;
+
+  try {
+    window.print();
+  } catch (error) {
+    throw new Error("Unable to open the print dialog. Please try again.");
+  }
+}
+
+export async function printStatement(
+  kind: "customer" | "supplier",
+  id: string,
+  q: any,
+) {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(q ?? {}))
+    if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+  const res = await fetch(
+    `/api/v1/${kind === "customer" ? "customers" : "suppliers"}/${id}/statement?${params}`,
+    { credentials: "same-origin", cache: "no-store" },
+  );
+  if (!res.ok) {
+    const e = await res.json().catch(() => null);
+    throw new Error(e?.error?.message ?? "Unable to load statement for printing.");
+  }
+  const data: any = await res.json();
+  const company = data.company ?? {};
+  const cur = company.currency ?? "KES";
+
+  const linesHtml = (data.items ?? [])
+    .map(
+      (l: any) => `
+    <div class="print-statement-line">
+      <span class="print-statement-date">${escapeHtml(
+        l.accounting_date ?? "",
+      )}</span>
+      <span class="print-statement-number">${escapeHtml(l.number ?? "")}</span>
+      <span class="print-statement-description">${escapeHtml(
+        l.description ?? "",
+      )}</span>
+      <span class="print-statement-debit">${
+        l.debit !== undefined && l.debit !== "—"
+          ? cur + money(l.debit)
+          : ""
+      }</span>
+      <span class="print-statement-credit">${
+        l.credit !== undefined && l.credit !== "—"
+          ? cur + money(l.credit)
+          : ""
+      }</span>
+      <span class="print-statement-balance">${cur} ${money(l.balance ?? 0)}</span>
+    </div>
+  `,
+    )
+    .join("");
+
+  const containerId = "duka-statement-print";
+  let container = document.getElementById(containerId);
+  if (!container) {
+    container = document.createElement("div");
+    container.id = containerId;
+    container.setAttribute("aria-hidden", "true");
+    container.style.position = "fixed";
+    container.style.left = "-10000px";
+    container.style.top = "0";
+    container.style.width = "0";
+    container.style.height = "0";
+    container.style.overflow = "hidden";
+    document.body.appendChild(container);
+  }
+
+  container.innerHTML = `
+    <div class="print-statement">
+      <div class="print-header">
+        <div class="print-title">${kind === "customer" ? "Customer" : "Supplier"} Statement</div>
+        <div class="print-company">${escapeHtml(company.name ?? "")}</div>
+        <div class="print-company-line">${escapeHtml(data.contact?.name ?? "")}</div>
+        <div class="print-company-line">${escapeHtml(
+          [data.contact?.phone, data.contact?.email]
+            .filter(Boolean)
+            .join(" · ") || data.contact?.address || "",
+        )}</div>
+      </div>
+      <div class="print-statement-meta">
+        <div class="print-statement-meta-row"><span class="print-statement-meta-label">Statement no.</span> <span class="print-statement-meta-value">${escapeHtml(data.contact?.code ?? "")}</span></div>
+        <div class="print-statement-meta-row"><span class="print-statement-meta-label">Period</span> <span class="print-statement-meta-value">${escapeHtml(q.from ?? "")} – ${escapeHtml(q.to ?? "")}</span></div>
+        <div class="print-statement-meta-row"><span class="print-statement-meta-label">Date issued</span> <span class="print-statement-meta-value">${new Date().toISOString().slice(0, 10)}</span></div>
+      </div>
+      <hr class="print-rule" />
+      <div class="print-statement-items">
+        <div class="print-statement-header">
+          <span>Date</span><span>Document</span><span>Details</span><span class="print-statement-right">Debit</span><span class="print-statement-right">Credit</span><span class="print-statement-right">Balance</span>
+        </div>
+        ${linesHtml}
+      </div>
+      <hr class="print-rule" />
+      <div class="print-totals">
+        <div class="print-total-row"><span class="print-total-label">Opening balance</span> <span class="print-total-value">${cur} ${money(data.opening ?? 0)}</span></div>
+        <div class="print-total-row print-total-bold"><span class="print-total-label">Closing balance</span> <span class="print-total-value">${cur} ${money(
+          data.items?.[data.items.length - 1]?.balance ?? data.opening ?? 0,
+        )}</span></div>
+      </div>
+      <div class="print-notes">${escapeHtml(
+        `Convention: ${data.convention ?? ""}. Balances are ${kind === "customer" ? "customer advances/AR" : "supplier advances/AP"} control accounts only.`,
+      )}</div>
+      <div class="print-footer">
+        This statement is a statement of account, not a fiscal invoice.
+      </div>
+    </div>
+  `;
+
+  try {
+    window.print();
+  } catch (error) {
+    throw new Error("Unable to open the print dialog. Please try again.");
+  }
+}
+
 function escapeHtml(text: string): string {
   const div = document.createElement("div");
   div.textContent = text;

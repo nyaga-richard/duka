@@ -169,7 +169,7 @@ import {
 import { requireCustomerInScope } from "../services/route-scope.ts";
 import {
   salePdf,
-  businessPdf,
+  getPrintData,
   statementPdf,
   reportPdf,
 } from "../services/documents.ts";
@@ -1220,11 +1220,14 @@ endpoint(
   undefined,
   undefined,
   "Audited printable business document",
-  async (ctx, _q, req) => ({
-    raw: await businessPdf(ctx, String(req.params.kind), idOf(req)),
-    contentType: "application/pdf",
-    filename: `${String(req.params.kind)}-${idOf(req)}.pdf`,
-  }),
+  async (ctx, _q, req) => {
+    const data = await getPrintData(
+      ctx,
+      String(req.params.kind),
+      idOf(req),
+    );
+    return data;
+  },
 );
 endpoint(
   "get",

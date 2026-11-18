@@ -24,6 +24,7 @@ import {
   money,
   useQuery,
   download,
+  printStatement,
 } from "../lib";
 import {
   Button,
@@ -477,10 +478,10 @@ export function ContactDetailPage({
               <Button
                 variant="secondary"
                 onClick={() =>
-                  download(
-                    `${resource}/${id}/statement?format=pdf&from=${dates.from}&to=${dates.to}`,
-                    "statement.pdf",
-                  ).catch((e) => notify(e.message, "error"))
+                  printStatement(kind, id, {
+                    from: dates.from,
+                    to: dates.to,
+                  }).catch((e) => notify(e.message, "error"))
                 }
               >
                 <Printer size={15} /> Print statement

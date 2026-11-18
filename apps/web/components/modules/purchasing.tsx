@@ -20,6 +20,7 @@ import {
   D,
   money,
   useQuery,
+  printDocument,
 } from "../lib";
 import {
   Button,
@@ -468,14 +469,19 @@ export function PurchasingPage() {
             )}
             <div className="form-actions">
               {selected?.kind !== "invoices" && (
-                <a
-                  className="btn secondary"
-                  href={`/api/v1/print/${selected?.kind === "orders" ? "purchase-order" : "goods-receipt"}/${detail.id}`}
-                  target="_blank"
-                  rel="noreferrer"
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    printDocument(
+                      selected?.kind === "orders"
+                        ? "purchase-order"
+                        : "goods-receipt",
+                      detail.id,
+                    )
+                  }
                 >
                   <Printer size={16} /> Print
-                </a>
+                </Button>
               )}
               {selected?.kind === "orders" && (
                 <>

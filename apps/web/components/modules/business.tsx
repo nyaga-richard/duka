@@ -23,6 +23,7 @@ import {
   money,
   useQuery,
   privateStore,
+  printDocument,
 } from "../lib";
 import {
   Button,
@@ -278,14 +279,12 @@ export function DocumentsPage() {
               ]}
             />
             <div className="form-actions">
-              <a
-                href={"/api/v1/print/document/" + detail.id}
-                target="_blank"
-                rel="noreferrer"
-                className="btn secondary"
+              <Button
+                variant="secondary"
+                onClick={() => printDocument("document", detail.id)}
               >
                 <Printer size={16} /> Print
-              </a>
+              </Button>
               {detail.status === "draft" && (
                 <Button
                   onClick={() => {
@@ -663,14 +662,12 @@ export function ExpensesPage() {
           <ExpenseRefundPanel expenseId={detail.id} onChanged={list.refresh} />
         )}
         <div className="form-actions">
-          <a
-            href={"/api/v1/print/expense/" + detail?.id}
-            className="btn secondary"
-            target="_blank"
-            rel="noreferrer"
+          <Button
+            variant="secondary"
+            onClick={() => printDocument("expense", detail?.id)}
           >
             <Printer size={16} /> Voucher
-          </a>
+          </Button>
           {(receipts.data?.items ?? []).map((file: any) => (
             <a
               key={file.id}

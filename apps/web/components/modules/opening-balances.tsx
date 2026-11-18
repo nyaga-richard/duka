@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import { Printer } from "lucide-react";
 import { openingBatchSchema, openingItemSchema } from "@duka/shared";
 import {
   api,
@@ -9,6 +10,7 @@ import {
   dateText,
   D,
   draftDecimal,
+  printDocument,
 } from "../lib";
 import {
   Button,
@@ -384,14 +386,12 @@ export function OpeningBalancesPanel() {
               reversed as though real settlements never happened.
             </p>
             <div className="form-actions">
-              <a
-                className="btn secondary"
-                href={"/api/v1/print/opening-balance/" + b.id}
-                target="_blank"
-                rel="noreferrer"
+              <Button
+                variant="secondary"
+                onClick={() => printDocument("opening-balance", b.id)}
               >
-                Print opening schedule
-              </a>
+                <Printer size={16} /> Print opening schedule
+              </Button>
               {b.state === "draft" &&
                 actor.permissions.includes("accounting.post") && (
                   <>

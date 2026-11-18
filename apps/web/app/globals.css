@@ -6334,4 +6334,330 @@ hr {
     font-size: 8pt;
     font-weight: 900;
   }
+
+  /* ======================== DOCUMENT PRINT STYLES ======================== */
+  /* A4/Letter business documents — purchase orders, GRNs, invoices, etc. */
+
+  #duka-document-print,
+  #duka-document-print * {
+    visibility: visible;
+  }
+  #duka-document-print {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0;
+    padding: 0;
+  }
+  #duka-statement-print,
+  #duka-statement-print * {
+    visibility: visible;
+  }
+  #duka-statement-print {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Base document container */
+  .print-document {
+    width: 210mm;
+    min-width: 210mm;
+    max-width: 210mm;
+    margin: 0;
+    padding: 15mm 15mm;
+    font-family: "Courier New", Courier, monospace;
+    color: #000;
+    background: #fff;
+    font-weight: 900;
+    font-size: 9pt;
+    line-height: 1.4;
+  }
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  .print-header {
+    margin-bottom: 8mm;
+  }
+  .print-title {
+    font-size: 16pt;
+    font-weight: 900;
+    letter-spacing: 1px;
+    margin-bottom: 2mm;
+    text-align: center;
+    border-bottom: 1.5px solid #000;
+    padding-bottom: 2mm;
+  }
+  .print-company {
+    font-size: 12pt;
+    font-weight: 900;
+    text-align: center;
+    margin-bottom: 1mm;
+  }
+  .print-company-line {
+    font-size: 8.5pt;
+    font-weight: 900;
+    text-align: center;
+    margin-bottom: 0.5mm;
+  }
+
+  .print-meta {
+    font-size: 8.5pt;
+    margin-bottom: 4mm;
+  }
+  .print-meta-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.6mm;
+  }
+  .print-meta-label {
+    font-size: 8.5pt;
+    font-weight: 900;
+    letter-spacing: 0.3px;
+    width: 45%;
+  }
+  .print-meta-value {
+    font-size: 8.5pt;
+    font-weight: 900;
+    letter-spacing: 0.3px;
+    width: 50%;
+    text-align: right;
+  }
+
+  .print-number-row,
+  .print-date-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5pt;
+    margin-bottom: 0.6mm;
+  }
+  .print-number-label,
+  .print-date-label {
+    font-weight: 900;
+    width: 45%;
+  }
+  .print-number-value,
+  .print-date-value {
+    width: 50%;
+    text-align: right;
+    font-weight: 900;
+  }
+
+  .print-rule {
+    border: none;
+    border-top: 0.8px solid #000;
+    margin: 2mm 0;
+  }
+
+  .print-party {
+    margin-bottom: 3mm;
+  }
+  .print-party-label {
+    font-size: 8pt;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 0.5mm;
+  }
+  .print-party-name {
+    font-size: 10pt;
+    font-weight: 900;
+    margin-bottom: 0.5mm;
+  }
+  .print-party-sub {
+    font-size: 7.5pt;
+    font-weight: 900;
+  }
+
+  .print-reference-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5pt;
+    margin-bottom: 1mm;
+  }
+  .print-reference-label {
+    font-weight: 900;
+    width: 45%;
+  }
+  .print-reference-value {
+    width: 50%;
+    text-align: right;
+    font-weight: 900;
+  }
+
+  .print-items {
+    margin-bottom: 3mm;
+  }
+  .print-line {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1mm;
+    font-size: 9pt;
+  }
+  .print-line-description {
+    font-weight: 900;
+    letter-spacing: 0.3px;
+    flex: 2;
+  }
+  .print-line-qty {
+    font-size: 8pt;
+    width: 12%;
+    text-align: right;
+  }
+  .print-line-unit {
+    font-size: 8pt;
+    width: 18%;
+    text-align: right;
+  }
+  .print-line-amount {
+    font-size: 9pt;
+    font-weight: 900;
+    width: 18%;
+    text-align: right;
+    letter-spacing: 0.3px;
+  }
+
+  .print-totals {
+    margin-bottom: 3mm;
+  }
+  .print-total-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.6mm;
+    font-size: 9pt;
+  }
+  .print-total-label {
+    font-weight: 900;
+    width: 60%;
+    letter-spacing: 0.3px;
+  }
+  .print-total-value {
+    width: 35%;
+    text-align: right;
+    font-weight: 900;
+    letter-spacing: 0.3px;
+  }
+  .print-total-row.print-total-bold {
+    font-size: 10pt;
+    border-top: 1.5px solid #000;
+    padding-top: 1mm;
+    margin-top: 1mm;
+  }
+
+  .print-notes {
+    font-size: 8pt;
+    font-weight: 900;
+    margin-bottom: 3mm;
+    white-space: pre-line;
+  }
+
+  .print-footer {
+    font-size: 8pt;
+    font-weight: 900;
+    text-align: center;
+    border-top: 0.8px solid #000;
+    padding-top: 2mm;
+  }
+
+  /* ======================== STATEMENT PRINT STYLES ======================== */
+
+  .print-statement {
+    width: 210mm;
+    min-width: 210mm;
+    max-width: 210mm;
+    margin: 0;
+    padding: 15mm 15mm;
+    font-family: "Courier New", Courier, monospace;
+    color: #000;
+    background: #fff;
+    font-weight: 900;
+    font-size: 9pt;
+    line-height: 1.4;
+  }
+
+  .print-statement-meta {
+    font-size: 8.5pt;
+    margin-bottom: 4mm;
+  }
+  .print-statement-meta-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.6mm;
+  }
+  .print-statement-meta-label {
+    font-size: 8.5pt;
+    font-weight: 900;
+    letter-spacing: 0.3px;
+    width: 45%;
+  }
+  .print-statement-meta-value {
+    font-size: 8.5pt;
+    font-weight: 900;
+    letter-spacing: 0.3px;
+    width: 50%;
+    text-align: right;
+  }
+
+  .print-statement-items {
+    margin-bottom: 3mm;
+  }
+  .print-statement-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8pt;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    margin-bottom: 1mm;
+    border-bottom: 1px solid #000;
+    padding-bottom: 0.5mm;
+  }
+  .print-statement-header span {
+    flex: 1;
+  }
+  .print-statement-header .print-statement-right {
+    text-align: right;
+    width: 14%;
+  }
+  .print-statement-line {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.6mm;
+    font-size: 8pt;
+  }
+  .print-statement-line span {
+    flex: 1;
+  }
+  .print-statement-line .print-statement-right {
+    text-align: right;
+    width: 14%;
+  }
+  .print-statement-date {
+    width: 12%;
+  }
+  .print-statement-number {
+    width: 16%;
+  }
+  .print-statement-description {
+    width: 30%;
+  }
+
+  body > :not(#duka-receipt-print):not(#duka-document-print):not(#duka-statement-print) {
+    display: none !important;
+  }
+  #duka-document-print {
+    display: block !important;
+  }
+  #duka-statement-print {
+    display: block !important;
+  }
 }

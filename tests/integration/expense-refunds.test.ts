@@ -227,13 +227,15 @@ test("expense refund and actual repayment preserve original voucher, net/VAT and
     assert.equal((await verifyIntegrity(ctx)).matches, true);
     assert.equal(e.refunds.length, 3);
   });
-  const { businessPdf } = await import(
+  const { getPrintData } = await import(
     "../../apps/api/src/services/documents.ts"
   );
-  const pdf = await transaction(f.actor, (ctx) =>
-    businessPdf(ctx, "expense-refund", first.id),
+  const data = await transaction(f.actor, (ctx) =>
+    getPrintData(ctx, "expense-refund", first.id),
   );
-  assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
+  assert.equal(data.title, "Expense refund received");
+  assert.ok(data.company.name);
+  assert.ok(data.lines.length > 0);
   await assert.rejects(
     () =>
       transaction(f.actor, (ctx) =>
