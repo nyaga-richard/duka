@@ -94,8 +94,9 @@ export function ContactsPage({ kind }: { kind: "customer" | "supplier" }) {
             name: "",
             code: "",
             credit_days: "30",
-            credit_limit: "0",
-            discount_percent: "0",
+            ...(customer
+              ? { credit_limit: "0", discount_percent: "0" }
+              : {}),
             ...(customer ? { route_id: null } : {}),
             active: true,
           },
