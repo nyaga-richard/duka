@@ -315,8 +315,9 @@ export async function listContacts(
       limit,
       offset,
       ctx.actor.branch_ids,
-      kind === "customer" && query.route_id ? String(query.route_id) : null,
-      ...(kind === "customer" ? [scope] : []),
+      ...(kind === "customer"
+        ? [query.route_id ? String(query.route_id) : null, scope]
+        : []),
     ],
   );
   return {
