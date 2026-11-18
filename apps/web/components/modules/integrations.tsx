@@ -5,26 +5,18 @@ import {
   Smartphone,
   ShieldCheck,
   RefreshCw,
-  Plug,
-  AlertTriangle,
   ArrowUpRight,
   Check,
   WifiOff,
   Download,
-  Upload,
-  CloudCheck,
   LockKeyhole,
   Monitor,
   ArrowRight,
   ChevronRight,
   ChevronLeft,
-  Key,
   Globe,
-  Send,
-  ShieldAlert,
   CheckCircle2,
   AlertCircle,
-  RotateCcw,
 } from "lucide-react";
 import {
   api,
@@ -34,8 +26,6 @@ import {
   useQuery,
   privateStore,
   updatePrivateStore,
-  D,
-  download,
 } from "../lib";
 import {
   Button,
@@ -52,28 +42,8 @@ import {
 import { useList, useAction } from "./common";
 
 /** ------------------------------------------------------------------ */
-/*  Small reusable step indicator                                       */
-/** ------------------------------------------------------------------ */
-function Stepper({ step, total }: { step: number; total: number }) {
-  return (
-    <div className="stepper">
-      {[1, 2, 3, 4].map((n) => (
-        <div key={n} className={`step ${n < step ? "done" : n === step ? "current" : "todo"}`}>
-          <span className="step-badge">{n <= step ? (n < step ? "✓" : n) : "•"}</span>
-          <span className="step-label">
-            {n === 1 && "Environment"}
-            {n === 2 && "Credentials"}
-            {n === 3 && "Test connection"}
-            {n === 4 && "Enable"}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** ------------------------------------------------------------------ */
 /*  M-Pesa setup wizard: guided, field-by-field onboarding             */
+/*  Styled to match the app's card/dialog design system.               */
 /** ------------------------------------------------------------------ */
 function MpesaSetupWizard({
   open,
@@ -103,7 +73,6 @@ function MpesaSetupWizard({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const isFirstTime = !existing?.configured;
   const requiredFilled =
     values.consumer_key &&
     values.consumer_secret &&
@@ -117,7 +86,6 @@ function MpesaSetupWizard({
     setTesting(true);
     setTestResult(null);
     try {
-      // Validate credentials by calling Daraja OAuth token endpoint
       const response = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
         headers: {
           Authorization:
@@ -167,61 +135,73 @@ function MpesaSetupWizard({
     }
   }
 
-  const stepTitles = {
-    1: "Choose your environment",
-    2: "Enter your Daraja credentials",
-    3: "Test the connection",
-    4: "Enable for your business",
-  };
-
-  const stepDescriptions = {
-    1: "Start with Sandbox to test. Switch to Production when you have live Daraja credentials.",
-    2: "Get your Consumer Key, Consumer Secret and Passkey from the Daraja developer portal.",
-    3: "We call Daraja directly to confirm your credentials work before saving.",
-    4: "Once enabled, M-Pesa Express appears as a payment method at the POS.",
-  };
+  const stepMeta = [
+    { n: 1, title: "1 · Environment", sub: "Sandbox to test, Production for live payments" },
+    { n: 2, title: "2 · Daraja credentials", sub: "Consumer key, secret, shortcode, passkey, callback secret" },
+    { n: 3, title: "3 · Test connection", sub: "We validate your credentials with Daraja before saving" },
+    { n: 4, title: "4 · Enable", sub: "M-Pesa Express appears at the POS once enabled" },
+  ];
 
   return (
     <Dialog open={open} onClose={onClose} title="Set up M-Pesa payments" description="Step-by-step connection to Safaricom Daraja." wide>
-      <div className="wizard">
-        <Stepper step={step} total={4} />
-        <h3 className="wizard-title">{stepTitles[step as keyof typeof stepTitles]}</h3>
-        <p className="wizard-sub">{stepDescriptions[step as keyof typeof stepDescriptions]}</p>
+      <div className="dialog-content">
+        {/* Step indicator */}
+        <div className="field" style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {stepMeta.map((s, i) => (
+              <div key={s.n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div
+                  className={`badge ${step >= s.n ? "success" : "neutral"}`}
+                  style={{ width: 26, height: 26, display: "grid", placeItems: "center", fontSize: 11 }}
+                >
+                  {step >= s.n ? s.n : i + 1}
+                </div>
+                {i < stepMeta.length - 1 && <div style={{ width: 1, height: 16, background: "var(--line)" }} />}
+              </div>
+            ))}
+          </div>
+          <p style={{ marginTop: 8, fontSize: 11, color: "var(--muted)" }}>{stepMeta[step - 1].sub}</p>
+        </div>
+
+        <h2 style={{ fontSize: 16, marginBottom: 6, color: "var(--text)" }}>{stepMeta[step - 1].title}</h2>
 
         {/* Step 1: Environment */}
-        {step === 1 && (
-          <>
-            <div className="env-choice">
+        {step === 1 ? (
+          <div className="field" style={{ marginBottom: 16 }}>
+            <span style={{ fontWeight: 500, fontSize: 11, color: "var(--text)" }}>Environment</span>
+            <div style={{ display: "flex", gap: 12 }}>
               <button
-                className={`env-btn ${env === "sandbox" ? "active" : ""}`}
+                className={`btn ${env === "sandbox" ? "secondary" : "ghost"}`}
                 onClick={() => setEnv("sandbox")}
+                style={{ padding: "12px 16px", minHeight: 44 }}
               >
-                <Globe size={18} />
+                <Globe size={16} style={{ marginRight: 8 }} />
                 <div>
-                  <strong>Sandbox (test)</strong>
-                  <p>Test with Daraja simulator credentials. No real money moves.</p>
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>Sandbox (test)</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)" }}>No real money moves</div>
                 </div>
               </button>
               <button
-                className={`env-btn ${env === "production" ? "active" : ""}`}
+                className={`btn ${env === "production" ? "secondary" : "ghost"}`}
                 onClick={() => setEnv("production")}
+                style={{ padding: "12px 16px", minHeight: 44 }}
               >
-                <ShieldCheck size={18} />
+                <ShieldCheck size={16} style={{ marginRight: 8 }} />
                 <div>
-                  <strong>Production (live)</strong>
-                  <p>Live pay bill / till number. Real customer payments.</p>
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>Production (live)</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)" }}>Real customer payments</div>
                 </div>
               </button>
             </div>
-            <div className="env-note">
+            <small style={{ color: "var(--muted)", marginTop: 6, display: "block" }}>
               The callback URL Daraja calls is pre-configured from your public host. You only need
               the API credentials below.
-            </div>
-          </>
-        )}
+            </small>
+          </div>
+        ) : null}
 
         {/* Step 2: Credentials */}
-        {step === 2 && (
+        {step === 2 ? (
           <>
             <Fields
               fields={[
@@ -274,20 +254,34 @@ function MpesaSetupWizard({
               value={values}
               onChange={setValues}
             />
-            <div className="callback-url">
-              <strong>Callback URL (auto-configured):</strong>{" "}
-              <code>{`${window.location.origin}/api/v1/integrations/mpesa/callback`}</code>
+            <div className="field" style={{ marginTop: 12 }}>
+              <span style={{ fontWeight: 500, fontSize: 11, color: "var(--text)" }}>Callback URL</span>
+              <div style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 7, padding: 11, fontSize: 11, fontFamily: "monospace", wordBreak: "break-all" }}>
+                {`${window.location.origin}/api/v1/integrations/mpesa/callback`}
+              </div>
+              <small style={{ color: "var(--muted)", marginTop: 6, display: "block" }}>
+                Auto-configured from your public host. No changes needed.
+              </small>
             </div>
           </>
-        )}
+        ) : null}
 
         {/* Step 3: Test connection */}
         {step === 3 && (
-          <div className="test-card">
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {testResult && (
-              <div className={`test-result ${testResult.ok ? "ok" : "fail"}`}>
-                {testResult.ok ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
-                {testResult.msg}
+              <div
+                className={`card`}
+                style={{
+                  padding: 16,
+                  borderLeft: `4px solid ${testResult.ok ? "var(--green)" : "var(--danger)"}`,
+                  background: testResult.ok ? "var(--green-light)" : "var(--surface-2)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {testResult.ok ? <CheckCircle2 size={16} style={{ color: "var(--green)" }} /> : <AlertCircle size={16} style={{ color: "var(--danger)" }} />}
+                  <span style={{ fontSize: 11, fontWeight: 500 }}>{testResult.msg}</span>
+                </div>
               </div>
             )}
             <Button
@@ -295,55 +289,55 @@ function MpesaSetupWizard({
               busy={testing}
               onClick={testConnection}
               disabled={!requiredFilled}
+              style={{ width: "100%" }}
             >
               {testing ? "Validating with Daraja…" : "Test connection with Daraja"}
             </Button>
             {!requiredFilled && (
-              <p className="hint">Fill in all credential fields above to enable testing.</p>
+              <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>
+                Fill in all credential fields above to enable testing.
+              </p>
             )}
             {testResult?.ok && (
-              <p className="hint ok">Your credentials are valid. Proceed to enable.</p>
+              <p style={{ fontSize: 11, color: "var(--green)", marginTop: 8, fontWeight: 500 }}>
+                Your credentials are valid. Proceed to enable.
+              </p>
             )}
           </div>
         )}
 
         {/* Step 4: Enable */}
         {step === 4 && (
-          <div className="enable-card">
-            <div className="enable-summary">
-              <div>
-                <strong>Environment:</strong> {env.charAt(0).toUpperCase() + env.slice(1)}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div className="card" style={{ padding: 18, background: "var(--green-light)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <Smartphone size={20} style={{ color: "var(--green)" }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>Ready to enable M-Pesa</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>Credentials encrypted at rest, never shown back</div>
+                </div>
               </div>
-              <div>
-                <strong>Shortcode:</strong> {values.shortcode}
+              <div style={{ marginTop: 14, display: "grid", gap: 8, fontSize: 11, color: "var(--muted)" }}>
+                <div><strong>Environment:</strong> {env.charAt(0).toUpperCase() + env.slice(1)}</div>
+                <div><strong>Shortcode:</strong> {values.shortcode}</div>
+                <div><strong>Transaction type:</strong> {values.transaction_type}</div>
+                <div><strong>Status:</strong> Will be enabled for this business</div>
               </div>
-              <div>
-                <strong>Transaction type:</strong> {values.transaction_type}
-              </div>
-              <div>
-                <strong>Status:</strong> Will be enabled for this business
-              </div>
-            </div>
-            <div className="enable-note">
-              Credentials are encrypted at rest and never shown back. Customers will see M-Pesa
-              Express as a payment option at the POS once enabled.
             </div>
           </div>
         )}
 
-        <div className="wizard-actions">
+        <div className="form-actions" style={{ marginTop: 24, justifyContent: "space-between" }}>
           {step > 1 && (
             <Button variant="ghost" onClick={() => setStep(step - 1)}>
-              <ChevronLeft size={16} /> Back
+              <ChevronLeft size={14} /> Back
             </Button>
           )}
           {step < 4 ? (
             <Button
               variant="primary"
               busy={saving}
-              disabled={
-                step === 3 && !testResult?.ok ? true : step === 2 && !requiredFilled
-              }
+              disabled={step === 3 && !testResult?.ok ? true : step === 2 && !requiredFilled}
               onClick={() =>
                 step === 3 ? (testResult?.ok ? setStep(4) : null) : setStep(step + 1)
               }
@@ -361,7 +355,11 @@ function MpesaSetupWizard({
             </Button>
           )}
         </div>
-        {saveError && <ErrorCard error={{ message: saveError }} />}
+        {saveError && (
+          <div style={{ marginTop: 16 }}>
+            <ErrorCard error={{ message: saveError }} />
+          </div>
+        )}
       </div>
     </Dialog>
   );
@@ -398,6 +396,19 @@ export function IntegrationsPage() {
 
   const canConfigure = meta.actor.permissions.includes("integrations.manage");
 
+  const mpesaBadge = mpesaEnabled
+    ? "active"
+    : mpesaConfigured
+      ? "pending"
+      : "neutral";
+  const mpesaBadgeLabel = mpesaEnabled
+    ? "Enabled"
+    : mpesaConfigured
+      ? "Configured, not enabled"
+      : "Not configured";
+
+  const etimsBadge = status.data?.fiscal_mode === "adapter" ? "pending" : "neutral";
+
   return (
     <>
       <PageHeading
@@ -416,88 +427,81 @@ export function IntegrationsPage() {
       </PageHeading>
 
       {/* Status cards */}
-      <div className="integration-grid">
-        <section className="card integration-card mpesa-card">
-          <div className="integration-logo mpesa">
-            <Smartphone size={26} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 22 }}>
+        <section className="card">
+          <div className="card-heading">
+            <div>
+              <h2 style={{ fontSize: 15, marginBottom: 4 }}>M-Pesa / Daraja</h2>
+              <p style={{ fontSize: 11, color: "var(--muted)" }}>
+                STK push → token-bound callback → provider query → allocation.
+              </p>
+            </div>
+            <div className="integration-logo mpesa">
+              <Smartphone size={20} />
+            </div>
           </div>
-          <div>
-            <h2>M-Pesa / Daraja</h2>
-            <p>
-              STK push → token-bound callback → independent provider query →
-              allocation.
-            </p>
-            <div className="status-row">
-              <Badge
-                status={
-                  mpesaEnabled ? "active" : mpesaConfigured ? "pending" : "neutral"
-                }
-              >
-                {mpesaEnabled
-                  ? "Enabled"
-                  : mpesaConfigured
-                    ? "Configured, not enabled"
-                    : "Not configured"}
-              </Badge>
+          <div style={{ padding: "0 22px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <Badge status={mpesaBadge}>{mpesaBadgeLabel}</Badge>
               <Badge
                 status={mpesaCreds ? "active" : "neutral"}
               >
                 {mpesaCreds ? "Live credentials" : "Sandbox / none"}
               </Badge>
             </div>
+            <div className="form-actions" style={{ marginTop: 8 }}>
+              {!mpesaConfigured && canConfigure && (
+                <Button variant="ghost" onClick={() => setSetupOpen(true)}>
+                  Set up now
+                </Button>
+              )}
+              {mpesaConfigured && !mpesaEnabled && canConfigure && (
+                <Button
+                  variant="secondary"
+                  busy={action.busy}
+                  onClick={() =>
+                    action.run(
+                      () =>
+                        api("/integrations/config", {
+                          method: "PUT",
+                          body: { provider: "mpesa", enabled: true },
+                        }).then(() => {
+                          config.refresh();
+                          status.refresh();
+                          return {};
+                        }),
+                      "M-Pesa enabled.",
+                    )
+                  }
+                >
+                  Enable
+                </Button>
+              )}
+              {mpesaEnabled && canConfigure && (
+                <Button
+                  variant="secondary"
+                  busy={action.busy}
+                  onClick={() =>
+                    action.run(
+                      () =>
+                        api("/integrations/config", {
+                          method: "PUT",
+                          body: { provider: "mpesa", enabled: false },
+                        }).then(() => {
+                          config.refresh();
+                          status.refresh();
+                          return {};
+                        }),
+                      "M-Pesa disabled.",
+                    )
+                  }
+                >
+                  Disable
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="card-actions">
-            {!mpesaConfigured && canConfigure && (
-              <Button variant="ghost" onClick={() => setSetupOpen(true)}>
-                Set up now
-              </Button>
-            )}
-            {mpesaConfigured && !mpesaEnabled && canConfigure && (
-              <Button
-                variant="secondary"
-                busy={action.busy}
-                onClick={() =>
-                  action.run(
-                    () =>
-                      api("/integrations/config", {
-                        method: "PUT",
-                        body: { provider: "mpesa", enabled: true },
-                      }).then(() => {
-                        config.refresh();
-                        status.refresh();
-                        return {};
-                      }),
-                    "M-Pesa enabled.",
-                  )
-                }
-              >
-                Enable
-              </Button>
-            )}
-            {mpesaEnabled && canConfigure && (
-              <Button
-                variant="secondary"
-                busy={action.busy}
-                onClick={() =>
-                  action.run(
-                    () =>
-                      api("/integrations/config", {
-                        method: "PUT",
-                        body: { provider: "mpesa", enabled: false },
-                      }).then(() => {
-                        config.refresh();
-                        status.refresh();
-                        return {};
-                      }),
-                    "M-Pesa disabled.",
-                  )
-                }
-              >
-                Disable
-              </Button>
-            )}
-          </div>
-          <small>
+          <small style={{ color: "var(--muted)", lineHeight: 1.8, display: "block", marginTop: 10 }}>
             {mpesaCreds
               ? "Credentials configured. Test with a small sale at the POS before going live."
               : mpesaConfigured
@@ -506,45 +510,50 @@ export function IntegrationsPage() {
           </small>
         </section>
 
-        <section className="card integration-card fiscal-card">
-          <div className="integration-logo fiscal">
-            <ShieldCheck size={26} />
+        <section className="card">
+          <div className="card-heading">
+            <div>
+              <h2 style={{ fontSize: 15, marginBottom: 4 }}>KRA eTIMS</h2>
+              <p style={{ fontSize: 11, color: "var(--muted)" }}>
+                Certified gateway adapter with idempotency, retries and failure visibility.
+              </p>
+            </div>
+            <div className="integration-logo fiscal">
+              <ShieldCheck size={20} />
+            </div>
           </div>
-          <div>
-            <h2>KRA eTIMS boundary</h2>
-            <p>
-              Certified gateway adapter with idempotency, identifiers, retries
-              and failure visibility.
-            </p>
-            <Badge status={status.data?.fiscal_mode === "adapter" ? "pending" : "neutral"}>
-              {status.data?.fiscal_mode ?? "Loading"}
-            </Badge>
+          <div style={{ padding: "0 22px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <Badge status={etimsBadge}>
+                {status.data?.fiscal_mode ?? "Loading"}
+              </Badge>
+            </div>
+            <div className="form-actions" style={{ marginTop: 8 }}>
+              {etims?.configured && canConfigure && (
+                <Button
+                  variant={etims.enabled ? "secondary" : "primary"}
+                  onClick={() =>
+                    action.run(
+                      () =>
+                        api("/integrations/config", {
+                          method: "PUT",
+                          body: { provider: "etims", enabled: !etims.enabled },
+                        }).then(() => {
+                          config.refresh();
+                          status.refresh();
+                        }),
+                      etims.enabled ? "eTIMS disabled." : "eTIMS enabled.",
+                    )
+                  }
+                >
+                  {etims.enabled ? "Disable" : "Enable"}
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="card-actions">
-            {etims?.configured && canConfigure && (
-              <Button
-                variant={etims.enabled ? "secondary" : "primary"}
-                onClick={() =>
-                  action.run(
-                    () =>
-                      api("/integrations/config", {
-                        method: "PUT",
-                        body: { provider: "etims", enabled: !etims.enabled },
-                      }).then(() => {
-                        config.refresh();
-                        status.refresh();
-                      }),
-                    etims.enabled ? "eTIMS disabled." : "eTIMS enabled.",
-                  )
-                }
-              >
-                {etims.enabled ? "Disable" : "Enable"}
-              </Button>
-            )}
-          </div>
-          <small>
-            No direct KRA certification is claimed. OSCU/VSCU onboarding and
-            current schema acceptance must be completed externally.
+          <small style={{ color: "var(--muted)", lineHeight: 1.8, display: "block", marginTop: 10 }}>
+            No direct KRA certification is claimed. OSCU/VSCU onboarding and current schema
+            acceptance must be completed externally.
           </small>
         </section>
       </div>
@@ -553,13 +562,15 @@ export function IntegrationsPage() {
 
       {!config.error && (
         <div className="integration-config-bar">
-          {["mpesa", "etims"].map((pv) => {
+          {(["mpesa", "etims"] as const).map((pv) => {
             const c = config.data?.[pv];
             return (
               <div className="card integration-config" key={pv}>
                 <div className="integration-config-text">
-                  <h3>{pv === "mpesa" ? "M-Pesa credentials" : "eTIMS gateway"}</h3>
-                  <p>
+                  <h3 style={{ fontSize: 14, fontWeight: 650, margin: "0 0 2px" }}>
+                    {pv === "mpesa" ? "M-Pesa credentials" : "eTIMS gateway"}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: 12.5, color: "var(--muted)" }}>
                     {config.loading && !config.data
                       ? "Loading configuration…"
                       : c?.configured
@@ -573,10 +584,7 @@ export function IntegrationsPage() {
                   </Badge>
                   <div className="form-actions compact">
                     {c?.configured && canConfigure && pv === "mpesa" && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => setSetupOpen(true)}
-                      >
+                      <Button variant="ghost" onClick={() => setSetupOpen(true)}>
                         Reconfigure
                       </Button>
                     )}
@@ -611,7 +619,7 @@ export function IntegrationsPage() {
       )}
 
       <div className="warning-box">
-        <AlertTriangle size={20} />
+        <AlertCircle size={20} />
         <p>
           Daraja callbacks are not treated as signed payment evidence.
           Successful settlement requires a server-to-provider query bound to the
@@ -1112,7 +1120,7 @@ export function OfflinePage() {
                     View confirmed sale <ArrowRight size={15} />
                   </a>
                 ),
-          },
+            },
           ]}
         />
       </section>
