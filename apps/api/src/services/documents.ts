@@ -1185,7 +1185,9 @@ export async function salePdf(ctx: Context, id: string, thermal: boolean) {
     title: thermal ? "Sales receipt" : "Sales invoice",
     number: s.number,
     date: dateText,
-    lines: s.lines,
+    lines: s.etims_enabled
+      ? s.lines
+      : s.lines.map(({ tax, ...line }: any) => line),
     totals: {
       Subtotal: s.subtotal,
       ...(D(s.discount).gt(0) ? { Discount: s.discount } : {}),
