@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Duka Business OS — one-command upgrade, for checkouts you update with git pull.
+# Duka Business OS — one-command upgrade for git checkouts and source releases.
 #
 #   cd /opt/duka
-#   sudo bash deploy/update.sh                 # git fetch + fast-forward pull, then upgrade
+#   sudo bash deploy/update.sh                 # fetch + fast-forward to upstream/default branch, then upgrade
 #   sudo bash deploy/update.sh --ref v0.2.0    # or pin to a reviewed tag/commit (checkout, never reset --hard)
 #
 # Zip/offline deployments can still refresh without a remote:
@@ -11,8 +11,9 @@
 #
 # Behaviour, in order:
 #   1. Validates the EXISTING deployment (env file, compose stack, healthy db).
-#   2. Updates the source: git fetch + fast-forward pull (default on hosts
-#      with .git; refuses a dirty tree or non-fast-forward), or an rsync copy
+#   2. Updates the source: git fetch + fast-forward to the tracked upstream
+#      (or origin's default branch for detached checkouts; refuses dirty trees
+#      and non-fast-forwards), or an rsync copy
 #      from --src that preserves the 0600 env, backup key and all runtime
 #      volumes (never --delete). RELEASE = short git sha (or UTC timestamp
 #      for gitless zip targets).
@@ -77,8 +78,29 @@ if [[ -z "$SRC" && -e "$TARGET/.git" ]]; then
     "$git" -C "$TARGET" checkout --quiet "$REF" ||
       die "could not check out '$REF'"
   else
-    "$git" -C "$TARGET" pull --ff-only ||
-      die "fast-forward pull failed; inspect history divergence (never overwrite production source blindly)"
+    # A number of production installs are checked out at an exact commit
+    # (detached HEAD), where `git pull` has no configured branch to follow.
+    # Resolve the intended remote ref explicitly, then advance only if this
+    # checkout is an ancestor of it. This keeps the same fast-forward-only
+    # safety guarantee for both attached and detached deployments.
+    CURRENT_BRANCH=$("$git" -C "$TARGET" symbolic-ref --quiet --short HEAD || true)
+    if [[ -n "$CURRENT_BRANCH" ]]; then
+      UPSTREAM=$("$git" -C "$TARGET" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)
+      [[ -n "$UPSTREAM" ]] || die "branch '$CURRENT_BRANCH' has no upstream; configure one or rerun with --ref REF"
+    else
+      UPSTREAM=$("$git" -C "$TARGET" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+      if [[ -z "$UPSTREAM" ]]; then
+        for candidate in origin/main origin/master; do
+          if "$git" -C "$TARGET" show-ref --verify --quiet "refs/remotes/$candidate"; then
+            UPSTREAM="$candidate"
+            break
+          fi
+        done
+      fi
+      [[ -n "$UPSTREAM" ]] || die "detached checkout and no origin default branch found; rerun with --ref REF"
+    fi
+    "$git" -C "$TARGET" merge --ff-only "$UPSTREAM" ||
+      die "fast-forward to $UPSTREAM failed; inspect history divergence (never overwrite production source blindly)"
   fi
   AFTER=$("$git" -C "$TARGET" rev-parse --short=12 HEAD)
   RELEASE="$AFTER"
