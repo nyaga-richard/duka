@@ -329,19 +329,17 @@ export async function printPdf(path: string) {
     frame = document.createElement("iframe");
     frame.title = "Receipt print frame";
     frame.setAttribute("aria-hidden", "true");
-    // Keep the PDF frame in the current document (not display:none), so
-    // Chromium's PDF viewer can render it, without opening another tab.
+    // Show the PDF in an in-page full-screen surface while the native print
+    // dialog opens. Transparent/behind-page iframes can print blank in
+    // Chromium because the PDF viewer is not composited for printing.
     Object.assign(frame.style, {
       position: "fixed",
-      left: "0",
-      bottom: "0",
-      // Give Chromium's PDF viewer a real viewport; a 1px frame can load but print blank.
+      inset: "0",
       width: "100vw",
       height: "100vh",
       border: "0",
-      opacity: "0",
-      pointerEvents: "none",
-      zIndex: "-1",
+      background: "#fff",
+      zIndex: "2147483647",
     });
 
     const printFrame = () => {
