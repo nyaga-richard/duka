@@ -287,6 +287,29 @@ export function scopedQuery(params: Record<string, any>, branch: string) {
     if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
   return q.toString();
 }
+export async function printPdf(path: string) {
+  const popup = window.open("about:blank", "_blank");
+  if (!popup) throw new Error("Allow pop-ups to print the receipt.");
+  popup.document.title = "Preparing receipt…";
+  popup.document.body.innerHTML = "<p style='font:14px sans-serif;padding:24px'>Preparing receipt for printing…</p>";
+  try {
+    const res = await fetch("/api/v1" + path, { credentials: "same-origin", cache: "no-store" });
+    if (!res.ok) {
+      const e = await res.json().catch(() => null);
+      throw new Error(e?.error?.message ?? "Unable to prepare receipt for printing.");
+    }
+    const url = URL.createObjectURL(await res.blob());
+    popup.onload = () => {
+      popup.focus();
+      popup.print();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    };
+    popup.location.href = url;
+  } catch (error) {
+    popup.close();
+    throw error;
+  }
+}
 export async function download(path: string, filename: string) {
   const res = await fetch("/api/v1" + path, { credentials: "same-origin" });
   if (!res.ok) {
