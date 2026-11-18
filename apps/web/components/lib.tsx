@@ -337,6 +337,7 @@ export async function printPdf(path: string) {
       frame.contentWindow.print();
     };
     frame.addEventListener("load", printFrame, { once: true });
+    frame.contentWindow?.addEventListener("afterprint", cleanup, { once: true });
     popup.addEventListener("afterprint", cleanup, { once: true });
     popup.addEventListener("pagehide", () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
