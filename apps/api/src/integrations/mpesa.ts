@@ -59,6 +59,36 @@ export type MpesaRuntimeCfg = {
 };
 // Company-scoped config (from encrypted integration_settings) overrides the
 // deployment-wide environment; validation already happened at save time.
+export async function testDarajaConnection(cfg: MpesaRuntimeCfg): Promise<void> {
+  const baseUrl = cfg.base_url;
+  if (!["https://sandbox.safaricom.co.ke", "https://api.safaricom.co.ke"].includes(baseUrl))
+    throw new Error("Unsupported Safaricom Daraja environment.");
+  let response: Response;
+  try {
+    response = await fetch(
+      baseUrl + "/oauth/v1/generate?grant_type=client_credentials",
+      {
+        headers: {
+          Authorization: "Basic " + Buffer.from(cfg.consumer_key + ":" + cfg.consumer_secret).toString("base64"),
+        },
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+  } catch {
+    throw new Error("The API server could not reach Safaricom Daraja. Check outbound HTTPS connectivity and DNS.");
+  }
+  let data: any = {};
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("Safaricom Daraja returned an unreadable response.");
+  }
+  if (!response.ok || !data.access_token) {
+    const providerMessage = String(data.errorMessage ?? data.error_description ?? "").slice(0, 240);
+    throw new Error(providerMessage || `Safaricom Daraja rejected the credentials (HTTP ${response.status}).`);
+  }
+}
+
 export class DarajaMpesa implements MpesaProvider {
   private token = "";
   private expiry = 0;
