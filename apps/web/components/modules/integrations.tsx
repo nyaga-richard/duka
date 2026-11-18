@@ -86,22 +86,23 @@ function MpesaSetupWizard({
     setTesting(true);
     setTestResult(null);
     try {
-      const response = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
-        headers: {
-          Authorization:
-            "Basic " +
-            Buffer.from(values.consumer_key + ":" + values.consumer_secret).toString("base64"),
+      const result = await api("/integrations/mpesa/test", {
+        method: "POST",
+        body: {
+          config: {
+            consumer_key: values.consumer_key.trim(),
+            consumer_secret: values.consumer_secret.trim(),
+            shortcode: values.shortcode.trim(),
+            passkey: values.passkey.trim(),
+            callback_secret: values.callback_secret.trim(),
+            transaction_type: values.transaction_type,
+            base_url: baseUrl,
+          },
         },
-        signal: AbortSignal.timeout(10000),
       });
-      const data = await response.json();
-      if (response.ok && data.access_token) {
-        setTestResult({ ok: true, msg: "Credentials validated with Daraja." });
-      } else {
-        setTestResult({ ok: false, msg: data.errorMessage || "Daraja rejected the credentials." });
-      }
+      setTestResult({ ok: true, msg: result.message || "Credentials validated with Daraja." });
     } catch (e: any) {
-      setTestResult({ ok: false, msg: e.message || "Could not reach Daraja." });
+      setTestResult({ ok: false, msg: e?.message || "Could not validate the Daraja connection." });
     } finally {
       setTesting(false);
     }
