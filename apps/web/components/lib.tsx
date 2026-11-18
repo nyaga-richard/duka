@@ -401,15 +401,15 @@ export async function printReceipt(receipt: any) {
         }
       </div>
       <div class="receipt-meta">
-        <div><span class="meta-label">Receipt no.</span> <span class="meta-value">${escapeHtml(receipt.number)}</span></div>
-        <div><span class="meta-label">Date</span> <span class="meta-value">${dateText}</span></div>
+        <div class="meta-row"><span class="meta-label">Receipt no.</span> <span class="meta-value">${escapeHtml(receipt.number)}</span></div>
+        <div class="meta-row"><span class="meta-label">Date</span> <span class="meta-value">${dateText}</span></div>
         ${
           timeText
-            ? `<div><span class="meta-label">Time</span> <span class="meta-value">${timeText}</span></div>`
+            ? `<div class="meta-row"><span class="meta-label">Time</span> <span class="meta-value">${timeText}</span></div>`
             : ""
         }
-        <div><span class="meta-label">Served by</span> <span class="meta-value">${escapeHtml(cashierName)}</span></div>
-        <div><span class="meta-label">Payment</span> <span class="meta-value">${escapeHtml(methodSummary)}</span></div>
+        <div class="meta-row"><span class="meta-label">Served by</span> <span class="meta-value">${escapeHtml(cashierName)}</span></div>
+        <div class="meta-row"><span class="meta-label">Payment</span> <span class="meta-value">${escapeHtml(methodSummary)}</span></div>
       </div>
       <hr class="receipt-rule" />
       <div class="receipt-items">
@@ -417,7 +417,7 @@ export async function printReceipt(receipt: any) {
       </div>
       ${
         receiptReference
-          ? `<div class="receipt-row"><span class="row-label">Reference</span> <span class="row-value">${escapeHtml(receiptReference)}</span></div>`
+          ? `<div class="receipt-row" style="display:flex;justify-content:space-between"><span class="row-label">Reference</span> <span class="row-value">${escapeHtml(receiptReference)}</span></div>`
           : ""
       }
       <hr class="receipt-rule" />
