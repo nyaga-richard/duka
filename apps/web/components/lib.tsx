@@ -317,7 +317,11 @@ export async function printPdf(path: string) {
       );
     }
 
-    objectUrl = URL.createObjectURL(await res.blob());
+    const pdf = await res.blob();
+    if (pdf.type && !pdf.type.toLowerCase().includes("pdf")) {
+      throw new Error("The server did not return a PDF receipt. Please refresh and try again.");
+    }
+    objectUrl = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
     popup.document.open();
     popup.document.write(`<!doctype html>
       <html>
@@ -333,8 +337,14 @@ export async function printPdf(path: string) {
 
     const printFrame = () => {
       if (popup.closed || !frame.contentWindow) return;
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
+      // Chromium's built-in PDF viewer can dispatch iframe load before the
+      // PDF plugin is ready. Give it a moment to finish rendering before
+      // opening the native print dialog.
+      popup.setTimeout(() => {
+        if (popup.closed || !frame.contentWindow) return;
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+      }, 800);
     };
     frame.addEventListener("load", printFrame, { once: true });
     frame.contentWindow?.addEventListener("afterprint", cleanup, { once: true });
