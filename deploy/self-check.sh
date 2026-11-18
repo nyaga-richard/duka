@@ -3,10 +3,6 @@
 #
 #   bash deploy/self-check.sh [pos.your-domain.example]
 #
-# With the e-commerce overlay provisioned, export SHOP_HOST (or pass it as the
-# second argument) to gate the storefront host as well: storefront shell,
-# its API readiness, the public catalogue and fail-closed admin endpoints.
-#
 # Verifies the LIVE public host over real HTTPS (through the Cloudflare
 # Tunnel): static login shell, API health/readiness, the public OpenAPI/doc
 # surface, and fail-closed authentication behaviour. No credentials are
@@ -17,18 +13,15 @@
 # Exit 0 = every check passed. Exit 1 = at least one failed (message tells
 # you which). No business data is changed by this script.
 set -uo pipefail
-# Never expand $1/$2 directly under `set -u`: running with only SHOP_HOST set is
-# an easy mistake and must print usage, not die with "unbound variable".
+# Never expand $1 directly under `set -u`.
 HOST=${1:-}
-SHOP_HOST=${SHOP_HOST:-${2:-}}
 if [[ ! "$HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,63}$ ]]; then
   HOST=${PUBLIC_HOST:-}
 fi
 if [[ ! "$HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,63}$ ]]; then
   cat >&2 <<'USAGE'
-usage: bash deploy/self-check.sh <erp-host> [shop-host]
-       SHOP_HOST=shop.example.com bash deploy/self-check.sh erp.example.com
-       (the first host may also come from the PUBLIC_HOST environment variable)
+usage: bash deploy/self-check.sh <erp-host>
+       PUBLIC_HOST=erp.example.com bash deploy/self-check.sh
 USAGE
   exit 2
 fi
@@ -69,73 +62,6 @@ if [[ -n "${SELF_CHECK_EMAIL:-}" && -n "${SELF_CHECK_PASSWORD:-}" ]]; then
     [[ "$c" == 200 ]] && ok "session actor restore (200)" || bad "auth/me expected 200, got $c"
     c=$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 15 -b "$cookie_jar" -H 'origin: '"$BASE" "$BASE/api/v1/setup/status")
     [[ "$c" == 200 ]] && ok "first-run setup status readable (200)" || bad "setup/status authenticated expected 200, got $c"
-  fi
-fi
-
-if [[ -n "$SHOP_HOST" ]]; then
-  [[ "$SHOP_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,63}$ ]] || {
-    echo "self-check: SHOP_HOST '$SHOP_HOST' is not a valid hostname" >&2
-    exit 2
-  }
-  SHOP_BASE="https://$SHOP_HOST"
-  shop_cf5=0
-  shcode() { curl -k -sS -o /dev/null -w '%{http_code}' --max-time 15 -H 'origin: '"$SHOP_BASE" "$@"; }
-  shcheck() { # path expected label
-    local path=$1 expected=$2 label=$3 got
-    got=$(shcode "$SHOP_BASE$path")
-    if [[ "$got" == "$expected" ]]; then
-      ok "$label"
-    else
-      bad "$label (got $got)"
-      [[ "$got" =~ ^5[0-9][0-9]$ ]] && shop_cf5=1
-    fi
-  }
-  echo
-  echo "self-check of $SHOP_BASE (storefront host, live)"
-
-  # Loopback probe: separates "Cloudflare cannot reach the origin" from
-  # "Caddy/app is broken". Only meaningful on the deployment host, where the
-  # Tunnel-mode proxy publishes 127.0.0.1:8080. Uses the host's curl, so it does
-  # not depend on anything installed inside the Caddy image.
-  if command -v docker >/dev/null 2>&1 && docker inspect duka-proxy-1 >/dev/null 2>&1; then
-    routed_host=$(docker exec duka-proxy-1 printenv SHOP_PUBLIC_HOST 2>/dev/null | tr -d '\r')
-    if [[ "$routed_host" != "$SHOP_HOST" ]]; then
-      if [[ -n "$routed_host" ]]; then
-        bad "the running proxy routes '$routed_host', not $SHOP_HOST — recreate it: bash deploy/ecommerce/shop.sh proxy"
-      else
-        bad "the running proxy has no SHOP_PUBLIC_HOST — recreate it: bash deploy/ecommerce/shop.sh proxy"
-      fi
-    else
-      origin_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
-        -H "Host: $SHOP_HOST" http://127.0.0.1:8080/ 2>/dev/null || true)
-      case "$origin_code" in
-        200) ok "storefront answers through Caddy on the loopback proxy (app + routing are fine)" ;;
-        000|"")
-          echo "  note: no loopback :8080 listener found (direct-TLS mode?) — skipped the origin probe"
-          ;;
-        *) bad "Caddy answered $origin_code for $SHOP_HOST on the loopback proxy"
-           if [[ "$origin_code" == 404 ]]; then
-             echo "        the proxy routes this host, but not to shop-web:3100 (a JSON 404 here is the"
-             echo "        shop API answering — a stale compiled config). Recreate it so Caddy re-reads"
-             echo "        the Caddyfile: bash deploy/ecommerce/shop.sh proxy"
-             echo "        if it survives that, run bash deploy/ecommerce/shop.sh diag (read-only)"
-           fi ;;
-      esac
-    fi
-  fi
-
-  shcheck "/" 200 "storefront shell serves (200)"
-  shcheck "/health/ready" 200 "storefront API readiness incl. DB + migrations (200)"
-  shcheck "/api/v1/openapi.json" 200 "storefront API document reachable"
-  shcheck "/api/v1/catalog/products" 200 "public catalogue responds (200; empty until an ERP pull)"
-  shcheck "/admin" 200 "storefront admin shell serves (200)"
-  shcheck "/api/v1/admin/orders" 401 "storefront admin API refuses anonymous access (401)"
-
-  if ((shop_cf5)); then
-    echo "  hint: 52x/530 responses are produced by Cloudflare, not by the app — the hostname is not"
-    echo "        reaching the origin. Add $SHOP_HOST as a Public Hostname on the SAME tunnel with"
-    echo "        service http://proxy:8080 and keep the DNS record Cloudflare creates (a hand-made"
-    echo "        CNAME without the tunnel entry returns 530). Then check 'docker logs duka-tunnel-1 --tail 50'."
   fi
 fi
 
