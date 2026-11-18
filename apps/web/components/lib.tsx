@@ -288,21 +288,7 @@ export function scopedQuery(params: Record<string, any>, branch: string) {
   return q.toString();
 }
 export async function printPdf(path: string) {
-  let objectUrl: string | null = null;
-  let frame: HTMLIFrameElement | null = null;
-  let cleanedUp = false;
-  let fallbackTimer: number | undefined;
-
-  const cleanup = () => {
-    if (cleanedUp) return;
-    cleanedUp = true;
-    if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer);
-    window.removeEventListener("afterprint", cleanup);
-    frame?.remove();
-    frame = null;
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-    objectUrl = null;
-  };
+  let url: string | null = null;
 
   try {
     const res = await fetch("/api/v1" + path, {
@@ -326,51 +312,28 @@ export async function printPdf(path: string) {
       );
     }
 
-    objectUrl = URL.createObjectURL(
+    url = URL.createObjectURL(
       new Blob([pdf], { type: "application/pdf" }),
     );
-    frame = document.createElement("iframe");
-    frame.title = "Receipt print frame";
-    frame.setAttribute("aria-hidden", "true");
-    // Never reduce opacity or visibility on a PDF viewer used for printing:
-    // Chromium can include that compositing in the print output. Keep a
-    // normal opaque viewport, but move it outside the visible screen.
-    Object.assign(frame.style, {
-      position: "fixed",
-      left: "-10000px",
-      top: "0",
-      width: "100vw",
-      height: "100vh",
-      border: "0",
-      opacity: "1",
-      pointerEvents: "none",
-      zIndex: "0",
-    });
 
-    const printFrame = () => {
-      if (!frame?.contentWindow) {
-        cleanup();
-        throw new Error("Unable to load the receipt for printing.");
-      }
-      window.addEventListener("afterprint", cleanup, { once: true });
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
-      // Some PDF viewers do not dispatch afterprint to the parent window.
-      fallbackTimer = window.setTimeout(cleanup, 120000);
-    };
+    // Open the receipt in a new tab so the browser's native PDF viewer
+    // handles rendering and printing. Iframe-based printing (contentWindow
+    // print) is unreliable: browser PDF viewers often ignore programmatic
+    // print calls, producing blank output or no print dialog at all.
+    const win = window.open(url, "_blank");
+    if (!win) {
+      throw new Error(
+        "Popup blocked. Please allow popups for this site and try again.",
+      );
+    }
 
-    frame.addEventListener(
-      "load",
-      () => {
-        // Chromium may fire iframe load before its PDF viewer is ready.
-        window.setTimeout(printFrame, 800);
-      },
-      { once: true },
-    );
-    document.body.appendChild(frame);
-    frame.src = objectUrl;
+    // Revoke the blob URL once the new tab has had time to load it.
+    setTimeout(() => {
+      if (url) URL.revokeObjectURL(url);
+      url = null;
+    }, 60000);
   } catch (error) {
-    cleanup();
+    if (url) URL.revokeObjectURL(url);
     throw error;
   }
 }
