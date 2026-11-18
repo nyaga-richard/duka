@@ -146,7 +146,12 @@ export const customerSchema = z
   .object({ ...contactFields, route_id: uuid.optional().nullable() })
   .strict();
 // Suppliers share the trade terms but never belong to a sales route.
-export const supplierSchema = z.object(contactFields).strict();
+// The suppliers table has no credit_limit or discount_percent columns,
+// so those customer-only fields are excluded.
+export const supplierSchema = z
+  .object({ ...contactFields })
+  .omit({ credit_limit: true, discount_percent: true })
+  .strict();
 // Route (van sales) master data: one salesperson and one till per route.
 export const routeSchema = z
   .object({
