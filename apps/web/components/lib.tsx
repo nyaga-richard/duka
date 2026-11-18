@@ -299,10 +299,19 @@ export async function printPdf(path: string) {
       throw new Error(e?.error?.message ?? "Unable to prepare receipt for printing.");
     }
     const url = URL.createObjectURL(await res.blob());
+    let cleanedUp = false;
+    const closeAfterPrint = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      URL.revokeObjectURL(url);
+      if (!popup.closed) popup.close();
+    };
+    // Close the temporary receipt window once the native print dialog is
+    // dismissed, whether the user prints or cancels.
+    popup.onafterprint = closeAfterPrint;
     popup.onload = () => {
       popup.focus();
       popup.print();
-      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
     };
     popup.location.href = url;
   } catch (error) {
