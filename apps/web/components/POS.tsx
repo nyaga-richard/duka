@@ -43,7 +43,7 @@ import {
   money,
   privateStore,
   updatePrivateStore,
-  download,
+  printPdf,
   ApiError,
 } from "./lib";
 import {
@@ -1954,12 +1954,11 @@ export default function POS() {
             <strong>Total</strong>
             <b>{currency(receipt?.total, meta.company.currency)}</b>
           </div>
-          <p className="fiscal-notice">
-            {receipt?.fiscal?.status === "successful"
-              ? `Fiscal reference: ${receipt.fiscal.fiscal_id}`
-              : "Not a KRA fiscal invoice. Fiscal status: " +
-                (receipt?.fiscal?.status ?? "disabled")}
-          </p>
+          {receipt?.etims_enabled && receipt?.fiscal?.status === "successful" && (
+            <p className="fiscal-notice">
+              eTIMS reference: {receipt.fiscal.fiscal_id}
+            </p>
+          )}
         </div>
         <div className="form-actions">
           <a
@@ -1973,14 +1972,16 @@ export default function POS() {
               ? "Print sales invoice (A4)"
               : "Print invoice (A4)"}
           </a>
-          <a
-            className="btn secondary"
-            href={`/api/v1/sales/${receipt?.id}/receipt?thermal=true`}
-            target="_blank"
-            rel="noreferrer"
+          <Button
+            variant="secondary"
+            onClick={() =>
+              printPdf(`/sales/${receipt?.id}/receipt?thermal=true`).catch((e) =>
+                notify(e.message, "error"),
+              )
+            }
           >
-            <Printer size={16} /> Print receipt
-          </a>
+            <Printer size={16} /> Print thermal receipt
+          </Button>
           <Button
             onClick={() => {
               setReceipt(null);

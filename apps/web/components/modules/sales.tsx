@@ -21,6 +21,7 @@ import {
   D,
   money,
   useQuery,
+  printPdf,
 } from "../lib";
 import {
   Button,
@@ -397,14 +398,12 @@ export function SalesPage() {
                 </div>
               ))}
             </div>
-            <div className="warning-box">
-              <ReceiptText size={18} />
-              <p>
-                {invoice.fiscal?.status === "successful"
-                  ? `Fiscal identifier: ${invoice.fiscal.fiscal_id}`
-                  : `This document is not a KRA fiscal invoice. Fiscal submission status: ${invoice.fiscal?.status ?? "disabled"}.`}
-              </p>
-            </div>
+            {invoice.etims_enabled && invoice.fiscal?.status === "successful" && (
+              <div className="warning-box">
+                <ReceiptText size={18} />
+                <p>eTIMS fiscal identifier: {invoice.fiscal.fiscal_id}</p>
+              </div>
+            )}
             <div className="form-actions">
               <a
                 className="btn secondary"
@@ -414,14 +413,16 @@ export function SalesPage() {
               >
                 <Printer size={16} /> A4 invoice
               </a>
-              <a
-                className="btn secondary"
-                href={`/api/v1/sales/${invoice.id}/receipt?thermal=true`}
-                target="_blank"
-                rel="noreferrer"
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  printPdf(`/sales/${invoice.id}/receipt?thermal=true`).catch((e) =>
+                    action.setError(e),
+                  )
+                }
               >
-                <Printer size={16} /> Thermal receipt
-              </a>
+                <Printer size={16} /> Print thermal receipt
+              </Button>
               {actor.permissions.includes("sales.return") && (
                 <Button onClick={beginReturn}>
                   <RotateCcw size={16} /> Return / credit note

@@ -1,5 +1,6 @@
 import { D, money, qty, sum, type CheckoutInput } from "@duka/shared";
 import { randomUUID } from "node:crypto";
+import { effectiveEtims } from "./integrations-config.ts";
 import {
   one,
   fail,
@@ -435,6 +436,7 @@ export async function getSale(ctx: Context, id: string, reprint = false) {
       [ctx.companyId, id],
     )
   ).rows[0];
+  const etims = await effectiveEtims(ctx.companyId);
   if (reprint) await audit(ctx, "reprint", "sale", id);
   return {
     ...redactCosts(ctx, s),
@@ -443,6 +445,7 @@ export async function getSale(ctx: Context, id: string, reprint = false) {
     company,
     branch,
     fiscal,
+    etims_enabled: etims.mode === "adapter",
   };
 }
 export async function listSales(ctx: Context, q: any) {
