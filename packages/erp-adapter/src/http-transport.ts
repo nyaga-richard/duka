@@ -9,7 +9,12 @@
  *  - never logging or persisting credentials, cookies or CSRF tokens.
  */
 import { createHmac } from "node:crypto";
-import type { ErpBinary, ErpTransport, ErpRequest, ErpResponse } from "./types.ts";
+import type {
+  ErpBinary,
+  ErpTransport,
+  ErpRequest,
+  ErpResponse,
+} from "./types.ts";
 import { ErpError } from "./errors.ts";
 
 export interface HttpTransportOptions {
@@ -23,7 +28,10 @@ export interface HttpTransportOptions {
   maxAttempts?: number;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
-  logger?: { warn: (obj: unknown, msg?: string) => void; info: (obj: unknown, msg?: string) => void };
+  logger?: {
+    warn: (obj: unknown, msg?: string) => void;
+    info: (obj: unknown, msg?: string) => void;
+  };
   /** Session lifetime assumed when the ERP does not report it. */
   sessionHours?: number;
 }
@@ -53,7 +61,10 @@ function base32Decode(input: string): Buffer {
 }
 
 /** RFC 6238 TOTP (SHA-1, 6 digits, 30 s step) used only when ERP MFA is enabled. */
-export function totpCode(secret: string, step = Math.floor(Date.now() / 30_000)): string {
+export function totpCode(
+  secret: string,
+  step = Math.floor(Date.now() / 30_000),
+): string {
   const key = base32Decode(secret);
   const buffer = Buffer.alloc(8);
   buffer.writeBigUInt64BE(BigInt(step));
@@ -63,7 +74,8 @@ export function totpCode(secret: string, step = Math.floor(Date.now() / 30_000))
   return String(code).padStart(6, "0");
 }
 
-const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const defaultSleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export class HttpErpTransport implements ErpTransport {
   private session: Session | null = null;
@@ -94,7 +106,8 @@ export class HttpErpTransport implements ErpTransport {
   private buildUrl(path: string, query?: ErpRequest["query"]): string {
     const url = new URL(this.options.baseUrl + path);
     for (const [key, value] of Object.entries(query ?? {})) {
-      if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+      if (value !== undefined && value !== null && value !== "")
+        url.searchParams.set(key, String(value));
     }
     return url.toString();
   }
@@ -131,9 +144,21 @@ export class HttpErpTransport implements ErpTransport {
       });
     } catch (error: any) {
       if (error?.name === "AbortError") {
-        throw new ErpError("ERP_TIMEOUT", "ERP login timed out", undefined, undefined, true);
+        throw new ErpError(
+          "ERP_TIMEOUT",
+          "ERP login timed out",
+          undefined,
+          undefined,
+          true,
+        );
       }
-      throw new ErpError("ERP_UNAVAILABLE", `ERP login request failed: ${error?.message ?? "network error"}`, undefined, undefined, true);
+      throw new ErpError(
+        "ERP_UNAVAILABLE",
+        `ERP login request failed: ${error?.message ?? "network error"}`,
+        undefined,
+        undefined,
+        true,
+      );
     } finally {
       clearTimeout(timer);
     }
@@ -149,10 +174,22 @@ export class HttpErpTransport implements ErpTransport {
     if (!response.ok) {
       const code = payload?.error?.code;
       if (response.status === 401) {
-        throw new ErpError("ERP_AUTH_FAILED", "The ERP rejected the integration identity credentials", 401, code, false);
+        throw new ErpError(
+          "ERP_AUTH_FAILED",
+          "The ERP rejected the integration identity credentials",
+          401,
+          code,
+          false,
+        );
       }
       if (response.status === 429) {
-        throw new ErpError("ERP_RATE_LIMITED", "ERP login is rate limited; back off", 429, code, true);
+        throw new ErpError(
+          "ERP_RATE_LIMITED",
+          "ERP login is rate limited; back off",
+          429,
+          code,
+          true,
+        );
       }
       if (response.status === 403) {
         throw new ErpError(
@@ -173,22 +210,36 @@ export class HttpErpTransport implements ErpTransport {
     }
 
     const cookies =
-      typeof (response.headers as any).getSetCookie === "function" ? (response.headers as any).getSetCookie() : [];
+      typeof (response.headers as any).getSetCookie === "function"
+        ? (response.headers as any).getSetCookie()
+        : [];
     const rawCookie = cookies.length
       ? cookies
-      : (response.headers.get("set-cookie") ?? "").split(/,(?=[^;]+=)/).filter(Boolean);
+      : (response.headers.get("set-cookie") ?? "")
+          .split(/,(?=[^;]+=)/)
+          .filter(Boolean);
     const sessionCookie = rawCookie
       .map((entry: string) => entry.split(";")[0]!.trim())
       .find((entry: string) => entry.startsWith("duka_session="));
     if (!sessionCookie) {
-      throw new ErpError("ERP_PROTOCOL", "ERP login succeeded but returned no duka_session cookie");
+      throw new ErpError(
+        "ERP_PROTOCOL",
+        "ERP login succeeded but returned no duka_session cookie",
+      );
     }
     const csrf = payload?.data?.csrf_token;
     if (typeof csrf !== "string" || csrf.length < 10) {
-      throw new ErpError("ERP_PROTOCOL", "ERP login succeeded but returned no CSRF token");
+      throw new ErpError(
+        "ERP_PROTOCOL",
+        "ERP login succeeded but returned no CSRF token",
+      );
     }
 
-    const session: Session = { cookie: sessionCookie, csrf, createdAt: Date.now() };
+    const session: Session = {
+      cookie: sessionCookie,
+      csrf,
+      createdAt: Date.now(),
+    };
     this.session = session;
     return session;
   }
@@ -196,7 +247,8 @@ export class HttpErpTransport implements ErpTransport {
   private async activeSession(force = false): Promise<Session> {
     if (force) this.session = null;
     const current = this.session;
-    if (current && Date.now() - current.createdAt < this.sessionMs - 5 * 60_000) return current;
+    if (current && Date.now() - current.createdAt < this.sessionMs - 5 * 60_000)
+      return current;
     return this.login();
   }
 
@@ -219,17 +271,24 @@ export class HttpErpTransport implements ErpTransport {
         headers["content-type"] = "application/json";
         headers["x-csrf-token"] = session.csrf;
       }
-      if (request.idempotencyKey) headers["idempotency-key"] = request.idempotencyKey;
+      if (request.idempotencyKey)
+        headers["idempotency-key"] = request.idempotencyKey;
       if (request.requestId) headers["x-request-id"] = request.requestId;
 
       let response: Response;
       try {
-        response = await this.fetchImpl(this.buildUrl(request.path, request.query), {
-          method: request.method,
-          headers,
-          body: request.body === undefined ? undefined : JSON.stringify(request.body),
-          signal: controller.signal,
-        });
+        response = await this.fetchImpl(
+          this.buildUrl(request.path, request.query),
+          {
+            method: request.method,
+            headers,
+            body:
+              request.body === undefined
+                ? undefined
+                : JSON.stringify(request.body),
+            signal: controller.signal,
+          },
+        );
       } catch (error: any) {
         clearTimeout(timer);
         const timedOut = error?.name === "AbortError";
@@ -256,7 +315,11 @@ export class HttpErpTransport implements ErpTransport {
           payload = JSON.parse(text);
         } catch {
           if (response.ok) {
-            throw new ErpError("ERP_PROTOCOL", "ERP returned a non-JSON success body", response.status);
+            throw new ErpError(
+              "ERP_PROTOCOL",
+              "ERP returned a non-JSON success body",
+              response.status,
+            );
           }
         }
       }
@@ -265,7 +328,10 @@ export class HttpErpTransport implements ErpTransport {
         return {
           status: response.status,
           data: (payload?.data ?? null) as T,
-          requestId: payload?.meta?.request_id ?? response.headers.get("x-request-id") ?? "",
+          requestId:
+            payload?.meta?.request_id ??
+            response.headers.get("x-request-id") ??
+            "",
         };
       }
 
@@ -275,7 +341,10 @@ export class HttpErpTransport implements ErpTransport {
       if (response.status === 401 && !relogged) {
         relogged = true;
         this.session = null;
-        this.options.logger?.warn({ path: request.path }, "ERP session rejected; re-authenticating once");
+        this.options.logger?.warn(
+          { path: request.path },
+          "ERP session rejected; re-authenticating once",
+        );
         continue;
       }
 
@@ -286,11 +355,20 @@ export class HttpErpTransport implements ErpTransport {
 
       if (retryable && attempt < this.maxAttempts) {
         const retryAfter = Number(response.headers.get("retry-after") ?? "");
-        await this.sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 5000) : this.backoff(attempt));
+        await this.sleep(
+          Number.isFinite(retryAfter) && retryAfter > 0
+            ? Math.min(retryAfter * 1000, 5000)
+            : this.backoff(attempt),
+        );
         continue;
       }
 
-      throw this.toError(response.status, erpCode, message, payload?.error?.details);
+      throw this.toError(
+        response.status,
+        erpCode,
+        message,
+        payload?.error?.details,
+      );
     }
   }
 
@@ -316,10 +394,13 @@ export class HttpErpTransport implements ErpTransport {
           signal: AbortSignal.timeout(this.timeoutMs),
         });
       } catch (error: any) {
-        const timedOut = error?.name === "AbortError" || error?.name === "TimeoutError";
+        const timedOut =
+          error?.name === "AbortError" || error?.name === "TimeoutError";
         throw new ErpError(
           timedOut ? "ERP_TIMEOUT" : "ERP_UNAVAILABLE",
-          timedOut ? `ERP download ${path} timed out` : `ERP download ${path} failed: ${error?.message ?? "network error"}`,
+          timedOut
+            ? `ERP download ${path} timed out`
+            : `ERP download ${path} failed: ${error?.message ?? "network error"}`,
           undefined,
           undefined,
           true,
@@ -332,29 +413,56 @@ export class HttpErpTransport implements ErpTransport {
         continue;
       }
       if (!response.ok) {
-        throw this.toError(response.status, undefined, "attachment download rejected");
+        throw this.toError(
+          response.status,
+          undefined,
+          "attachment download rejected",
+        );
       }
 
       return {
         bytes: new Uint8Array(await response.arrayBuffer()),
-        contentType: response.headers.get("content-type") ?? "application/octet-stream",
-        filename: response.headers.get("content-disposition")?.match(/filename="?([^";]+)"?/)?.[1],
+        contentType:
+          response.headers.get("content-type") ?? "application/octet-stream",
+        filename: response.headers
+          .get("content-disposition")
+          ?.match(/filename="?([^";]+)"?/)?.[1],
       };
     }
   }
 
   private backoff(attempt: number): number {
-    return Math.min(250 * 2 ** (attempt - 1), 4_000) + Math.floor(Math.random() * 100);
+    return (
+      Math.min(250 * 2 ** (attempt - 1), 4_000) +
+      Math.floor(Math.random() * 100)
+    );
   }
 
-  private toError(status: number, erpCode?: string, message?: string, details?: unknown): ErpError {
+  private toError(
+    status: number,
+    erpCode?: string,
+    message?: string,
+    details?: unknown,
+  ): ErpError {
     const suffix = erpCode ? ` (${erpCode})` : "";
     switch (status) {
       case 400:
       case 422:
-        return new ErpError("ERP_VALIDATION", `ERP rejected the payload${suffix}: ${message ?? "validation error"}`, status, erpCode, false, details);
+        return new ErpError(
+          "ERP_VALIDATION",
+          `ERP rejected the payload${suffix}: ${message ?? "validation error"}`,
+          status,
+          erpCode,
+          false,
+          details,
+        );
       case 401:
-        return new ErpError("ERP_AUTH_FAILED", "ERP authentication failed", status, erpCode);
+        return new ErpError(
+          "ERP_AUTH_FAILED",
+          "ERP authentication failed",
+          status,
+          erpCode,
+        );
       case 403:
         return new ErpError(
           "ERP_FORBIDDEN",
@@ -363,11 +471,29 @@ export class HttpErpTransport implements ErpTransport {
           erpCode,
         );
       case 404:
-        return new ErpError("ERP_NOT_FOUND", `ERP resource not found${suffix}`, status, erpCode);
+        return new ErpError(
+          "ERP_NOT_FOUND",
+          `ERP resource not found${suffix}`,
+          status,
+          erpCode,
+        );
       case 409:
-        return new ErpError("ERP_CONFLICT", `ERP state conflict${suffix}: ${message ?? "conflict"}`, status, erpCode, false, details);
+        return new ErpError(
+          "ERP_CONFLICT",
+          `ERP state conflict${suffix}: ${message ?? "conflict"}`,
+          status,
+          erpCode,
+          false,
+          details,
+        );
       case 429:
-        return new ErpError("ERP_RATE_LIMITED", "ERP rate limit reached", status, erpCode, true);
+        return new ErpError(
+          "ERP_RATE_LIMITED",
+          "ERP rate limit reached",
+          status,
+          erpCode,
+          true,
+        );
       default:
         return new ErpError(
           status >= 500 ? "ERP_UNAVAILABLE" : "ERP_PROTOCOL",
@@ -380,7 +506,12 @@ export class HttpErpTransport implements ErpTransport {
     }
   }
 
-  async health(): Promise<{ ok: boolean; live: boolean; ready: boolean; detail?: unknown }> {
+  async health(): Promise<{
+    ok: boolean;
+    live: boolean;
+    ready: boolean;
+    detail?: unknown;
+  }> {
     const probe = async (path: string) => {
       try {
         const response = await this.fetchImpl(this.buildUrl(path), {
@@ -392,7 +523,10 @@ export class HttpErpTransport implements ErpTransport {
         return false;
       }
     };
-    const [live, ready] = await Promise.all([probe("/health/live"), probe("/health/ready")]);
+    const [live, ready] = await Promise.all([
+      probe("/health/live"),
+      probe("/health/ready"),
+    ]);
     return { ok: live && ready, live, ready };
   }
 

@@ -15,7 +15,13 @@ export const reviewSchema = z
 
 export async function createReview(
   tx: Queryable,
-  input: { customerId: number; orderLineId: number; rating: number; title?: string; comment?: string },
+  input: {
+    customerId: number;
+    orderLineId: number;
+    rating: number;
+    title?: string;
+    comment?: string;
+  },
 ) {
   const lines = await tx.query<any>(
     `SELECT l.order_line_id, l.product_id, o.customer_id, o.order_status_id
@@ -30,14 +36,24 @@ export async function createReview(
   if (![3, 4, 5, 6].includes(line.order_status_id)) {
     fail(409, "CONFLICT", "Only paid or delivered purchases can be reviewed");
   }
-  const existing = await tx.query("SELECT 1 FROM review WHERE order_line_id = $1", [input.orderLineId]);
-  if (existing.rowCount > 0) fail(409, "CONFLICT", "This purchase has already been reviewed");
+  const existing = await tx.query(
+    "SELECT 1 FROM review WHERE order_line_id = $1",
+    [input.orderLineId],
+  );
+  if (existing.rowCount > 0)
+    fail(409, "CONFLICT", "This purchase has already been reviewed");
 
   const review = await tx.query<any>(
     `INSERT INTO review(order_line_id, customer_id, rating, title, comment, status)
      VALUES($1,$2,$3,$4,$5,'pending')
      RETURNING review_id, rating, title, comment, status, created_at`,
-    [input.orderLineId, input.customerId, input.rating, input.title ?? null, input.comment ?? null],
+    [
+      input.orderLineId,
+      input.customerId,
+      input.rating,
+      input.title ?? null,
+      input.comment ?? null,
+    ],
   );
   await audit(tx, {
     actorType: "customer",
@@ -50,7 +66,10 @@ export async function createReview(
   return review.rows[0];
 }
 
-export async function listPublishedReviews(db: Queryable, input: { slugOrId: string; page: number; limit: number }) {
+export async function listPublishedReviews(
+  db: Queryable,
+  input: { slugOrId: string; page: number; limit: number },
+) {
   const isNumeric = /^\d+$/.test(input.slugOrId);
   const products = await db.query<{ product_id: number }>(
     `SELECT product_id FROM product WHERE (($1::boolean AND product_id = $2::int) OR (NOT $1::boolean AND slug = $3)) LIMIT 1`,

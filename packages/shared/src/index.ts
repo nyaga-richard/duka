@@ -32,7 +32,10 @@ export const MONEY_PATTERN = /^(0|[1-9]\d{0,11})(\.\d{1,2})?$/;
 export const moneyString = z
   .string()
   .trim()
-  .regex(MONEY_PATTERN, "Use a decimal string with at most 2 places, e.g. 1250.00")
+  .regex(
+    MONEY_PATTERN,
+    "Use a decimal string with at most 2 places, e.g. 1250.00",
+  )
   .transform((v) => money(v));
 
 export const positiveMoneyString = moneyString.refine(
@@ -69,7 +72,10 @@ export const kenyanPhone = z
   .string()
   .trim()
   .transform((v) => normalizeKenyanPhone(v))
-  .refine((v): v is string => Boolean(v), "Use a Kenyan mobile number, e.g. 0712345678");
+  .refine(
+    (v): v is string => Boolean(v),
+    "Use a Kenyan mobile number, e.g. 0712345678",
+  );
 
 export function slugify(input: string): string {
   return input
@@ -103,7 +109,12 @@ export type OrderStatusName =
   | "refunded"
   | "payment_failed";
 
-export const RESERVATION_STATUSES = ["active", "consumed", "released", "expired"] as const;
+export const RESERVATION_STATUSES = [
+  "active",
+  "consumed",
+  "released",
+  "expired",
+] as const;
 export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 
 export const PERMISSIONS = [

@@ -38,13 +38,31 @@ async function main() {
   };
 
   await Promise.all([
-    build({ ...common, entryPoints: ["apps/api/src/index.ts"], outfile: `${outdir}/api.mjs` }),
-    build({ ...common, entryPoints: ["apps/api/src/worker.ts"], outfile: `${outdir}/worker.mjs` }),
-    build({ ...common, entryPoints: ["scripts/migrate.ts"], outfile: `${outdir}/migrate.mjs` }),
-    build({ ...common, entryPoints: ["database/seeds/phase1.ts"], outfile: `${outdir}/seed.mjs` }),
+    build({
+      ...common,
+      entryPoints: ["apps/api/src/index.ts"],
+      outfile: `${outdir}/api.mjs`,
+    }),
+    build({
+      ...common,
+      entryPoints: ["apps/api/src/worker.ts"],
+      outfile: `${outdir}/worker.mjs`,
+    }),
+    build({
+      ...common,
+      entryPoints: ["scripts/migrate.ts"],
+      outfile: `${outdir}/migrate.mjs`,
+    }),
+    build({
+      ...common,
+      entryPoints: ["database/seeds/phase1.ts"],
+      outfile: `${outdir}/seed.mjs`,
+    }),
   ]);
 
-  console.log("Built dist/api.mjs, dist/worker.mjs, dist/migrate.mjs, dist/seed.mjs");
+  console.log(
+    "Built dist/api.mjs, dist/worker.mjs, dist/migrate.mjs, dist/seed.mjs",
+  );
 }
 
 main().catch((error) => {

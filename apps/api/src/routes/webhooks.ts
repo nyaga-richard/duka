@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { endpoint } from "../http/route.ts";
-import { ingestPaymentWebhook, schedulePaymentSync } from "../services/payments.ts";
+import {
+  ingestPaymentWebhook,
+  schedulePaymentSync,
+} from "../services/payments.ts";
 import { config } from "../config.ts";
 
 export function registerWebhookRoutes(router: Router) {
@@ -11,7 +14,8 @@ export function registerWebhookRoutes(router: Router) {
     {
       auth: "public",
       transactional: false,
-      summary: "Provider payment webhook (HMAC-verified, deduplicated by event id)",
+      summary:
+        "Provider payment webhook (HMAC-verified, deduplicated by event id)",
       tags: ["webhooks"],
     },
     async ({ ctx }) => {
@@ -22,8 +26,13 @@ export function registerWebhookRoutes(router: Router) {
         "x-webhook-signature": ctx.req.header("x-webhook-signature"),
         "x-request-id": ctx.req.header("x-request-id"),
       };
-      const result = await ingestPaymentWebhook(ctx.db, { providerName: provider, headers, rawBody });
-      if (result.processed && result.orderId) await schedulePaymentSync(ctx.db, result.orderId);
+      const result = await ingestPaymentWebhook(ctx.db, {
+        providerName: provider,
+        headers,
+        rawBody,
+      });
+      if (result.processed && result.orderId)
+        await schedulePaymentSync(ctx.db, result.orderId);
       return {
         status: 200,
         data: {
@@ -31,7 +40,8 @@ export function registerWebhookRoutes(router: Router) {
           duplicate: result.duplicate,
           processed: result.processed,
           reason: result.reason ?? null,
-          environment: config.env === "production" ? "production" : "non-production",
+          environment:
+            config.env === "production" ? "production" : "non-production",
         },
       };
     },

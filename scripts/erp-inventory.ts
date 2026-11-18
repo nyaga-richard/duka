@@ -19,10 +19,17 @@ if (!erpRoot) {
   console.error("usage: tsx scripts/erp-inventory.ts <erp-repo> [output.md]");
   process.exit(2);
 }
-const output = process.argv[3] ?? path.resolve("docs/ERP_ENDPOINT_INVENTORY.md");
+const output =
+  process.argv[3] ?? path.resolve("docs/ERP_ENDPOINT_INVENTORY.md");
 const routesFile = path.join(erpRoot, "apps/api/src/routes/index.ts");
 const source = await readFile(routesFile, "utf8");
-const file = ts.createSourceFile(routesFile, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const file = ts.createSourceFile(
+  routesFile,
+  source,
+  ts.ScriptTarget.Latest,
+  true,
+  ts.ScriptKind.TS,
+);
 
 interface Row {
   method: string;
@@ -36,7 +43,8 @@ const rows: Row[] = [];
 
 function literal(node: ts.Node | undefined): string | null {
   if (!node) return null;
-  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+    return node.text;
   return null;
 }
 
@@ -60,7 +68,12 @@ function visit(node: ts.Node) {
     rows.push({
       method: (method ?? expression(methodArg)).toUpperCase(),
       routePath: routePath ?? expression(pathArg),
-      permission: permission ?? (permissionArg.kind === ts.SyntaxKind.Identifier && permissionArg.getText(file) === "undefined" ? "—" : expression(permissionArg)),
+      permission:
+        permission ??
+        (permissionArg.kind === ts.SyntaxKind.Identifier &&
+        permissionArg.getText(file) === "undefined"
+          ? "—"
+          : expression(permissionArg)),
       summary: summary ?? expression(summaryArg),
       computed: !method || !routePath,
     });
@@ -76,7 +89,9 @@ const header = [
 const body = rows.map(
   (row) =>
     `| ${row.method} | \`${row.routePath}\`${row.computed ? " *(computed)*" : ""} | ${
-      row.permission === "—" ? "authenticated / service-checked" : `\`${row.permission.replaceAll("|", "\\|")}\``
+      row.permission === "—"
+        ? "authenticated / service-checked"
+        : `\`${row.permission.replaceAll("|", "\\|")}\``
     } | ${row.summary.replaceAll("|", "\\|")} |`,
 );
 

@@ -1,5 +1,9 @@
 /** Provider-agnostic payment boundary. No provider is enabled by default. */
-export type PaymentIntentStatus = "pending" | "requires_action" | "succeeded" | "failed";
+export type PaymentIntentStatus =
+  | "pending"
+  | "requires_action"
+  | "succeeded"
+  | "failed";
 
 export interface CreateIntentInput {
   orderId: number;

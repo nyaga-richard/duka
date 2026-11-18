@@ -6,7 +6,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Server } from "node:http";
-import { createEmbeddedDatabase, setDatabase, closeDatabase, type Database } from "../apps/api/src/db/index.ts";
+import {
+  createEmbeddedDatabase,
+  setDatabase,
+  closeDatabase,
+  type Database,
+} from "../apps/api/src/db/index.ts";
 import { migrate } from "../apps/api/src/db/migrate.ts";
 import { createApp } from "../apps/api/src/app.ts";
 import { provisionAdmin } from "../apps/api/src/services/auth.ts";
@@ -28,7 +33,9 @@ export async function startTestContext(): Promise<TestContext> {
 
   const app = createApp({ db });
   const server = app.listen(0, "127.0.0.1");
-  await new Promise<void>((resolve) => server.once("listening", () => resolve()));
+  await new Promise<void>((resolve) =>
+    server.once("listening", () => resolve()),
+  );
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : 0;
 
@@ -57,12 +64,28 @@ export interface ApiClient {
   request: <T = any>(
     method: string,
     path: string,
-    options?: { body?: unknown; headers?: Record<string, string | undefined>; origin?: string | null },
+    options?: {
+      body?: unknown;
+      headers?: Record<string, string | undefined>;
+      origin?: string | null;
+    },
   ) => Promise<ApiResponse<T>>;
   get: <T = any>(path: string) => Promise<ApiResponse<T>>;
-  post: <T = any>(path: string, body?: unknown, headers?: Record<string, string>) => Promise<ApiResponse<T>>;
-  patch: <T = any>(path: string, body?: unknown, headers?: Record<string, string>) => Promise<ApiResponse<T>>;
-  put: <T = any>(path: string, body?: unknown, headers?: Record<string, string>) => Promise<ApiResponse<T>>;
+  post: <T = any>(
+    path: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ) => Promise<ApiResponse<T>>;
+  patch: <T = any>(
+    path: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ) => Promise<ApiResponse<T>>;
+  put: <T = any>(
+    path: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ) => Promise<ApiResponse<T>>;
   del: <T = any>(path: string) => Promise<ApiResponse<T>>;
   setCsrfFromBody: (body: any) => void;
 }
@@ -72,15 +95,28 @@ export function apiClient(baseUrl: string): ApiClient {
   const client: ApiClient = {
     cookies,
     csrf: null,
-    async request<T>(method: string, requestPath: string, options: { body?: unknown; headers?: Record<string, string | undefined>; origin?: string | null } = {}) {
+    async request<T>(
+      method: string,
+      requestPath: string,
+      options: {
+        body?: unknown;
+        headers?: Record<string, string | undefined>;
+        origin?: string | null;
+      } = {},
+    ) {
       const headers: Record<string, string> = {
         accept: "application/json",
         "content-type": "application/json",
       };
-      const origin = options.origin === undefined ? ALLOWED_ORIGIN : options.origin;
+      const origin =
+        options.origin === undefined ? ALLOWED_ORIGIN : options.origin;
       if (origin) headers.origin = origin;
-      if (cookies.size) headers.cookie = [...cookies.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
-      if (client.csrf && method !== "GET") headers["x-csrf-token"] = client.csrf;
+      if (cookies.size)
+        headers.cookie = [...cookies.entries()]
+          .map(([name, value]) => `${name}=${value}`)
+          .join("; ");
+      if (client.csrf && method !== "GET")
+        headers["x-csrf-token"] = client.csrf;
       for (const [key, value] of Object.entries(options.headers ?? {})) {
         if (value === undefined) delete headers[key];
         else headers[key] = value;
@@ -88,7 +124,8 @@ export function apiClient(baseUrl: string): ApiClient {
       const response = await fetch(`${baseUrl}${requestPath}`, {
         method,
         headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        body:
+          options.body === undefined ? undefined : JSON.stringify(options.body),
       });
       const setCookies = (response.headers as any).getSetCookie?.() ?? [];
       for (const cookie of setCookies as string[]) {
@@ -106,15 +143,29 @@ export function apiClient(baseUrl: string): ApiClient {
       } catch {
         body = text;
       }
-      return { status: response.status, body, headers: response.headers, data: body?.data as T };
+      return {
+        status: response.status,
+        body,
+        headers: response.headers,
+        data: body?.data as T,
+      };
     },
     get: <T>(requestPath: string) => client.request<T>("GET", requestPath),
-    post: <T>(requestPath: string, body?: unknown, headers?: Record<string, string>) =>
-      client.request<T>("POST", requestPath, { body, headers }),
-    patch: <T>(requestPath: string, body?: unknown, headers?: Record<string, string>) =>
-      client.request<T>("PATCH", requestPath, { body, headers }),
-    put: <T>(requestPath: string, body?: unknown, headers?: Record<string, string>) =>
-      client.request<T>("PUT", requestPath, { body, headers }),
+    post: <T>(
+      requestPath: string,
+      body?: unknown,
+      headers?: Record<string, string>,
+    ) => client.request<T>("POST", requestPath, { body, headers }),
+    patch: <T>(
+      requestPath: string,
+      body?: unknown,
+      headers?: Record<string, string>,
+    ) => client.request<T>("PATCH", requestPath, { body, headers }),
+    put: <T>(
+      requestPath: string,
+      body?: unknown,
+      headers?: Record<string, string>,
+    ) => client.request<T>("PUT", requestPath, { body, headers }),
     del: <T>(requestPath: string) => client.request<T>("DELETE", requestPath),
     setCsrfFromBody: (body: any) => {
       client.csrf = body?.csrf_token ?? null;
@@ -140,7 +191,13 @@ export interface CatalogueFixture {
 
 export async function seedCatalogue(
   db: Database,
-  input: { name?: string; sku?: string; price?: string; stock?: number; status?: "active" | "draft" } = {},
+  input: {
+    name?: string;
+    sku?: string;
+    price?: string;
+    stock?: number;
+    status?: "active" | "draft";
+  } = {},
 ): Promise<CatalogueFixture> {
   const name = input.name ?? "Kanzu Shirt";
   const sku = input.sku ?? "KANZU-M-BLK";
@@ -161,13 +218,21 @@ export async function seedCatalogue(
   const product = await db.query<{ product_id: number }>(
     `INSERT INTO product(product_name, description, brand, brand_id, slug, status, summary)
      VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING product_id`,
-    [name, "A test product", "Duka", brand.rows[0]!.brand_id, slug, input.status ?? "active", "Test product summary"],
+    [
+      name,
+      "A test product",
+      "Duka",
+      brand.rows[0]!.brand_id,
+      slug,
+      input.status ?? "active",
+      "Test product summary",
+    ],
   );
   const productId = product.rows[0]!.product_id;
-  await db.query("INSERT INTO product_category(product_id, category_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [
-    productId,
-    category.rows[0]!.category_id,
-  ]);
+  await db.query(
+    "INSERT INTO product_category(product_id, category_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
+    [productId, category.rows[0]!.category_id],
+  );
   const option = await db.query<{ option_id: number }>(
     "INSERT INTO product_option(product_id, option_name, sort_order) VALUES($1,'Size',1) RETURNING option_id",
     [productId],
@@ -181,11 +246,14 @@ export async function seedCatalogue(
      VALUES($1,$2,$3,$4,true,true) RETURNING variant_id`,
     [productId, sku, price, stock],
   );
-  await db.query("INSERT INTO variant_option_value(variant_id, option_id, option_value_id) VALUES($1,$2,$3)", [
-    variant.rows[0]!.variant_id,
-    option.rows[0]!.option_id,
-    optionValue.rows[0]!.option_value_id,
-  ]);
+  await db.query(
+    "INSERT INTO variant_option_value(variant_id, option_id, option_value_id) VALUES($1,$2,$3)",
+    [
+      variant.rows[0]!.variant_id,
+      option.rows[0]!.option_id,
+      optionValue.rows[0]!.option_value_id,
+    ],
+  );
   await db.query(
     `INSERT INTO product_image(product_id, image_url, alt_text, is_primary) VALUES($1,$2,$3,true)`,
     [productId, `https://cdn.example.test/${slug}.jpg`, name],
@@ -205,7 +273,11 @@ export async function seedCatalogue(
   };
 }
 
-export async function seedAdmin(db: Database, role = "owner", email = "owner@shop.test") {
+export async function seedAdmin(
+  db: Database,
+  role = "owner",
+  email = "owner@shop.test",
+) {
   return provisionAdmin(db, {
     email,
     password: "OwnerPassword2026!",
@@ -214,17 +286,30 @@ export async function seedAdmin(db: Database, role = "owner", email = "owner@sho
   });
 }
 
-export async function adminClient(baseUrl: string, db: Database, role = "owner", email?: string) {
-  const adminEmail = email ?? (role === "owner" ? "owner@shop.test" : `${role}@shop.test`);
+export async function adminClient(
+  baseUrl: string,
+  db: Database,
+  role = "owner",
+  email?: string,
+) {
+  const adminEmail =
+    email ?? (role === "owner" ? "owner@shop.test" : `${role}@shop.test`);
   await seedAdmin(db, role, adminEmail);
   const client = apiClient(baseUrl);
-  const login = await client.post("/api/v1/admin/auth/login", { email: adminEmail, password: "OwnerPassword2026!" });
-  if (login.status !== 200) throw new Error(`admin login failed: ${JSON.stringify(login.body)}`);
+  const login = await client.post("/api/v1/admin/auth/login", {
+    email: adminEmail,
+    password: "OwnerPassword2026!",
+  });
+  if (login.status !== 200)
+    throw new Error(`admin login failed: ${JSON.stringify(login.body)}`);
   client.setCsrfFromBody(login.data);
   return client;
 }
 
-export async function customerClient(baseUrl: string, email = "shopper@example.test") {
+export async function customerClient(
+  baseUrl: string,
+  email = "shopper@example.test",
+) {
   const client = apiClient(baseUrl);
   const register = await client.post("/api/v1/auth/register", {
     email,
@@ -233,21 +318,30 @@ export async function customerClient(baseUrl: string, email = "shopper@example.t
     last_name: "Wanjiku",
     phone: "0712345678",
   });
-  if (register.status !== 201) throw new Error(`register failed: ${JSON.stringify(register.body)}`);
+  if (register.status !== 201)
+    throw new Error(`register failed: ${JSON.stringify(register.body)}`);
   client.setCsrfFromBody(register.data);
   return client;
 }
 
-export async function guestClient(baseUrl: string, email = "guest@example.test") {
+export async function guestClient(
+  baseUrl: string,
+  email = "guest@example.test",
+) {
   const client = apiClient(baseUrl);
   const guest = await client.post("/api/v1/auth/guest", { email });
-  if (guest.status !== 201) throw new Error(`guest failed: ${JSON.stringify(guest.body)}`);
+  if (guest.status !== 201)
+    throw new Error(`guest failed: ${JSON.stringify(guest.body)}`);
   client.setCsrfFromBody(guest.data);
   return client;
 }
 
 /** Add one item and return the cart view. */
-export async function addToCart(client: ApiClient, variantId: number, quantity = 1) {
+export async function addToCart(
+  client: ApiClient,
+  variantId: number,
+  quantity = 1,
+) {
   return client.post("/api/v1/cart/items", { variant_id: variantId, quantity });
 }
 
@@ -268,6 +362,9 @@ export async function checkout(
       phone: "0712345678",
       email: input.email,
     },
-    { "idempotency-key": input.key ?? `test-${Math.random().toString(36).slice(2)}` },
+    {
+      "idempotency-key":
+        input.key ?? `test-${Math.random().toString(36).slice(2)}`,
+    },
   );
 }

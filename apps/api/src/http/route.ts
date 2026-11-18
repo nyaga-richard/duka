@@ -6,7 +6,12 @@
  * and `/api/v1/openapi.json` describe actual code, not a hand-written list.
  */
 import { createHash } from "node:crypto";
-import { Router, type Request, type Response, type NextFunction } from "express";
+import {
+  Router,
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
 import { z, ZodError, type ZodType } from "zod";
 import type { Database, Transaction } from "../db/index.ts";
 import { fail } from "../errors.ts";
@@ -15,7 +20,12 @@ import { sendData } from "./respond.ts";
 import { requireAnyPermission, verifyCsrf } from "../services/auth.ts";
 import type { Permission } from "@ecom/shared";
 
-export type AuthMode = "public" | "customer" | "customer_or_guest" | "admin" | "any";
+export type AuthMode =
+  | "public"
+  | "customer"
+  | "customer_or_guest"
+  | "admin"
+  | "any";
 
 export interface EndpointOptions {
   auth?: AuthMode;
@@ -44,7 +54,12 @@ export interface RouteResult {
    * the given headers instead of the usual `{ data, meta }` envelope; the route
    * is still registered, so it still appears in the generated API docs.
    */
-  raw?: { bytes: Uint8Array; contentType: string; cacheControl?: string; etag?: string };
+  raw?: {
+    bytes: Uint8Array;
+    contentType: string;
+    cacheControl?: string;
+    etag?: string;
+  };
   /**
    * Side effects that must happen after the database transaction commits:
    * provider calls, ERP queueing. Runs once, outside the transaction; mutating
@@ -81,13 +96,15 @@ export function selectActor(ctx: RequestContext, mode: AuthMode): Actor | null {
     case "public":
       return admin ?? customer ?? guest ?? null;
     case "any":
-      if (!admin && !customer && !guest) fail(401, "UNAUTHENTICATED", "Please sign in");
+      if (!admin && !customer && !guest)
+        fail(401, "UNAUTHENTICATED", "Please sign in");
       return admin ?? customer ?? guest;
     case "customer":
       if (!customer) fail(401, "UNAUTHENTICATED", "Customer sign-in required");
       return customer;
     case "customer_or_guest":
-      if (!customer && !guest) fail(401, "UNAUTHENTICATED", "A customer or guest session is required");
+      if (!customer && !guest)
+        fail(401, "UNAUTHENTICATED", "A customer or guest session is required");
       return customer ?? guest;
     case "admin":
       if (!admin) {
@@ -97,8 +114,12 @@ export function selectActor(ctx: RequestContext, mode: AuthMode): Actor | null {
   }
 }
 
-function requireAdmin(actor: Actor | null, permissions: Permission[]): NonNullable<RequestContext["actor"]> {
-  if (!actor || actor.kind !== "admin") fail(401, "UNAUTHENTICATED", "Store administrator sign-in required");
+function requireAdmin(
+  actor: Actor | null,
+  permissions: Permission[],
+): NonNullable<RequestContext["actor"]> {
+  if (!actor || actor.kind !== "admin")
+    fail(401, "UNAUTHENTICATED", "Store administrator sign-in required");
   if (permissions.length) requireAnyPermission(actor, permissions);
   return actor;
 }
@@ -125,82 +146,103 @@ export function endpoint(
   };
   routeRegistry.push(registered);
 
-  router[method](path, async (req: Request, res: Response, next: NextFunction) => {
-    const decorated = req as Request & { db: Database; requestId: string };
-    const ctx: RequestContext = {
-      req,
-      res,
-      db: decorated.db,
-      requestId: decorated.requestId,
-      ip: req.ip ?? req.socket?.remoteAddress ?? "unknown",
-      actor: null,
-      startedAt: Date.now(),
-    };
-    try {
-      const actor = selectActor(ctx, auth);
-      ctx.actor = actor;
+  router[method](
+    path,
+    async (req: Request, res: Response, next: NextFunction) => {
+      const decorated = req as Request & { db: Database; requestId: string };
+      const ctx: RequestContext = {
+        req,
+        res,
+        db: decorated.db,
+        requestId: decorated.requestId,
+        ip: req.ip ?? req.socket?.remoteAddress ?? "unknown",
+        actor: null,
+        startedAt: Date.now(),
+      };
+      try {
+        const actor = selectActor(ctx, auth);
+        ctx.actor = actor;
 
-      if (actor && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
-        verifyCsrf(actor, req.header("X-CSRF-Token"));
-      }
-      if (auth === "admin") requireAdmin(actor, registered.permissions);
-
-      const query = options.query ? options.query.parse(req.query) : undefined;
-      const body = options.body ? options.body.parse(req.body ?? {}) : undefined;
-      const key = req.header("Idempotency-Key");
-
-      let result: RouteResult;
-      if (options.idempotent) {
-        if (!key) {
-          fail(422, "IDEMPOTENCY_REQUIRED", "Idempotency-Key header is required for this operation");
+        if (actor && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+          verifyCsrf(actor, req.header("X-CSRF-Token"));
         }
-        result = await runIdempotent(
-          ctx.db,
-          {
-            scope: `${method} ${path}`,
-            key: key!,
-            request: { params: req.params ?? {}, body: body ?? null },
-          },
-          async (tx) => handler({ ctx, body, query, tx }),
-        );
-      } else if (transactional) {
-        result = await ctx.db.withTransaction(async (tx) => handler({ ctx, body, query, tx }));
-      } else {
-        result = await handler({ ctx, body, query, tx: null });
-      }
+        if (auth === "admin") requireAdmin(actor, registered.permissions);
 
-      // Post-commit side effects (payment provider, ERP queue) run here, once.
-      if (result.afterCommit) {
-        await result.afterCommit(result.data);
-        if (options.idempotent && !(result as any).replayed) {
-          // Refresh the replay record so a retry sees the final response.
-          await ctx.db.query(
-            "UPDATE idempotency_key SET response = $3, status_code = $4 WHERE scope = $1 AND key = $2",
-            [
-              `${method} ${path}`,
-              key,
-              JSON.stringify({ data: result.data }),
-              result.status ?? options.status ?? 200,
-            ],
+        const query = options.query
+          ? options.query.parse(req.query)
+          : undefined;
+        const body = options.body
+          ? options.body.parse(req.body ?? {})
+          : undefined;
+        const key = req.header("Idempotency-Key");
+
+        let result: RouteResult;
+        if (options.idempotent) {
+          if (!key) {
+            fail(
+              422,
+              "IDEMPOTENCY_REQUIRED",
+              "Idempotency-Key header is required for this operation",
+            );
+          }
+          result = await runIdempotent(
+            ctx.db,
+            {
+              scope: `${method} ${path}`,
+              key: key!,
+              request: { params: req.params ?? {}, body: body ?? null },
+            },
+            async (tx) => handler({ ctx, body, query, tx }),
           );
+        } else if (transactional) {
+          result = await ctx.db.withTransaction(async (tx) =>
+            handler({ ctx, body, query, tx }),
+          );
+        } else {
+          result = await handler({ ctx, body, query, tx: null });
         }
-      }
 
-      if (result.raw) {
-        res.status(result.status ?? 200);
-        res.setHeader("content-type", result.raw.contentType);
-        res.setHeader("content-length", String(result.raw.bytes.byteLength));
-        res.setHeader("cache-control", result.raw.cacheControl ?? "public, max-age=300");
-        if (result.raw.etag) res.setHeader("etag", result.raw.etag);
-        res.end(Buffer.from(result.raw.bytes));
-        return;
-      }
+        // Post-commit side effects (payment provider, ERP queue) run here, once.
+        if (result.afterCommit) {
+          await result.afterCommit(result.data);
+          if (options.idempotent && !(result as any).replayed) {
+            // Refresh the replay record so a retry sees the final response.
+            await ctx.db.query(
+              "UPDATE idempotency_key SET response = $3, status_code = $4 WHERE scope = $1 AND key = $2",
+              [
+                `${method} ${path}`,
+                key,
+                JSON.stringify({ data: result.data }),
+                result.status ?? options.status ?? 200,
+              ],
+            );
+          }
+        }
 
-      sendData(res, ctx.requestId, result.data, result.status ?? options.status ?? 200);
-    } catch (error) {
-      next(error);
-    }
-  });
+        if (result.raw) {
+          res.status(result.status ?? 200);
+          res.setHeader("content-type", result.raw.contentType);
+          res.setHeader("content-length", String(result.raw.bytes.byteLength));
+          res.setHeader(
+            "cache-control",
+            result.raw.cacheControl ?? "public, max-age=300",
+          );
+          if (result.raw.etag) res.setHeader("etag", result.raw.etag);
+          res.end(Buffer.from(result.raw.bytes));
+          return;
+        }
+
+        sendData(
+          res,
+          ctx.requestId,
+          result.data,
+          result.status ?? options.status ?? 200,
+        );
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 }
 
 /** Deterministic JSON for request hashing. */
@@ -245,12 +287,17 @@ export async function runIdempotent<T>(
         status: string;
         response: any;
         status_code: number | null;
-      }>("SELECT request_hash, status, response, status_code FROM idempotency_key WHERE scope=$1 AND key=$2", [
-        input.scope,
-        input.key,
-      ]);
+      }>(
+        "SELECT request_hash, status, response, status_code FROM idempotency_key WHERE scope=$1 AND key=$2",
+        [input.scope, input.key],
+      );
       const row = existing.rows[0];
-      if (!row) fail(409, "CONFLICT", "Idempotency record disappeared; retry the request");
+      if (!row)
+        fail(
+          409,
+          "CONFLICT",
+          "Idempotency record disappeared; retry the request",
+        );
       if (row.request_hash !== hash) {
         fail(
           409,
@@ -259,15 +306,28 @@ export async function runIdempotent<T>(
         );
       }
       if (row.status !== "completed") {
-        fail(409, "IDEMPOTENCY_IN_PROGRESS", "An identical request is still in progress");
+        fail(
+          409,
+          "IDEMPOTENCY_IN_PROGRESS",
+          "An identical request is still in progress",
+        );
       }
-      return { status: row.status_code ?? 200, data: row.response?.data ?? null, replayed: true } as RouteResult;
+      return {
+        status: row.status_code ?? 200,
+        data: row.response?.data ?? null,
+        replayed: true,
+      } as RouteResult;
     }
 
     const result = await handler(tx);
     await tx.query(
       "UPDATE idempotency_key SET status='completed', status_code=$3, response=$4 WHERE scope=$1 AND key=$2",
-      [input.scope, input.key, result.status ?? 200, JSON.stringify({ data: result.data })],
+      [
+        input.scope,
+        input.key,
+        result.status ?? 200,
+        JSON.stringify({ data: result.data }),
+      ],
     );
     return result;
   });
@@ -304,7 +364,14 @@ export function openApiDocument() {
           ]
         : []),
       ...(route.method !== "get"
-        ? [{ in: "header", name: "X-CSRF-Token", required: route.auth !== "public", schema: { type: "string" } }]
+        ? [
+            {
+              in: "header",
+              name: "X-CSRF-Token",
+              required: route.auth !== "public",
+              schema: { type: "string" },
+            },
+          ]
         : []),
     ];
     paths[path] ??= {};
@@ -322,7 +389,9 @@ export function openApiDocument() {
         ? {
             requestBody: {
               required: true,
-              content: { "application/json": { schema: jsonSchema(route.body) } },
+              content: {
+                "application/json": { schema: jsonSchema(route.body) },
+              },
             },
           }
         : {}),
@@ -351,7 +420,11 @@ export function openApiDocument() {
       securitySchemes: {
         customerSession: { type: "apiKey", in: "cookie", name: "ecom_session" },
         guestSession: { type: "apiKey", in: "cookie", name: "ecom_guest" },
-        adminSession: { type: "apiKey", in: "cookie", name: "ecom_admin_session" },
+        adminSession: {
+          type: "apiKey",
+          in: "cookie",
+          name: "ecom_admin_session",
+        },
       },
     },
   };
@@ -359,7 +432,10 @@ export function openApiDocument() {
 
 export function docsHtml() {
   const escape = (value: string) =>
-    value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
+    value
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll('"', "&quot;");
   const rows = routeRegistry
     .map(
       (route) =>

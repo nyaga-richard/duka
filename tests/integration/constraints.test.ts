@@ -1,6 +1,11 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
-import { startTestContext, seedCatalogue, type TestContext, type CatalogueFixture } from "../helpers.ts";
+import {
+  startTestContext,
+  seedCatalogue,
+  type TestContext,
+  type CatalogueFixture,
+} from "../helpers.ts";
 
 let ctx: TestContext;
 let catalogue: CatalogueFixture;
@@ -15,7 +20,10 @@ const insertCustomer = async (email = "constraints@example.test") => {
   return row.rows[0]!.customer_id;
 };
 
-const insertCart = async (owner: { customerId?: number; guestSessionId?: string }) => {
+const insertCart = async (owner: {
+  customerId?: number;
+  guestSessionId?: string;
+}) => {
   const row = await ctx.db.query<{ cart_id: string }>(
     "INSERT INTO cart(customer_id, guest_session_id) VALUES($1,$2) RETURNING cart_id",
     [owner.customerId ?? null, owner.guestSessionId ?? null],
@@ -30,7 +38,9 @@ const insertOrder = async (
   shipping = "0.00",
   totalOverride?: string,
 ) => {
-  const total = totalOverride ?? (Number(subtotal) - Number(discount) + Number(shipping)).toFixed(2);
+  const total =
+    totalOverride ??
+    (Number(subtotal) - Number(discount) + Number(shipping)).toFixed(2);
   const row = await ctx.db.query<{ order_id: number }>(
     `INSERT INTO customer_order(customer_id, order_status_id, subtotal, discount_total, shipping_cost, order_total, email)
      VALUES($1,$2,$3,$4,$5,$6,'constraints@example.test') RETURNING order_id`,
@@ -39,12 +49,20 @@ const insertOrder = async (
   return row.rows[0]!.order_id;
 };
 
-async function expectDbError(promise: Promise<unknown>, code: string, message?: RegExp) {
+async function expectDbError(
+  promise: Promise<unknown>,
+  code: string,
+  message?: RegExp,
+) {
   try {
     await promise;
     assert.fail(`expected database error ${code}`);
   } catch (error: any) {
-    assert.equal(error.code, code, `expected ${code}, received ${error.code}: ${error.message}`);
+    assert.equal(
+      error.code,
+      code,
+      `expected ${code}, received ${error.code}: ${error.message}`,
+    );
     if (message) assert.match(error.message, message);
   }
 }
@@ -61,34 +79,52 @@ after(async () => {
 
 test("customer email is unique and must be lower case", async () => {
   await expectDbError(insertCustomer("constraints@example.test"), "23505");
-  await expectDbError(insertCustomer("UPPER@example.test"), "23514", /ck_customer_email_lower/);
+  await expectDbError(
+    insertCustomer("UPPER@example.test"),
+    "23514",
+    /ck_customer_email_lower/,
+  );
 });
 
 test("foreign keys are enforced (order line needs a real order and variant)", async () => {
   await expectDbError(
-    ctx.db.query("INSERT INTO order_line(order_id, variant_id, quantity, unit_price) VALUES(999999,$1,1,'10.00')", [
-      catalogue.variant_id,
-    ]),
+    ctx.db.query(
+      "INSERT INTO order_line(order_id, variant_id, quantity, unit_price) VALUES(999999,$1,1,'10.00')",
+      [catalogue.variant_id],
+    ),
     "23503",
   );
   const orderId = await insertOrder();
   await expectDbError(
-    ctx.db.query("INSERT INTO order_line(order_id, variant_id, quantity, unit_price) VALUES($1,999999,1,'10.00')", [orderId]),
+    ctx.db.query(
+      "INSERT INTO order_line(order_id, variant_id, quantity, unit_price) VALUES($1,999999,1,'10.00')",
+      [orderId],
+    ),
     "23503",
   );
 });
 
 test("an order cannot contain the same variant twice", async () => {
   const orderId = await insertOrder();
-  await ctx.db.query("INSERT INTO order_line(order_id, variant_id, quantity, unit_price) VALUES($1,$2,1,'10.00')", [orderId, catalogue.variant_id]);
+  await ctx.db.query(
+    "INSERT INTO order_line(order_id, variant_id, quantity, unit_price) VALUES($1,$2,1,'10.00')",
+    [orderId, catalogue.variant_id],
+  );
   await expectDbError(
-    ctx.db.query("INSERT INTO order_line(order_id, variant_id, quantity, unit_price) VALUES($1,$2,1,'10.00')", [orderId, catalogue.variant_id]),
+    ctx.db.query(
+      "INSERT INTO order_line(order_id, variant_id, quantity, unit_price) VALUES($1,$2,1,'10.00')",
+      [orderId, catalogue.variant_id],
+    ),
     "23505",
   );
 });
 
 test("order totals must add up and be non-negative", async () => {
-  await expectDbError(insertOrder(2, "100.00", "0.00", "0.00", "120.00"), "23514", /ck_order_math/);
+  await expectDbError(
+    insertOrder(2, "100.00", "0.00", "0.00", "120.00"),
+    "23514",
+    /ck_order_math/,
+  );
   await expectDbError(insertOrder(2, "-1.00", "0.00", "0.00"), "23514");
 });
 
@@ -99,18 +135,39 @@ test("reviews are limited to 1–5 stars and one per purchased line", async () =
     [orderId, catalogue.variant_id],
   );
   const lineId = line.rows[0]!.order_line_id;
-  await expectDbError(ctx.db.query("INSERT INTO review(order_line_id, rating) VALUES($1,6)", [lineId]), "23514", /ck_review_rating/);
-  await ctx.db.query("INSERT INTO review(order_line_id, rating) VALUES($1,5)", [lineId]);
-  await expectDbError(ctx.db.query("INSERT INTO review(order_line_id, rating) VALUES($1,4)", [lineId]), "23505");
+  await expectDbError(
+    ctx.db.query("INSERT INTO review(order_line_id, rating) VALUES($1,6)", [
+      lineId,
+    ]),
+    "23514",
+    /ck_review_rating/,
+  );
+  await ctx.db.query("INSERT INTO review(order_line_id, rating) VALUES($1,5)", [
+    lineId,
+  ]);
+  await expectDbError(
+    ctx.db.query("INSERT INTO review(order_line_id, rating) VALUES($1,4)", [
+      lineId,
+    ]),
+    "23505",
+  );
 });
 
 test("a cart has exactly one owner", async () => {
-  await expectDbError(ctx.db.query("INSERT INTO cart(customer_id, guest_session_id) VALUES(NULL,NULL)"), "23514");
+  await expectDbError(
+    ctx.db.query(
+      "INSERT INTO cart(customer_id, guest_session_id) VALUES(NULL,NULL)",
+    ),
+    "23514",
+  );
   const guest = await ctx.db.query<{ guest_session_id: string }>(
     "INSERT INTO guest_session(token_hash, csrf_token, expires_at) VALUES('hash-1','csrf',now() + interval '1 day') RETURNING guest_session_id",
   );
   await expectDbError(
-    ctx.db.query("INSERT INTO cart(customer_id, guest_session_id) VALUES($1,$2)", [customerId, guest.rows[0]!.guest_session_id]),
+    ctx.db.query(
+      "INSERT INTO cart(customer_id, guest_session_id) VALUES($1,$2)",
+      [customerId, guest.rows[0]!.guest_session_id],
+    ),
     "23514",
   );
 });
@@ -118,13 +175,18 @@ test("a cart has exactly one owner", async () => {
 test("one active cart per customer, but a converted cart does not block a new one", async () => {
   const first = await insertCart({ customerId });
   await expectDbError(insertCart({ customerId }), "23505");
-  await ctx.db.query("UPDATE cart SET status = 'converted' WHERE cart_id = $1", [first]);
+  await ctx.db.query(
+    "UPDATE cart SET status = 'converted' WHERE cart_id = $1",
+    [first],
+  );
   const second = await insertCart({ customerId });
   assert.ok(second);
 });
 
 test("reservations require a positive quantity and unique active cart+variant", async () => {
-  const cartId = await insertCart({ customerId: await insertCustomer("reservations@example.test") });
+  const cartId = await insertCart({
+    customerId: await insertCustomer("reservations@example.test"),
+  });
   await expectDbError(
     ctx.db.query(
       "INSERT INTO inventory_reservation(cart_id, variant_id, quantity, expires_at) VALUES($1,$2,0, now() + interval '10 minutes')",
@@ -148,7 +210,10 @@ test("reservations require a positive quantity and unique active cart+variant", 
 test("payments must be positive and provider references are unique per transaction", async () => {
   const orderId = await insertOrder();
   await expectDbError(
-    ctx.db.query("INSERT INTO payment(order_id, provider_reference, amount, payment_status) VALUES($1,'ref-1',0,'succeeded')", [orderId]),
+    ctx.db.query(
+      "INSERT INTO payment(order_id, provider_reference, amount, payment_status) VALUES($1,'ref-1',0,'succeeded')",
+      [orderId],
+    ),
     "23514",
   );
   const transaction = await ctx.db.query<{ transaction_id: string }>(
@@ -205,11 +270,15 @@ test("ERP mappings are unique in both directions", async () => {
     `INSERT INTO erp_entity_map(entity_type, local_id, erp_id) VALUES('product','1','erp-1')`,
   );
   await expectDbError(
-    ctx.db.query(`INSERT INTO erp_entity_map(entity_type, local_id, erp_id) VALUES('product','1','erp-2')`),
+    ctx.db.query(
+      `INSERT INTO erp_entity_map(entity_type, local_id, erp_id) VALUES('product','1','erp-2')`,
+    ),
     "23505",
   );
   await expectDbError(
-    ctx.db.query(`INSERT INTO erp_entity_map(entity_type, local_id, erp_id) VALUES('product','2','erp-1')`),
+    ctx.db.query(
+      `INSERT INTO erp_entity_map(entity_type, local_id, erp_id) VALUES('product','2','erp-1')`,
+    ),
     "23505",
   );
 });
@@ -233,9 +302,15 @@ test("promotion windows and discount types are constrained", async () => {
 
 test("idempotency records are unique per scope and key", async () => {
   const hash = "a".repeat(64);
-  await ctx.db.query("INSERT INTO idempotency_key(scope, key, request_hash) VALUES('scope','key',$1)", [hash]);
+  await ctx.db.query(
+    "INSERT INTO idempotency_key(scope, key, request_hash) VALUES('scope','key',$1)",
+    [hash],
+  );
   await expectDbError(
-    ctx.db.query("INSERT INTO idempotency_key(scope, key, request_hash) VALUES('scope','key',$1)", [hash]),
+    ctx.db.query(
+      "INSERT INTO idempotency_key(scope, key, request_hash) VALUES('scope','key',$1)",
+      [hash],
+    ),
     "23505",
   );
 });

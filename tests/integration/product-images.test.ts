@@ -12,7 +12,9 @@ const helpers = await import("../helpers.ts");
 const { ErpAdapter, HttpErpTransport } = await import("@ecom/erp-adapter");
 const { createFakeErp } = await import("@ecom/erp-adapter/testing/fake-erp.ts");
 const sync = await import("../../apps/api/src/services/sync.ts");
-const { setErpAdapterForTest } = await import("../../apps/api/src/integrations/erp.ts");
+const { setErpAdapterForTest } = await import(
+  "../../apps/api/src/integrations/erp.ts"
+);
 const images = await import("../../apps/api/src/services/product-images.ts");
 
 type TestContext = import("../helpers.ts").TestContext;
@@ -30,8 +32,18 @@ const PNG = (() => {
 before(async () => {
   ctx = await helpers.startTestContext();
   fake = createFakeErp();
-  const shirt = fake.createProduct({ sku: "SHIRT-M", name: "Kanzu Shirt", price: "1250.00", stock: "4", active: true });
-  fake.attachImage(shirt.id, { bytes: PNG, mime_type: "image/png", filename: "kanzu.png" });
+  const shirt = fake.createProduct({
+    sku: "SHIRT-M",
+    name: "Kanzu Shirt",
+    price: "1250.00",
+    stock: "4",
+    active: true,
+  });
+  fake.attachImage(shirt.id, {
+    bytes: PNG,
+    mime_type: "image/png",
+    filename: "kanzu.png",
+  });
 
   const transport = new HttpErpTransport({
     baseUrl: "https://erp.example.test",
@@ -71,28 +83,40 @@ test("a transport without binary support reports the capability as unsupported",
     },
     health: async () => ({ ok: true, live: true, ready: true }),
   });
-  await assert.rejects(() => jsonOnly.downloadAttachment("whatever"), /unsupported|binary/i);
+  await assert.rejects(
+    () => jsonOnly.downloadAttachment("whatever"),
+    /unsupported|binary/i,
+  );
 });
 
 test("the catalogue pull records the ERP image as the product's primary image", async () => {
   const summary = await sync.pullCatalog(ctx.db, adapter);
   assert.ok(summary.products >= 1);
 
-  const row = await ctx.db.query<{ image_url: string; alt_text: string; is_primary: boolean }>(
+  const row = await ctx.db.query<{
+    image_url: string;
+    alt_text: string;
+    is_primary: boolean;
+  }>(
     `SELECT i.image_url, i.alt_text, i.is_primary
        FROM product_image i JOIN product p ON p.product_id = i.product_id
       WHERE p.product_name = 'Kanzu Shirt'`,
   );
   assert.equal(row.rows.length, 1);
   const attachmentId = fake.state.products[0]!.image_attachment_id!;
-  assert.equal(row.rows[0]!.image_url, `/api/v1/catalog/images/${attachmentId}`);
+  assert.equal(
+    row.rows[0]!.image_url,
+    `/api/v1/catalog/images/${attachmentId}`,
+  );
   assert.equal(row.rows[0]!.alt_text, "Kanzu Shirt");
   assert.equal(row.rows[0]!.is_primary, true);
 });
 
 test("the image route serves the ERP bytes for a published product", async () => {
   const attachmentId = fake.state.products[0]!.image_attachment_id!;
-  const response = await fetch(`${ctx.baseUrl}/api/v1/catalog/images/${attachmentId}`);
+  const response = await fetch(
+    `${ctx.baseUrl}/api/v1/catalog/images/${attachmentId}`,
+  );
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "image/png");
   assert.match(response.headers.get("cache-control") ?? "", /max-age=\d+/);
@@ -102,37 +126,61 @@ test("the image route serves the ERP bytes for a published product", async () =>
 
 test("the image route refuses unknown ids and unpublished products", async () => {
   const attachmentId = fake.state.products[0]!.image_attachment_id!;
-  const unknown = await fetch(`${ctx.baseUrl}/api/v1/catalog/images/00000000-0000-0000-0000-000000000000`);
+  const unknown = await fetch(
+    `${ctx.baseUrl}/api/v1/catalog/images/00000000-0000-0000-0000-000000000000`,
+  );
   assert.equal(unknown.status, 404);
 
-  const malformed = await fetch(`${ctx.baseUrl}/api/v1/catalog/images/..%2F..%2Fetc%2Fpasswd`);
+  const malformed = await fetch(
+    `${ctx.baseUrl}/api/v1/catalog/images/..%2F..%2Fetc%2Fpasswd`,
+  );
   assert.equal(malformed.status, 404);
 
   const product = await ctx.db.query<{ product_id: number }>(
     "SELECT product_id FROM product WHERE product_name = 'Kanzu Shirt'",
   );
-  await ctx.db.query("UPDATE product SET status = 'draft' WHERE product_id = $1", [product.rows[0]!.product_id]);
+  await ctx.db.query(
+    "UPDATE product SET status = 'draft' WHERE product_id = $1",
+    [product.rows[0]!.product_id],
+  );
   try {
-    const hidden = await fetch(`${ctx.baseUrl}/api/v1/catalog/images/${attachmentId}`);
-    assert.equal(hidden.status, 404, "a draft product's image must not be fetchable");
+    const hidden = await fetch(
+      `${ctx.baseUrl}/api/v1/catalog/images/${attachmentId}`,
+    );
+    assert.equal(
+      hidden.status,
+      404,
+      "a draft product's image must not be fetchable",
+    );
   } finally {
-    await ctx.db.query("UPDATE product SET status = 'active' WHERE product_id = $1", [product.rows[0]!.product_id]);
+    await ctx.db.query(
+      "UPDATE product SET status = 'active' WHERE product_id = $1",
+      [product.rows[0]!.product_id],
+    );
   }
 });
 
 test("a replaced ERP photo replaces the stored URL", async () => {
   const product = fake.state.products[0]!;
-  const replacement = fake.attachImage(product.id, { bytes: PNG, filename: "kanzu-v2.png" });
+  const replacement = fake.attachImage(product.id, {
+    bytes: PNG,
+    filename: "kanzu-v2.png",
+  });
   await sync.pullCatalog(ctx.db, adapter);
   const row = await ctx.db.query<{ image_url: string }>(
     `SELECT i.image_url FROM product_image i JOIN product p ON p.product_id = i.product_id
       WHERE p.product_name = 'Kanzu Shirt'`,
   );
-  assert.equal(row.rows[0]!.image_url, `/api/v1/catalog/images/${replacement.id}`);
+  assert.equal(
+    row.rows[0]!.image_url,
+    `/api/v1/catalog/images/${replacement.id}`,
+  );
 });
 
 test("an unreachable ERP degrades to a transparent pixel, uncached", async () => {
-  await ctx.db.query("UPDATE product SET status = 'active' WHERE product_name = 'Kanzu Shirt'");
+  await ctx.db.query(
+    "UPDATE product SET status = 'active' WHERE product_name = 'Kanzu Shirt'",
+  );
   const attachmentId = fake.state.products[0]!.image_attachment_id!;
   images.clearImageCache();
 
@@ -150,7 +198,9 @@ test("an unreachable ERP degrades to a transparent pixel, uncached", async () =>
   );
   setErpAdapterForTest(unreachable);
   try {
-    const response = await fetch(`${ctx.baseUrl}/api/v1/catalog/images/${attachmentId}`);
+    const response = await fetch(
+      `${ctx.baseUrl}/api/v1/catalog/images/${attachmentId}`,
+    );
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "image/png");
     assert.equal(response.headers.get("cache-control"), "no-store");

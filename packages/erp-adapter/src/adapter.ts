@@ -40,13 +40,21 @@ export interface SalesOrderDocumentInput {
   warehouseId?: string;
   customerId?: string;
   notes?: string;
-  lines: Array<{ productId: string; quantity: number | string; unitPrice?: string }>;
+  lines: Array<{
+    productId: string;
+    quantity: number | string;
+    unitPrice?: string;
+  }>;
 }
 
 export interface ErpSaleInput {
   registerId: string;
   customerId?: string;
-  lines: Array<{ productId: string; quantity: number | string; unitPrice?: string }>;
+  lines: Array<{
+    productId: string;
+    quantity: number | string;
+    unitPrice?: string;
+  }>;
   payments: Array<{ methodId: string; amount: string; reference?: string }>;
   notes?: string;
 }
@@ -59,7 +67,10 @@ export interface SettlementInput {
   allocations?: Array<{ saleId: string; amount: string }>;
 }
 
-export function erpIdempotencyKey(operation: string, localId: string | number): string {
+export function erpIdempotencyKey(
+  operation: string,
+  localId: string | number,
+): string {
   const safe = String(localId).replace(/[^A-Za-z0-9._:-]/g, "-");
   return `ecommerce:${operation}:${safe}`.slice(0, 150);
 }
@@ -68,7 +79,10 @@ export function erpIdempotencyKey(operation: string, localId: string | number): 
  * The ERP's `endpoint()` wrapper accepts only owner-permitted fields; these
  * helpers convert adapter input to the exact wire shapes verified in the ERP.
  */
-function orderLine(line: { productId: string; quantity: number | string }): Record<string, unknown> {
+function orderLine(line: {
+  productId: string;
+  quantity: number | string;
+}): Record<string, unknown> {
   return { product_id: line.productId, quantity: String(line.quantity) };
 }
 
@@ -85,10 +99,13 @@ export class ErpAdapter {
   /** Verified-but-optional probe: health, identity and granted permissions. */
   async probe() {
     const health = await this.transport.health();
-    let identity: { id: string; email: string; permissions: string[] } | null = null;
+    let identity: { id: string; email: string; permissions: string[] } | null =
+      null;
     let error: string | null = null;
     try {
-      const me = await this.transport.request<{ actor: { id: string; email: string; permissions?: string[] } }>({
+      const me = await this.transport.request<{
+        actor: { id: string; email: string; permissions?: string[] };
+      }>({
         method: "GET",
         path: "/api/v1/auth/me",
       });
@@ -98,27 +115,38 @@ export class ErpAdapter {
         permissions: me.data.actor.permissions ?? [],
       };
     } catch (caught) {
-      error = caught instanceof ErpError ? `${caught.code}: ${caught.message}` : String(caught);
+      error =
+        caught instanceof ErpError
+          ? `${caught.code}: ${caught.message}`
+          : String(caught);
     }
     return { health, identity, error };
   }
 
   async metadata(): Promise<ErpMetadata> {
-    const response = await this.transport.request<ErpMetadata>({ method: "GET", path: "/api/v1/metadata" });
+    const response = await this.transport.request<ErpMetadata>({
+      method: "GET",
+      path: "/api/v1/metadata",
+    });
     if (!response.data?.company?.id) {
-      throw new ErpError("ERP_PROTOCOL", "ERP metadata response did not include a company");
+      throw new ErpError(
+        "ERP_PROTOCOL",
+        "ERP metadata response did not include a company",
+      );
     }
     return response.data;
   }
 
-  async listProducts(input: {
-    page?: number;
-    limit?: number;
-    q?: string;
-    active?: "true" | "all";
-    categoryId?: string;
-    warehouseId?: string;
-  } = {}): Promise<ErpPage<ErpProduct>> {
+  async listProducts(
+    input: {
+      page?: number;
+      limit?: number;
+      q?: string;
+      active?: "true" | "all";
+      categoryId?: string;
+      warehouseId?: string;
+    } = {},
+  ): Promise<ErpPage<ErpProduct>> {
     const response = await this.transport.request<ErpPage<ErpProduct>>({
       method: "GET",
       path: "/api/v1/products",
@@ -133,11 +161,17 @@ export class ErpAdapter {
     });
     const page = response.data;
     if (!page || !Array.isArray(page.items)) {
-      throw new ErpError("ERP_PROTOCOL", "ERP products response was not paginated as documented");
+      throw new ErpError(
+        "ERP_PROTOCOL",
+        "ERP products response was not paginated as documented",
+      );
     }
     for (const item of page.items) {
       if (!item.id || !item.sku) {
-        throw new ErpError("ERP_PROTOCOL", "ERP product row missing id/sku; refusing to map it");
+        throw new ErpError(
+          "ERP_PROTOCOL",
+          "ERP product row missing id/sku; refusing to map it",
+        );
       }
     }
     return page;
@@ -156,7 +190,10 @@ export class ErpAdapter {
     });
     const items = response.data?.items;
     if (!Array.isArray(items)) {
-      throw new ErpError("ERP_PROTOCOL", "ERP product attachments response was not a list");
+      throw new ErpError(
+        "ERP_PROTOCOL",
+        "ERP product attachments response was not a list",
+      );
     }
     return items.filter((item) => typeof item?.id === "string");
   }
@@ -167,11 +204,20 @@ export class ErpAdapter {
    */
   async downloadAttachment(attachmentId: string): Promise<ErpBinary> {
     if (typeof this.transport.download !== "function") {
-      throw unsupported("binary attachment download", "GET /api/v1/attachments/:id", "G10");
+      throw unsupported(
+        "binary attachment download",
+        "GET /api/v1/attachments/:id",
+        "G10",
+      );
     }
-    const binary = await this.transport.download(`/api/v1/attachments/${encodeURIComponent(attachmentId)}`);
+    const binary = await this.transport.download(
+      `/api/v1/attachments/${encodeURIComponent(attachmentId)}`,
+    );
     if (!binary?.bytes?.length) {
-      throw new ErpError("ERP_PROTOCOL", "ERP returned an empty attachment body");
+      throw new ErpError(
+        "ERP_PROTOCOL",
+        "ERP returned an empty attachment body",
+      );
     }
     return binary;
   }
@@ -182,13 +228,25 @@ export class ErpAdapter {
     for (;;) {
       const result = await this.listProducts({ page, limit });
       for (const item of result.items) yield item;
-      if (page * result.limit >= result.total || result.items.length === 0) return;
+      if (page * result.limit >= result.total || result.items.length === 0)
+        return;
       page += 1;
-      if (page > 10_000) throw new ErpError("ERP_PROTOCOL", "ERP catalogue pagination did not terminate");
+      if (page > 10_000)
+        throw new ErpError(
+          "ERP_PROTOCOL",
+          "ERP catalogue pagination did not terminate",
+        );
     }
   }
 
-  async listInventory(input: { page?: number; limit?: number; q?: string; warehouseId?: string } = {}) {
+  async listInventory(
+    input: {
+      page?: number;
+      limit?: number;
+      q?: string;
+      warehouseId?: string;
+    } = {},
+  ) {
     const response = await this.transport.request<ErpPage<ErpInventoryRow>>({
       method: "GET",
       path: "/api/v1/inventory/balances",
@@ -200,19 +258,30 @@ export class ErpAdapter {
       },
     });
     if (!response.data || !Array.isArray(response.data.items)) {
-      throw new ErpError("ERP_PROTOCOL", "ERP inventory response was not paginated as documented");
+      throw new ErpError(
+        "ERP_PROTOCOL",
+        "ERP inventory response was not paginated as documented",
+      );
     }
     return response.data;
   }
 
-  async *iterateInventory(limit = 100, warehouseId?: string): AsyncGenerator<ErpInventoryRow> {
+  async *iterateInventory(
+    limit = 100,
+    warehouseId?: string,
+  ): AsyncGenerator<ErpInventoryRow> {
     let page = 1;
     for (;;) {
       const result = await this.listInventory({ page, limit, warehouseId });
       for (const item of result.items) yield item;
-      if (page * result.limit >= result.total || result.items.length === 0) return;
+      if (page * result.limit >= result.total || result.items.length === 0)
+        return;
       page += 1;
-      if (page > 10_000) throw new ErpError("ERP_PROTOCOL", "ERP inventory pagination did not terminate");
+      if (page > 10_000)
+        throw new ErpError(
+          "ERP_PROTOCOL",
+          "ERP inventory pagination did not terminate",
+        );
     }
   }
 
@@ -225,7 +294,10 @@ export class ErpAdapter {
     return response.data?.items ?? [];
   }
 
-  async createCustomer(input: CreateCustomerInput, idempotencyKey?: string): Promise<ErpCustomer> {
+  async createCustomer(
+    input: CreateCustomerInput,
+    idempotencyKey?: string,
+  ): Promise<ErpCustomer> {
     const response = await this.transport.request<ErpCustomer>({
       method: "POST",
       path: "/api/v1/customers",
@@ -241,13 +313,19 @@ export class ErpAdapter {
         discount_percent: "0",
         active: true,
       },
-      idempotencyKey: idempotencyKey ?? erpIdempotencyKey("customer", input.code),
+      idempotencyKey:
+        idempotencyKey ?? erpIdempotencyKey("customer", input.code),
     });
-    if (!response.data?.id) throw new ErpError("ERP_PROTOCOL", "ERP customer create returned no id");
+    if (!response.data?.id)
+      throw new ErpError("ERP_PROTOCOL", "ERP customer create returned no id");
     return response.data;
   }
 
-  async updateCustomer(id: string, input: Partial<CreateCustomerInput>, idempotencyKey?: string): Promise<ErpCustomer> {
+  async updateCustomer(
+    id: string,
+    input: Partial<CreateCustomerInput>,
+    idempotencyKey?: string,
+  ): Promise<ErpCustomer> {
     const response = await this.transport.request<ErpCustomer>({
       method: "PUT",
       path: `/api/v1/customers/${id}`,
@@ -263,14 +341,22 @@ export class ErpAdapter {
         discount_percent: "0",
         active: true,
       },
-      idempotencyKey: idempotencyKey ?? erpIdempotencyKey("customer-update", id),
+      idempotencyKey:
+        idempotencyKey ?? erpIdempotencyKey("customer-update", id),
     });
     return response.data;
   }
 
   /** Creates a sales_order document. Does not reserve stock until approved. */
-  async createSalesOrderDocument(input: SalesOrderDocumentInput, idempotencyKey?: string) {
-    const response = await this.transport.request<{ id: string; number: string; status: string }>({
+  async createSalesOrderDocument(
+    input: SalesOrderDocumentInput,
+    idempotencyKey?: string,
+  ) {
+    const response = await this.transport.request<{
+      id: string;
+      number: string;
+      status: string;
+    }>({
       method: "POST",
       path: "/api/v1/documents",
       body: {
@@ -281,9 +367,12 @@ export class ErpAdapter {
         notes: input.notes,
         lines: input.lines.map(orderLine),
       },
-      idempotencyKey: idempotencyKey ?? erpIdempotencyKey("sales-order", input.customerId ?? "guest"),
+      idempotencyKey:
+        idempotencyKey ??
+        erpIdempotencyKey("sales-order", input.customerId ?? "guest"),
     });
-    if (!response.data?.id) throw new ErpError("ERP_PROTOCOL", "ERP document create returned no id");
+    if (!response.data?.id)
+      throw new ErpError("ERP_PROTOCOL", "ERP document create returned no id");
     return response.data;
   }
 
@@ -293,17 +382,25 @@ export class ErpAdapter {
     reason: string,
     idempotencyKey?: string,
   ) {
-    const response = await this.transport.request<{ id: string; status: string }>({
+    const response = await this.transport.request<{
+      id: string;
+      status: string;
+    }>({
       method: "POST",
       path: `/api/v1/documents/${id}/transition`,
       body: { status, reason },
-      idempotencyKey: idempotencyKey ?? erpIdempotencyKey(`document-${status}`, id),
+      idempotencyKey:
+        idempotencyKey ?? erpIdempotencyKey(`document-${status}`, id),
     });
     return response.data;
   }
 
   async postSale(input: ErpSaleInput, idempotencyKey: string) {
-    const response = await this.transport.request<{ id: string; number: string; total: string }>({
+    const response = await this.transport.request<{
+      id: string;
+      number: string;
+      total: string;
+    }>({
       method: "POST",
       path: "/api/v1/sales",
       body: {
@@ -320,17 +417,24 @@ export class ErpAdapter {
       },
       idempotencyKey,
     });
-    if (!response.data?.id) throw new ErpError("ERP_PROTOCOL", "ERP sale POST returned no id");
+    if (!response.data?.id)
+      throw new ErpError("ERP_PROTOCOL", "ERP sale POST returned no id");
     return response.data;
   }
 
   async getSale(id: string): Promise<ErpSaleSummary> {
-    const response = await this.transport.request<ErpSaleSummary>({ method: "GET", path: `/api/v1/sales/${id}` });
+    const response = await this.transport.request<ErpSaleSummary>({
+      method: "GET",
+      path: `/api/v1/sales/${id}`,
+    });
     return response.data;
   }
 
   async settleCustomer(input: SettlementInput, idempotencyKey: string) {
-    const response = await this.transport.request<{ id?: string; receipt_id?: string }>({
+    const response = await this.transport.request<{
+      id?: string;
+      receipt_id?: string;
+    }>({
       method: "POST",
       path: "/api/v1/customers/settlements",
       body: {
@@ -360,7 +464,10 @@ export class ErpAdapter {
     },
     idempotencyKey: string,
   ) {
-    const response = await this.transport.request<{ id: string; number: string }>({
+    const response = await this.transport.request<{
+      id: string;
+      number: string;
+    }>({
       method: "POST",
       path: "/api/v1/sales/returns",
       body: {
@@ -372,7 +479,12 @@ export class ErpAdapter {
           restock: line.restock,
         })),
         ...(input.refundAmount && input.methodId
-          ? { payment: { method_id: input.methodId, amount: input.refundAmount } }
+          ? {
+              payment: {
+                method_id: input.methodId,
+                amount: input.refundAmount,
+              },
+            }
           : {}),
       },
       idempotencyKey,
@@ -384,26 +496,50 @@ export class ErpAdapter {
   // Capabilities the ERP does not provide. Explicit failures, never fake work.
   // -------------------------------------------------------------------------
   async reserveInventory(): Promise<never> {
-    throw unsupported("TTL stock reservations", "POST /api/v1/inventory/reservations", "G3");
+    throw unsupported(
+      "TTL stock reservations",
+      "POST /api/v1/inventory/reservations",
+      "G3",
+    );
   }
 
   async createChannelOrder(): Promise<never> {
-    throw unsupported("channel orders without an open cashier shift", "POST /api/v1/integration/orders", "G4");
+    throw unsupported(
+      "channel orders without an open cashier shift",
+      "POST /api/v1/integration/orders",
+      "G4",
+    );
   }
 
   async postPaymentByReference(): Promise<never> {
-    throw unsupported("payment posting by external reference", "POST /api/v1/integration/payments", "G5");
+    throw unsupported(
+      "payment posting by external reference",
+      "POST /api/v1/integration/payments",
+      "G5",
+    );
   }
 
   async createRefundByReference(): Promise<never> {
-    throw unsupported("refunds by external reference", "POST /api/v1/integration/refunds", "G6");
+    throw unsupported(
+      "refunds by external reference",
+      "POST /api/v1/integration/refunds",
+      "G6",
+    );
   }
 
   async createShipment(): Promise<never> {
-    throw unsupported("shipment records with tracking", "POST /api/v1/integration/shipments", "G7");
+    throw unsupported(
+      "shipment records with tracking",
+      "POST /api/v1/integration/shipments",
+      "G7",
+    );
   }
 
   async subscribeEvents(): Promise<never> {
-    throw unsupported("outbound ERP webhooks", "POST /api/v1/integration/subscriptions", "G8");
+    throw unsupported(
+      "outbound ERP webhooks",
+      "POST /api/v1/integration/subscriptions",
+      "G8",
+    );
   }
 }

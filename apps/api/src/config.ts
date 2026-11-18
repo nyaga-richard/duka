@@ -40,14 +40,18 @@ if (!databaseUrl) {
 
 const isEmbedded = databaseUrl.startsWith("pglite://");
 if (environment === "production" && isEmbedded) {
-  throw new Error("Production requires PostgreSQL; the embedded PGlite driver is not allowed");
+  throw new Error(
+    "Production requires PostgreSQL; the embedded PGlite driver is not allowed",
+  );
 }
 if (
   environment !== "production" &&
   !isEmbedded &&
   !/^postgres(ql)?:\/\//.test(databaseUrl)
 ) {
-  throw new Error("DATABASE_URL must be a postgresql:// URL or pglite://<path> in development");
+  throw new Error(
+    "DATABASE_URL must be a postgresql:// URL or pglite://<path> in development",
+  );
 }
 
 const paymentsMode = z
@@ -55,7 +59,9 @@ const paymentsMode = z
   .parse(process.env.PAYMENTS_MODE ?? "manual");
 
 if (environment === "production" && paymentsMode === "fake") {
-  throw new Error("PAYMENTS_MODE=fake is a test provider and cannot run in production");
+  throw new Error(
+    "PAYMENTS_MODE=fake is a test provider and cannot run in production",
+  );
 }
 
 const erpEnabled = bool(process.env.ERP_ENABLED, false);
@@ -68,7 +74,9 @@ if (erpEnabled) {
     throw new Error("ERP_ENABLED requires ERP_BASE_URL (http(s)://…)");
   }
   if (environment === "production" && !erpBaseUrl.startsWith("https://")) {
-    throw new Error("Production ERP integration requires ERP_BASE_URL to use https");
+    throw new Error(
+      "Production ERP integration requires ERP_BASE_URL to use https",
+    );
   }
   if (!erpEmail || !erpPassword) {
     throw new Error(
@@ -81,7 +89,9 @@ const webOrigin = process.env.WEB_ORIGIN ?? "http://localhost:3100";
 const allowedOrigins = list(process.env.ALLOWED_ORIGINS);
 if (environment === "production") {
   if (!allowedOrigins.length) {
-    throw new Error("ALLOWED_ORIGINS must list the storefront origin in production");
+    throw new Error(
+      "ALLOWED_ORIGINS must list the storefront origin in production",
+    );
   }
   if (allowedOrigins.some((o) => !o.startsWith("https://"))) {
     throw new Error("Production ALLOWED_ORIGINS must all use https");
@@ -91,7 +101,9 @@ if (environment === "production") {
   }
   if (erpEnabled && !process.env.ADMIN_BOOTSTRAP_EMAIL) {
     // Not fatal: an admin can be provisioned with the CLI. Surface it at boot.
-    process.emitWarning("No ADMIN_BOOTSTRAP_EMAIL configured; provision an admin explicitly");
+    process.emitWarning(
+      "No ADMIN_BOOTSTRAP_EMAIL configured; provision an admin explicitly",
+    );
   }
 }
 
@@ -104,7 +116,9 @@ export const config = {
   isProduction: environment === "production",
   isTest: environment === "test",
   port: int(process.env.PORT, 4100),
-  apiPublicUrl: process.env.API_PUBLIC_URL ?? `http://localhost:${int(process.env.PORT, 4100)}`,
+  apiPublicUrl:
+    process.env.API_PUBLIC_URL ??
+    `http://localhost:${int(process.env.PORT, 4100)}`,
   webOrigin,
   allowedOrigins: [...new Set([webOrigin, ...allowedOrigins])],
   trustProxy: int(process.env.TRUST_PROXY, 0),
@@ -141,7 +155,10 @@ export const config = {
     timeoutMs: int(process.env.ERP_REQUEST_TIMEOUT_MS, 15000),
     maxAttempts: Math.min(Math.max(int(process.env.ERP_MAX_ATTEMPTS, 3), 1), 6),
     reserveOrders: bool(process.env.ERP_RESERVE_ORDERS_IN_ERP, false),
-    syncIntervalMs: Math.max(int(process.env.ERP_SYNC_INTERVAL_MS, 300000), 60000),
+    syncIntervalMs: Math.max(
+      int(process.env.ERP_SYNC_INTERVAL_MS, 300000),
+      60000,
+    ),
   },
   payments: {
     mode: paymentsMode,
@@ -157,7 +174,8 @@ export const config = {
       callbackBaseUrl: process.env.MPESA_CALLBACK_BASE_URL ?? "",
     },
   },
-  logLevel: process.env.LOG_LEVEL ?? (environment === "test" ? "silent" : "info"),
+  logLevel:
+    process.env.LOG_LEVEL ?? (environment === "test" ? "silent" : "info"),
   adminBootstrap: {
     email: process.env.ADMIN_BOOTSTRAP_EMAIL ?? "",
     password: process.env.ADMIN_BOOTSTRAP_PASSWORD ?? "",
@@ -169,14 +187,20 @@ export function describeConfig() {
   return {
     env: config.env,
     port: config.port,
-    database: { driver: config.db.embedded ? "pglite" : "postgres", pool_max: config.db.poolMax },
+    database: {
+      driver: config.db.embedded ? "pglite" : "postgres",
+      pool_max: config.db.poolMax,
+    },
     web_origin: config.webOrigin,
     erp: {
       enabled: config.erp.enabled,
       base_url: config.erp.baseUrl || null,
       reserve_orders: config.erp.reserveOrders,
     },
-    payments: { mode: config.payments.mode, capture_enabled: config.payments.captureEnabled },
+    payments: {
+      mode: config.payments.mode,
+      capture_enabled: config.payments.captureEnabled,
+    },
   };
 }
 

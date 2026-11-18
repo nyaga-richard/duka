@@ -20,9 +20,10 @@ browser ──HTTPS──> web (Next, :3100) ──server-side proxy──> api 
    `ALLOWED_ORIGINS`, and `COOKIE_SECURE=true` when behind TLS.
 2. `docker compose --env-file docker/.env -f docker/docker-compose.yml up -d --build`.
 
-   In a Duka deployment this step is replaced by `bash deploy/go-live.sh`
-   (create) and `bash deploy/update.sh` (upgrade), which run the stack defined
-   by `deploy/ecommerce/compose.shop.yml` inside the `duka` Compose project.
+   In a Duka deployment this step is replaced by `bash ../duka/deploy/go-live.sh`
+   (create) and `bash ../duka/deploy/update.sh` (upgrade), which run the stack defined
+   by `deploy/compose.shop.yml` inside the `duka` Compose project.
+
 3. Confirm: `curl -sf http://localhost:4100/health/ready | jq`.
 4. Create the first administrator (once), then unset the bootstrap variables:
    ```bash
@@ -39,26 +40,26 @@ browser ──HTTPS──> web (Next, :3100) ──server-side proxy──> api 
 
 In a Duka installation the storefront is not deployed from this directory. It
 runs inside the `duka` Compose project as the `shop-*` services, created by
-`deploy/go-live.sh` and upgraded by `deploy/update.sh` using
-`deploy/ecommerce/compose.shop.yml`:
+`../duka/deploy/go-live.sh` and upgraded by `../duka/deploy/update.sh` using
+`deploy/compose.shop.yml`:
 
-| Thing | Value |
-| --- | --- |
-| database container | `duka-shop-db-1`, database `ecommerce`, role `shop_app` |
-| application containers | `duka-shop-api-1`, `duka-shop-worker-1`, `duka-shop-web-1` |
-| images | `duka-shop-api:<RELEASE>`, `duka-shop-web:<RELEASE>` |
-| config | `deploy/ecommerce/.env.shop` (0600) |
-| dump key | `deploy/ecommerce/secrets/shop-backup.key` (separate from Duka's) |
-| public entry | `https://$SHOP_PUBLIC_HOST` through Caddy on the Duka tunnel |
+| Thing                  | Value                                                        |
+| ---------------------- | ------------------------------------------------------------ |
+| database container     | `duka-shop-db-1`, database `ecommerce`, role `shop_app`      |
+| application containers | `duka-shop-api-1`, `duka-shop-worker-1`, `duka-shop-web-1`   |
+| images                 | `duka-shop-api:<RELEASE>`, `duka-shop-web:<RELEASE>`         |
+| config                 | `deploy/.env.shop` (0600)                                    |
+| dump key               | `deploy/secrets/shop-backup.key` (separate from Duka's)      |
+| public entry           | `https://$SHOP_PUBLIC_HOST` through Caddy on the Duka tunnel |
 
 Day-2 commands (no secrets on the command line):
 
 ```bash
-bash deploy/ecommerce/shop.sh status
-bash deploy/ecommerce/shop.sh logs shop-worker
-bash deploy/ecommerce/shop.sh migrate
-bash deploy/ecommerce/shop.sh backup        # encrypted + verified
-bash deploy/ecommerce/shop.sh restore <file>
+bash deploy/shop.sh status
+bash deploy/shop.sh logs shop-worker
+bash deploy/shop.sh migrate
+bash deploy/shop.sh backup        # encrypted + verified
+bash deploy/shop.sh restore <file>
 ```
 
 The ERP API is reachable at `http://api:4000` on the private network. Set
@@ -66,15 +67,15 @@ The ERP API is reachable at `http://api:4000` on the private network. Set
 ERP user must not require an interactive MFA challenge. Stock and prices are
 read from the ERP and never written back.
 
-Rollback happens through `deploy/update.sh` (both stacks roll back together if
+Rollback happens through `../duka/deploy/update.sh` (both stacks roll back together if
 either health gate fails). Do not restore a storefront dump into Duka's `duka`
 database — the schemas and owners are different by design.
 
 ## Health
 
-| Endpoint | Meaning |
-| --- | --- |
-| `GET /health/live` | Process is up. No dependency checks. |
+| Endpoint            | Meaning                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GET /health/live`  | Process is up. No dependency checks.                                                                   |
 | `GET /health/ready` | Database reachable, migrations current, worker heartbeat age, payments/ERP mode. `503` when not ready. |
 
 `checks.worker.required` is `false` outside production: a missing worker degrades
@@ -101,7 +102,7 @@ Rules:
 
 Follow [`ERP_CONNECTION_GUIDE.md`](ERP_CONNECTION_GUIDE.md). It is the ordered,
 copy-pasteable procedure — ERP role and identity, the origin rule, the six
-`SHOP_ERP_*` values in `deploy/ecommerce/.env.shop`, the probe, the first
+`SHOP_ERP_*` values in `deploy/.env.shop`, the probe, the first
 catalogue and stock pulls, one customer and one order document, plus a
 symptom→cause table. Read [`ERP_INTEGRATION_CONTRACT.md`](ERP_INTEGRATION_CONTRACT.md)
 before promising anything beyond it: those additions (G1–G9) are proposals, and

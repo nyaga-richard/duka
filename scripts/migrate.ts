@@ -14,10 +14,13 @@ try {
     for (const row of rows) {
       console.log(
         `${row.applied ? "applied" : "pending"}  ${row.version}  ${row.name}` +
-          (row.applied && row.checksum_matches === false ? "  CHECKSUM MISMATCH" : ""),
+          (row.applied && row.checksum_matches === false
+            ? "  CHECKSUM MISMATCH"
+            : ""),
       );
     }
-    if (rows.some((r) => r.applied && r.checksum_matches === false)) process.exitCode = 1;
+    if (rows.some((r) => r.applied && r.checksum_matches === false))
+      process.exitCode = 1;
   } else {
     const result = await migrate(db, { log: (line) => console.log(line) });
     console.log(

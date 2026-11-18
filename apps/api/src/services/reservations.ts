@@ -38,7 +38,10 @@ export async function lockVariant(tx: Queryable, variantId: number) {
   return variant;
 }
 
-export async function reservedQuantity(tx: Queryable, variantId: number): Promise<number> {
+export async function reservedQuantity(
+  tx: Queryable,
+  variantId: number,
+): Promise<number> {
   const rows = await tx.query<{ reserved: number }>(
     `SELECT coalesce(sum(quantity), 0)::int AS reserved
        FROM inventory_reservation
@@ -48,7 +51,11 @@ export async function reservedQuantity(tx: Queryable, variantId: number): Promis
   return Number(rows.rows[0]?.reserved ?? 0);
 }
 
-export async function availability(tx: Queryable, variantId: number, qtyInStock: number) {
+export async function availability(
+  tx: Queryable,
+  variantId: number,
+  qtyInStock: number,
+) {
   const reserved = await reservedQuantity(tx, variantId);
   return Math.max(0, Number(qtyInStock) - reserved);
 }
@@ -68,7 +75,11 @@ export interface ReserveInput {
  */
 export async function reserveStock(tx: Queryable, input: ReserveInput) {
   if (!Number.isInteger(input.quantity) || input.quantity <= 0) {
-    fail(422, "VALIDATION_ERROR", "Reservation quantity must be a positive whole number");
+    fail(
+      422,
+      "VALIDATION_ERROR",
+      "Reservation quantity must be a positive whole number",
+    );
   }
   const variant = await lockVariant(tx, input.variantId);
 
@@ -88,15 +99,24 @@ export async function reserveStock(tx: Queryable, input: ReserveInput) {
 
   const current = Number(existing.rows[0]?.quantity ?? 0);
   const target = input.absolute ? input.quantity : current + input.quantity;
-  const available = await availability(tx, input.variantId, variant.qty_in_stock);
+  const available = await availability(
+    tx,
+    input.variantId,
+    variant.qty_in_stock,
+  );
 
   if (target > available + current) {
-    fail(409, "INSUFFICIENT_STOCK", `Only ${available + current} unit(s) of ${variant.product_name} are available`, {
-      variant_id: input.variantId,
-      sku: variant.sku,
-      requested: target,
-      available: available + current,
-    });
+    fail(
+      409,
+      "INSUFFICIENT_STOCK",
+      `Only ${available + current} unit(s) of ${variant.product_name} are available`,
+      {
+        variant_id: input.variantId,
+        sku: variant.sku,
+        requested: target,
+        available: available + current,
+      },
+    );
   }
 
   if (existing.rows[0]) {
@@ -113,7 +133,13 @@ export async function reserveStock(tx: Queryable, input: ReserveInput) {
     `INSERT INTO inventory_reservation(cart_id, order_id, variant_id, quantity, expires_at)
      VALUES($1,$2,$3,$4, now() + ($5 || ' minutes')::interval)
      RETURNING reservation_id`,
-    [input.owner.cartId ?? null, input.owner.orderId ?? null, input.variantId, target, String(input.ttlMinutes)],
+    [
+      input.owner.cartId ?? null,
+      input.owner.orderId ?? null,
+      input.variantId,
+      target,
+      String(input.ttlMinutes),
+    ],
   );
   return { reservationId: inserted.rows[0]!.reservation_id, quantity: target };
 }
@@ -130,7 +156,11 @@ export async function releaseReservation(
   );
 }
 
-export async function releaseCartReservations(tx: Queryable, cartId: string, reason: string) {
+export async function releaseCartReservations(
+  tx: Queryable,
+  cartId: string,
+  reason: string,
+) {
   await tx.query(
     `UPDATE inventory_reservation
         SET status = 'released', closed_at = now(), close_reason = $2, updated_at = now()
@@ -139,7 +169,11 @@ export async function releaseCartReservations(tx: Queryable, cartId: string, rea
   );
 }
 
-export async function releaseCartVariant(tx: Queryable, cartId: string, variantId: number) {
+export async function releaseCartVariant(
+  tx: Queryable,
+  cartId: string,
+  variantId: number,
+) {
   await tx.query(
     `UPDATE inventory_reservation
         SET status = 'released', closed_at = now(), close_reason = 'cart_item_removed', updated_at = now()
@@ -165,9 +199,15 @@ export async function consumeForOrder(
   tx: Queryable,
   input: { orderId: number; cartId: string; lines: ConsumeLine[] },
 ) {
-  for (const line of [...input.lines].sort((a, b) => a.variantId - b.variantId)) {
+  for (const line of [...input.lines].sort(
+    (a, b) => a.variantId - b.variantId,
+  )) {
     const variant = await lockVariant(tx, line.variantId);
-    const reservation = await tx.query<{ reservation_id: string; quantity: number; status: string }>(
+    const reservation = await tx.query<{
+      reservation_id: string;
+      quantity: number;
+      status: string;
+    }>(
       `SELECT reservation_id, quantity, status FROM inventory_reservation
         WHERE cart_id = $1 AND variant_id = $2
         ORDER BY (status = 'active') DESC, created_at DESC LIMIT 1
@@ -176,10 +216,18 @@ export async function consumeForOrder(
     );
     const row = reservation.rows[0];
     if (!row || row.status !== "active") {
-      fail(409, "CART_RESERVATION_EXPIRED", "Your stock reservation expired. Please review your cart and try again.");
+      fail(
+        409,
+        "CART_RESERVATION_EXPIRED",
+        "Your stock reservation expired. Please review your cart and try again.",
+      );
     }
     if (Number(row.quantity) < line.quantity) {
-      fail(409, "CART_RESERVATION_EXPIRED", "Your stock reservation is smaller than the cart line. Please refresh the cart.");
+      fail(
+        409,
+        "CART_RESERVATION_EXPIRED",
+        "Your stock reservation is smaller than the cart line. Please refresh the cart.",
+      );
     }
 
     const updated = await tx.query<{ quantity: number }>(
@@ -189,7 +237,11 @@ export async function consumeForOrder(
       [line.variantId, line.quantity],
     );
     if (!updated.rows[0]) {
-      fail(409, "INSUFFICIENT_STOCK", "Stock changed while checking out. Please refresh your cart.");
+      fail(
+        409,
+        "INSUFFICIENT_STOCK",
+        "Stock changed while checking out. Please refresh your cart.",
+      );
     }
 
     await tx.query(
@@ -203,14 +255,23 @@ export async function consumeForOrder(
       `INSERT INTO inventory_movement(variant_id, quantity_delta, quantity_after, reason, source_type, source_id, reservation_id, actor, note)
        VALUES($1,$2,$3,'order_placed','order',$4,$5,'system','Checkout consumed reservation')
        ON CONFLICT DO NOTHING`,
-      [line.variantId, -line.quantity, updated.rows[0]!.quantity, String(input.orderId), row.reservation_id],
+      [
+        line.variantId,
+        -line.quantity,
+        updated.rows[0]!.quantity,
+        String(input.orderId),
+        row.reservation_id,
+      ],
     );
   }
 }
 
 /** Worker sweep: expire abandoned reservations in bounded batches. */
 export async function expireStaleReservations(db: Queryable, limit = 200) {
-  const rows = await db.query<{ reservation_id: string; cart_id: string | null }>(
+  const rows = await db.query<{
+    reservation_id: string;
+    cart_id: string | null;
+  }>(
     `SELECT reservation_id, cart_id FROM inventory_reservation
       WHERE status = 'active' AND expires_at <= now()
       ORDER BY expires_at
@@ -226,16 +287,28 @@ export async function expireStaleReservations(db: Queryable, limit = 200) {
       WHERE reservation_id = ANY($1::uuid[])`,
     [ids],
   );
-  const carts = [...new Set(rows.rows.map((row) => row.cart_id).filter((id): id is string => Boolean(id)))];
+  const carts = [
+    ...new Set(
+      rows.rows
+        .map((row) => row.cart_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
   return { expired: ids.length, carts };
 }
 
 /** Return reserved stock for a cancelled order (stock had already left). */
 export async function restockOrder(
   tx: Queryable,
-  input: { orderId: number; lines: Array<{ variantId: number; quantity: number }>; reason: "order_cancelled" | "refund_restock" },
+  input: {
+    orderId: number;
+    lines: Array<{ variantId: number; quantity: number }>;
+    reason: "order_cancelled" | "refund_restock";
+  },
 ) {
-  for (const line of [...input.lines].sort((a, b) => a.variantId - b.variantId)) {
+  for (const line of [...input.lines].sort(
+    (a, b) => a.variantId - b.variantId,
+  )) {
     const updated = await tx.query<{ quantity: number }>(
       `UPDATE product_variant SET qty_in_stock = qty_in_stock + $2, updated_at = now()
         WHERE variant_id = $1 RETURNING qty_in_stock AS quantity`,
@@ -246,7 +319,13 @@ export async function restockOrder(
       `INSERT INTO inventory_movement(variant_id, quantity_delta, quantity_after, reason, source_type, source_id, actor)
        VALUES($1,$2,$3,$4,'order',$5,'system')
        ON CONFLICT DO NOTHING`,
-      [line.variantId, line.quantity, updated.rows[0].quantity, input.reason, String(input.orderId)],
+      [
+        line.variantId,
+        line.quantity,
+        updated.rows[0].quantity,
+        input.reason,
+        String(input.orderId),
+      ],
     );
   }
 }

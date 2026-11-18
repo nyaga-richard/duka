@@ -3,8 +3,15 @@ import { ZodError } from "zod";
 import { AppError } from "../errors.ts";
 import { logger } from "../logger.ts";
 
-export function sendData(res: Response, requestId: string, data: unknown, status = 200) {
-  res.status(status).json({ data: data ?? null, meta: { request_id: requestId } });
+export function sendData(
+  res: Response,
+  requestId: string,
+  data: unknown,
+  status = 200,
+) {
+  res
+    .status(status)
+    .json({ data: data ?? null, meta: { request_id: requestId } });
 }
 
 /** Express 5 error handler: one JSON shape for every failure. */
@@ -13,7 +20,8 @@ export function errorHandler() {
     const requestId = (req as any).requestId ?? "unknown";
     let status = 500;
     let code = "INTERNAL_ERROR";
-    let message = "An unexpected error occurred. Quote the request ID to support.";
+    let message =
+      "An unexpected error occurred. Quote the request ID to support.";
     let details: unknown;
 
     if (error instanceof ZodError) {
@@ -46,7 +54,9 @@ export function errorHandler() {
       status = 409;
       code = "CONFLICT";
       message = "The database rejected an inconsistent value";
-    } else if (["22P02", "22007", "22008", "22003"].includes((error as any)?.code)) {
+    } else if (
+      ["22P02", "22007", "22008", "22003"].includes((error as any)?.code)
+    ) {
       status = 400;
       code = "VALIDATION_ERROR";
       message = "Invalid identifier, date or number";
@@ -57,7 +67,14 @@ export function errorHandler() {
     }
 
     if (status >= 500) {
-      logger.error({ requestId, err: (error as Error)?.message, stack: (error as Error)?.stack }, "request failed");
+      logger.error(
+        {
+          requestId,
+          err: (error as Error)?.message,
+          stack: (error as Error)?.stack,
+        },
+        "request failed",
+      );
     }
 
     res.status(status).json({

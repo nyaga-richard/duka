@@ -7,19 +7,32 @@ import { createHmac } from "node:crypto";
 process.env.PAYMENTS_MODE = "fake";
 process.env.PAYMENT_CAPTURE_ENABLED = "true";
 
-const { startTestContext, seedCatalogue, customerClient, addToCart, checkout } = await import("../helpers.ts");
+const { startTestContext, seedCatalogue, customerClient, addToCart, checkout } =
+  await import("../helpers.ts");
 type TestContext = import("../helpers.ts").TestContext;
 type CatalogueFixture = import("../helpers.ts").CatalogueFixture;
 
 const SECRET = "test-secret";
-const sign = (raw: string) => createHmac("sha256", SECRET).update(raw).digest("hex");
+const sign = (raw: string) =>
+  createHmac("sha256", SECRET).update(raw).digest("hex");
 
-async function postWebhook(baseUrl: string, provider: string, payload: Record<string, unknown>, options: { signature?: string | null } = {}) {
+async function postWebhook(
+  baseUrl: string,
+  provider: string,
+  payload: Record<string, unknown>,
+  options: { signature?: string | null } = {},
+) {
   const raw = JSON.stringify(payload);
-  const headers: Record<string, string> = { "content-type": "application/json" };
-  const signature = options.signature === undefined ? sign(raw) : options.signature;
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  const signature =
+    options.signature === undefined ? sign(raw) : options.signature;
   if (signature) headers["x-webhook-signature"] = signature;
-  const response = await fetch(`${baseUrl}/api/v1/webhooks/payments/${provider}`, { method: "POST", headers, body: raw });
+  const response = await fetch(
+    `${baseUrl}/api/v1/webhooks/payments/${provider}`,
+    { method: "POST", headers, body: raw },
+  );
   const text = await response.text();
   const body = text ? JSON.parse(text) : null;
   return { status: response.status, body, data: body?.data };
@@ -34,12 +47,21 @@ async function placedOrder(email: string) {
   const placed = await checkout(client, { key: `webhook-${email}` });
   assert.equal(placed.status, 201, JSON.stringify(placed.body));
   assert.equal(placed.data.payment.status, "requires_action");
-  return { client, orderId: placed.data.order.order_id as number, total: String(placed.data.order.total) };
+  return {
+    client,
+    orderId: placed.data.order.order_id as number,
+    total: String(placed.data.order.total),
+  };
 }
 
 before(async () => {
   ctx = await startTestContext();
-  variant = await seedCatalogue(ctx.db, { name: "Webhook Shirt", sku: "WH-M", price: "1000.00", stock: 10 });
+  variant = await seedCatalogue(ctx.db, {
+    name: "Webhook Shirt",
+    sku: "WH-M",
+    price: "1000.00",
+    stock: 10,
+  });
 });
 
 after(async () => {
@@ -47,7 +69,9 @@ after(async () => {
 });
 
 test("the fake provider is active and orders wait for a signed webhook", async () => {
-  const health = (await (await fetch(`${ctx.baseUrl}/health/ready`)).json()) as any;
+  const health = (await (
+    await fetch(`${ctx.baseUrl}/health/ready`)
+  ).json()) as any;
   assert.equal(health.checks.payments_mode, "fake");
   const { client } = await placedOrder("wh-waiting@example.test");
   const orders = await client.get("/api/v1/orders");
@@ -61,12 +85,17 @@ test("an unsigned webhook is recorded and rejected, and changes nothing", async 
     "SELECT provider_reference FROM payment_transaction WHERE order_id = $1",
     [orderId],
   );
-  const response = await postWebhook(ctx.baseUrl, "fake", {
-    event_id: "evt-unsigned-1",
-    reference: reference.rows[0]!.provider_reference,
-    status: "succeeded",
-    amount: "1300.00",
-  }, { signature: null });
+  const response = await postWebhook(
+    ctx.baseUrl,
+    "fake",
+    {
+      event_id: "evt-unsigned-1",
+      reference: reference.rows[0]!.provider_reference,
+      status: "succeeded",
+      amount: "1300.00",
+    },
+    { signature: null },
+  );
   assert.equal(response.status, 401);
   assert.equal(response.body.error.code, "FORBIDDEN");
 
@@ -126,9 +155,15 @@ test("a signed success webhook marks the order paid exactly once", async () => {
     "SELECT count(*)::int AS count FROM payment WHERE order_id = $1",
     [orderId],
   );
-  assert.equal(stillOne.rows[0]!.count, 1, "duplicate events never double-credit");
+  assert.equal(
+    stillOne.rows[0]!.count,
+    1,
+    "duplicate events never double-credit",
+  );
 
-  const cancel = await client.post(`/api/v1/orders/${orderId}/cancel`, { reason: "Paid orders need a refund" });
+  const cancel = await client.post(`/api/v1/orders/${orderId}/cancel`, {
+    reason: "Paid orders need a refund",
+  });
   assert.equal(cancel.status, 409);
   assert.match(cancel.body.error.message, /cannot be cancelled/i);
 });
@@ -153,11 +188,18 @@ test("a signed failure webhook moves a pending order to payment_failed", async (
   const cancellation = await client.post(`/api/v1/orders/${orderId}/cancel`, {
     reason: "Payment failed so I cancelled",
   });
-  assert.equal(cancellation.status, 200, "a failed payment is still cancellable");
+  assert.equal(
+    cancellation.status,
+    200,
+    "a failed payment is still cancellable",
+  );
 });
 
 test("a provider that is not the active one cannot post webhooks", async () => {
-  const response = await postWebhook(ctx.baseUrl, "mpesa", { event_id: "evt-mpesa-1", status: "succeeded" });
+  const response = await postWebhook(ctx.baseUrl, "mpesa", {
+    event_id: "evt-mpesa-1",
+    status: "succeeded",
+  });
   assert.equal(response.status, 404);
   assert.equal(response.body.error.code, "NOT_FOUND");
 });

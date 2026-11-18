@@ -16,14 +16,25 @@ can be implemented without changing existing behaviour.
 `POST /api/v1/integration/tokens`
 
 ```json
-{ "client_id": "shop-prod", "client_secret": "<secret>", "scope": ["catalog.read", "inventory.read"] }
+{
+  "client_id": "shop-prod",
+  "client_secret": "<secret>",
+  "scope": ["catalog.read", "inventory.read"]
+}
 ```
 
 Response `201`:
 
 ```json
-{ "data": { "access_token": "<opaque>", "token_type": "Bearer", "expires_in": 900,
-            "scope": ["catalog.read", "inventory.read"] }, "meta": { "request_id": "..." } }
+{
+  "data": {
+    "access_token": "<opaque>",
+    "token_type": "Bearer",
+    "expires_in": 900,
+    "scope": ["catalog.read", "inventory.read"]
+  },
+  "meta": { "request_id": "..." }
+}
 ```
 
 Requirements: scopes are intersected with the identity's roles; tokens are hashed at rest;
@@ -43,8 +54,12 @@ instead of guessing.
 `POST /api/v1/integration/reservations` (idempotent)
 
 ```json
-{ "channel": "web", "warehouse_id": "uuid", "ttl_seconds": 900,
-  "lines": [{ "product_id": "uuid", "quantity": 2 }] }
+{
+  "channel": "web",
+  "warehouse_id": "uuid",
+  "ttl_seconds": 900,
+  "lines": [{ "product_id": "uuid", "quantity": 2 }]
+}
 ```
 
 `201` → `{ "data": { "reservation_id": "uuid", "expires_at": "2026-11-16T10:15:00Z",
@@ -62,13 +77,22 @@ with per-line availability.
 `POST /api/v1/integration/orders` (idempotent)
 
 ```json
-{ "external_ref": "EC-20261116-000123", "channel": "web",
-  "branch_id": "uuid", "warehouse_id": "uuid",
+{
+  "external_ref": "EC-20261116-000123",
+  "channel": "web",
+  "branch_id": "uuid",
+  "warehouse_id": "uuid",
   "customer": { "erp_customer_id": "uuid" },
   "lines": [{ "product_id": "uuid", "quantity": 2, "unit_price": "1250.00" }],
   "shipping": { "method": "countrywide", "amount": "500.00" },
-  "totals": { "subtotal": "2500.00", "discount": "0.00", "shipping": "500.00", "total": "3000.00" },
-  "reservation_id": "uuid" }
+  "totals": {
+    "subtotal": "2500.00",
+    "discount": "0.00",
+    "shipping": "500.00",
+    "total": "3000.00"
+  },
+  "reservation_id": "uuid"
+}
 ```
 
 `201` → `{ "data": { "order_id": "uuid", "number": "WEB-000123", "status": "placed" } }`
@@ -87,9 +111,16 @@ or `allowSelfApproval=true`.
 `POST /api/v1/integration/payments` (idempotent)
 
 ```json
-{ "external_ref": "mpesa:QK12AB34CD", "order_id": "uuid",
-  "amount": "3000.00", "currency": "KES", "method": "mpesa", "provider": "mpesa",
-  "provider_reference": "QK12AB34CD", "received_at": "2026-11-16T09:59:00Z" }
+{
+  "external_ref": "mpesa:QK12AB34CD",
+  "order_id": "uuid",
+  "amount": "3000.00",
+  "currency": "KES",
+  "method": "mpesa",
+  "provider": "mpesa",
+  "provider_reference": "QK12AB34CD",
+  "received_at": "2026-11-16T09:59:00Z"
+}
 ```
 
 `201` → `{ "data": { "payment_id": "uuid", "allocated": "3000.00", "unapplied": "0.00" } }`
@@ -102,9 +133,15 @@ second posting. Reject amount/currency mismatches with `422`.
 `POST /api/v1/integration/refunds` (idempotent)
 
 ```json
-{ "external_ref": "refund:<uuid>", "order_id": "uuid", "payment_reference": "QK12AB34CD",
-  "amount": "500.00", "reason": "Damaged item", "restock": true,
-  "lines": [{ "product_id": "uuid", "quantity": 1 }] }
+{
+  "external_ref": "refund:<uuid>",
+  "order_id": "uuid",
+  "payment_reference": "QK12AB34CD",
+  "amount": "500.00",
+  "reason": "Damaged item",
+  "restock": true,
+  "lines": [{ "product_id": "uuid", "quantity": 1 }]
+}
 ```
 
 `201` → `{ "data": { "refund_id": "uuid", "credit_note": "CN-000042", "status": "succeeded" } }`
@@ -121,8 +158,16 @@ lines: [{ order_line_id, quantity }] }`; `PATCH …/{id}` with `status` in
 `POST /api/v1/integration/subscriptions`
 
 ```json
-{ "url": "https://shop-api.example/api/v1/webhooks/erp", "events": ["product.updated", "stock.changed", "order.paid", "shipment.updated"],
-  "secret": "<HMAC secret>" }
+{
+  "url": "https://shop-api.example/api/v1/webhooks/erp",
+  "events": [
+    "product.updated",
+    "stock.changed",
+    "order.paid",
+    "shipment.updated"
+  ],
+  "secret": "<HMAC secret>"
+}
 ```
 
 Delivery: `POST` with headers `X-ERP-Event`, `X-ERP-Delivery` (uuid), `X-ERP-Signature:
@@ -141,10 +186,17 @@ and cannot be embedded by a public storefront.
 Extend product payloads with:
 
 ```json
-{ "id": "uuid", "sku": "TS-BLK-M", "price": "1250.00",
-  "options": [{ "name": "Colour", "value": "Black" }, { "name": "Size", "value": "M" }],
+{
+  "id": "uuid",
+  "sku": "TS-BLK-M",
+  "price": "1250.00",
+  "options": [
+    { "name": "Colour", "value": "Black" },
+    { "name": "Size", "value": "M" }
+  ],
   "attributes": [{ "key": "material", "label": "Material", "value": "Cotton" }],
-  "images": [{ "url": "https://…", "sort_order": 1 }] }
+  "images": [{ "url": "https://…", "sort_order": 1 }]
+}
 ```
 
 ## G11 — Incremental catalogue

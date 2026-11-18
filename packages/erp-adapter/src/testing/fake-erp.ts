@@ -50,40 +50,96 @@ export interface FakeErpState {
     value: string;
     version: number;
   }>;
-  customers: Array<{ id: string; name: string; code: string; email: string | null; active: boolean }>;
-  documents: Array<{ id: string; number: string; status: string; kind: string; total: string }>;
-  sales: Array<{ id: string; number: string; total: string; status: string; customer_id: string | null }>;
+  customers: Array<{
+    id: string;
+    name: string;
+    code: string;
+    email: string | null;
+    active: boolean;
+  }>;
+  documents: Array<{
+    id: string;
+    number: string;
+    status: string;
+    kind: string;
+    total: string;
+  }>;
+  sales: Array<{
+    id: string;
+    number: string;
+    total: string;
+    status: string;
+    customer_id: string | null;
+  }>;
   openShifts: Set<string>;
   /** Product image attachments, keyed by ERP product id. */
-  attachments: Array<{ id: string; product_id: string; filename: string; mime_type: string; size: number; bytes: Uint8Array }>;
+  attachments: Array<{
+    id: string;
+    product_id: string;
+    filename: string;
+    mime_type: string;
+    size: number;
+    bytes: Uint8Array;
+  }>;
   sessions: Map<string, { csrf: string; email: string }>;
   idempotency: Map<string, { body: string; response: unknown; status: number }>;
   failNext: Array<{ status: number; code?: string; message?: string }>;
   loginAttempts: number;
   loginRateLimit: number;
   allowSelfApproval: boolean;
-  requests: Array<{ method: string; path: string; idempotencyKey?: string; origin?: string }>;
+  requests: Array<{
+    method: string;
+    path: string;
+    idempotencyKey?: string;
+    origin?: string;
+  }>;
 }
 
 export interface FakeErp {
   fetch: typeof fetch;
   state: FakeErpState;
   expireSessions: () => void;
-  createProduct: (overrides: Partial<FakeErpProduct> & { sku: string; name: string; price: string }) => FakeErpProduct;
+  createProduct: (
+    overrides: Partial<FakeErpProduct> & {
+      sku: string;
+      name: string;
+      price: string;
+    },
+  ) => FakeErpProduct;
   /** Attach an image to a product and point its `image_attachment_id` at it. */
   attachImage: (
     productId: string,
-    options?: { id?: string; filename?: string; mime_type?: string; size?: number; bytes?: Uint8Array },
-  ) => { id: string; product_id: string; filename: string; mime_type: string; size: number; bytes: Uint8Array };
+    options?: {
+      id?: string;
+      filename?: string;
+      mime_type?: string;
+      size?: number;
+      bytes?: Uint8Array;
+    },
+  ) => {
+    id: string;
+    product_id: string;
+    filename: string;
+    mime_type: string;
+    size: number;
+    bytes: Uint8Array;
+  };
 }
 
-const json = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
+const json = (
+  body: unknown,
+  status = 200,
+  extraHeaders: Record<string, string> = {},
+) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json", ...extraHeaders },
   });
 
-const envelope = (data: unknown) => ({ data, meta: { request_id: randomUUID() } });
+const envelope = (data: unknown) => ({
+  data,
+  meta: { request_id: randomUUID() },
+});
 const errorBody = (code: string, message: string) => ({
   error: { code, message, request_id: randomUUID() },
 });
@@ -94,7 +150,10 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
   }
 
   const state: FakeErpState = {
-    credentials: seed.credentials ?? { email: "integration@shop.test", password: "integration-password-123" },
+    credentials: seed.credentials ?? {
+      email: "integration@shop.test",
+      password: "integration-password-123",
+    },
     allowedOrigins: seed.allowedOrigins ?? ["https://erp.example.test"],
     permissions: seed.permissions ?? [
       "catalog.read",
@@ -122,9 +181,13 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
   };
 
   let counter = 0;
-  const nextNumber = (prefix: string) => `${prefix}-${String(++counter).padStart(5, "0")}`;
+  const nextNumber = (prefix: string) =>
+    `${prefix}-${String(++counter).padStart(5, "0")}`;
 
-  const fakeFetch = async (input: any, init: RequestInit = {}): Promise<Response> => {
+  const fakeFetch = async (
+    input: any,
+    init: RequestInit = {},
+  ): Promise<Response> => {
     const url = new URL(String(input));
     const method = (init.method ?? "GET").toUpperCase();
     const path = url.pathname;
@@ -136,16 +199,26 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
 
     if (state.failNext.length) {
       const failure = state.failNext.shift()!;
-      return json(errorBody(failure.code ?? "INTERNAL_ERROR", failure.message ?? "injected failure"), failure.status);
+      return json(
+        errorBody(
+          failure.code ?? "INTERNAL_ERROR",
+          failure.message ?? "injected failure",
+        ),
+        failure.status,
+      );
     }
 
     if (path === "/health/live") return json({ status: "ok" });
     if (path === "/health/ready") return json({ status: "ready" });
-    if (path === "/api/v1/openapi.json") return json({ openapi: "3.1.0", paths: {} });
+    if (path === "/api/v1/openapi.json")
+      return json({ openapi: "3.1.0", paths: {} });
 
     const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
     if (isMutation && (!origin || !state.allowedOrigins.includes(origin))) {
-      return json(errorBody("ORIGIN_DENIED", "Request origin is not allowed"), 403);
+      return json(
+        errorBody("ORIGIN_DENIED", "Request origin is not allowed"),
+        403,
+      );
     }
 
     if (path === "/api/v1/auth/login" && method === "POST") {
@@ -153,30 +226,43 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
       if (state.loginAttempts > state.loginRateLimit) {
         return json(errorBody("RATE_LIMITED", "Too many attempts"), 429);
       }
-      if (body?.email !== state.credentials.email || body?.password !== state.credentials.password) {
-        return json(errorBody("INVALID_CREDENTIALS", "Invalid email or password"), 401);
+      if (
+        body?.email !== state.credentials.email ||
+        body?.password !== state.credentials.password
+      ) {
+        return json(
+          errorBody("INVALID_CREDENTIALS", "Invalid email or password"),
+          401,
+        );
       }
       const token = `session-${randomUUID()}`;
       const csrf = `csrf-${randomUUID()}`;
       state.sessions.set(token, { csrf, email: body.email });
-      return json(
-        envelope({ signed_in: true, csrf_token: csrf }),
-        200,
-        {
-          "set-cookie": `duka_session=${token}; Path=/; HttpOnly; SameSite=Lax`,
-        },
-      );
+      return json(envelope({ signed_in: true, csrf_token: csrf }), 200, {
+        "set-cookie": `duka_session=${token}; Path=/; HttpOnly; SameSite=Lax`,
+      });
     }
 
     const cookie = headers.get("cookie") ?? "";
-    const token = cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("duka_session="))?.split("=")[1];
+    const token = cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith("duka_session="))
+      ?.split("=")[1];
     const session = token ? state.sessions.get(token) : undefined;
-    if (!session) return json(errorBody("UNAUTHENTICATED", "Please sign in"), 401);
+    if (!session)
+      return json(errorBody("UNAUTHENTICATED", "Please sign in"), 401);
     if (isMutation && headers.get("x-csrf-token") !== session.csrf) {
-      return json(errorBody("CSRF_INVALID", "Security token is missing or invalid"), 403);
+      return json(
+        errorBody("CSRF_INVALID", "Security token is missing or invalid"),
+        403,
+      );
     }
     if (isMutation && !idempotencyKey) {
-      return json(errorBody("IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required"), 422);
+      return json(
+        errorBody("IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required"),
+        422,
+      );
     }
 
     if (idempotencyKey) {
@@ -185,7 +271,10 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
       if (stored) {
         if (stored.body !== fingerprint) {
           return json(
-            errorBody("IDEMPOTENCY_CONFLICT", "Idempotency-Key reused with a different payload"),
+            errorBody(
+              "IDEMPOTENCY_CONFLICT",
+              "Idempotency-Key reused with a different payload",
+            ),
             409,
           );
         }
@@ -205,20 +294,64 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
     };
 
     if (path === "/api/v1/auth/me" && method === "GET") {
-      return json(envelope({ actor: { id: "erp-actor-1", email: session.email, permissions: state.permissions } }));
+      return json(
+        envelope({
+          actor: {
+            id: "erp-actor-1",
+            email: session.email,
+            permissions: state.permissions,
+          },
+        }),
+      );
     }
 
     if (path === "/api/v1/metadata" && method === "GET") {
       return json(
         envelope({
-          company: { id: "company-1", name: "Test ERP", currency: "KES", timezone: "Africa/Nairobi", settings: {} },
+          company: {
+            id: "company-1",
+            name: "Test ERP",
+            currency: "KES",
+            timezone: "Africa/Nairobi",
+            settings: {},
+          },
           branches: [{ id: "branch-1", name: "Nairobi", code: "NBO" }],
-          warehouses: [{ id: "warehouse-1", name: "Main", code: "MAIN", branch_id: "branch-1" }],
-          registers: [{ id: "register-1", name: "Till 1", branch_id: "branch-1", warehouse_id: "warehouse-1", active: true }],
+          warehouses: [
+            {
+              id: "warehouse-1",
+              name: "Main",
+              code: "MAIN",
+              branch_id: "branch-1",
+            },
+          ],
+          registers: [
+            {
+              id: "register-1",
+              name: "Till 1",
+              branch_id: "branch-1",
+              warehouse_id: "warehouse-1",
+              active: true,
+            },
+          ],
           units: [{ id: "unit-1", name: "Piece", symbol: "pc" }],
           categories: [{ id: "category-1", name: "Apparel", parent_id: null }],
-          tax_rules: [{ id: "tax-1", name: "VAT", code: "VAT16", rate: "16", kind: "standard" }],
-          payment_methods: [{ id: "method-1", name: "M-Pesa", kind: "mpesa", requires_reference: true }],
+          tax_rules: [
+            {
+              id: "tax-1",
+              name: "VAT",
+              code: "VAT16",
+              rate: "16",
+              kind: "standard",
+            },
+          ],
+          payment_methods: [
+            {
+              id: "method-1",
+              name: "M-Pesa",
+              kind: "mpesa",
+              requires_reference: true,
+            },
+          ],
           price_lists: [{ id: "list-1", name: "Retail" }],
         }),
       );
@@ -227,10 +360,15 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
     if (path === "/api/v1/products" && method === "GET") {
       const q = (url.searchParams.get("q") ?? "").toLowerCase();
       const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
-      const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? 100)));
+      const limit = Math.min(
+        100,
+        Math.max(1, Number(url.searchParams.get("limit") ?? 100)),
+      );
       const filtered = state.products.filter(
         (product) =>
-          (!q || product.name.toLowerCase().includes(q) || product.sku.toLowerCase().includes(q)) &&
+          (!q ||
+            product.name.toLowerCase().includes(q) ||
+            product.sku.toLowerCase().includes(q)) &&
           (url.searchParams.get("active") === "all" || product.active),
       );
       return json(
@@ -249,26 +387,43 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
         .filter((row) => !warehouse || row.warehouse_id === warehouse)
         .map((row) => ({
           ...row,
-          product_name: state.products.find((p) => p.id === row.product_id)?.name,
+          product_name: state.products.find((p) => p.id === row.product_id)
+            ?.name,
           sku: state.products.find((p) => p.id === row.product_id)?.sku,
         }));
-      return json(envelope({ items: rows, page: 1, limit: 100, total: rows.length }));
+      return json(
+        envelope({ items: rows, page: 1, limit: 100, total: rows.length }),
+      );
     }
 
     if (path === "/api/v1/customers" && method === "GET") {
       const q = (url.searchParams.get("q") ?? "").toLowerCase();
       const rows = state.customers.filter(
-        (customer) => !q || customer.email?.toLowerCase() === q || customer.name.toLowerCase().includes(q),
+        (customer) =>
+          !q ||
+          customer.email?.toLowerCase() === q ||
+          customer.name.toLowerCase().includes(q),
       );
-      return json(envelope({ items: rows, page: 1, limit: 25, total: rows.length }));
+      return json(
+        envelope({ items: rows, page: 1, limit: 25, total: rows.length }),
+      );
     }
 
     if (path === "/api/v1/customers" && method === "POST") {
       if (!state.permissions.includes("customers.write")) {
-        return json(errorBody("FORBIDDEN", "Permission required: customers.write"), 403);
+        return json(
+          errorBody("FORBIDDEN", "Permission required: customers.write"),
+          403,
+        );
       }
       if (state.customers.some((customer) => customer.code === body.code)) {
-        return json(errorBody("DUPLICATE_REFERENCE", "A customer with that code already exists"), 409);
+        return json(
+          errorBody(
+            "DUPLICATE_REFERENCE",
+            "A customer with that code already exists",
+          ),
+          409,
+        );
       }
       const customer = {
         id: `erp-customer-${state.customers.length + 1}`,
@@ -283,8 +438,11 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
 
     const customerMatch = path.match(/^\/api\/v1\/customers\/([^/]+)$/);
     if (customerMatch && method === "PUT") {
-      const customer = state.customers.find((entry) => entry.id === customerMatch[1]);
-      if (!customer) return json(errorBody("NOT_FOUND", "Record not found"), 404);
+      const customer = state.customers.find(
+        (entry) => entry.id === customerMatch[1],
+      );
+      if (!customer)
+        return json(errorBody("NOT_FOUND", "Record not found"), 404);
       Object.assign(customer, {
         name: body.name ?? customer.name,
         code: body.code ?? customer.code,
@@ -295,15 +453,18 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
 
     if (path === "/api/v1/documents" && method === "POST") {
       if (body?.kind !== "sales_order") {
-        return json(errorBody("VALIDATION_ERROR", "Only sales orders are supported by this adapter"), 422);
+        return json(
+          errorBody(
+            "VALIDATION_ERROR",
+            "Only sales orders are supported by this adapter",
+          ),
+          422,
+        );
       }
-      const total = (body.lines ?? []).reduce(
-        (sum: number, line: any) => {
-          const product = state.products.find((p) => p.id === line.product_id);
-          return sum + Number(product?.price ?? 0) * Number(line.quantity);
-        },
-        0,
-      );
+      const total = (body.lines ?? []).reduce((sum: number, line: any) => {
+        const product = state.products.find((p) => p.id === line.product_id);
+        return sum + Number(product?.price ?? 0) * Number(line.quantity);
+      }, 0);
       const document = {
         id: `erp-document-${state.documents.length + 1}`,
         number: nextNumber("SO"),
@@ -315,13 +476,21 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
       return remember(envelope(document), 200);
     }
 
-    const transitionMatch = path.match(/^\/api\/v1\/documents\/([^/]+)\/transition$/);
+    const transitionMatch = path.match(
+      /^\/api\/v1\/documents\/([^/]+)\/transition$/,
+    );
     if (transitionMatch && method === "POST") {
-      const document = state.documents.find((entry) => entry.id === transitionMatch[1]);
-      if (!document) return json(errorBody("NOT_FOUND", "Record not found"), 404);
+      const document = state.documents.find(
+        (entry) => entry.id === transitionMatch[1],
+      );
+      if (!document)
+        return json(errorBody("NOT_FOUND", "Record not found"), 404);
       if (body?.status === "approved" && !state.allowSelfApproval) {
         return json(
-          errorBody("SELF_APPROVAL", "A different authorized user must approve this transaction"),
+          errorBody(
+            "SELF_APPROVAL",
+            "A different authorized user must approve this transaction",
+          ),
           403,
         );
       }
@@ -336,7 +505,9 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
       const sale = {
         id: `erp-sale-${state.sales.length + 1}`,
         number: nextNumber("INV"),
-        total: (body.payments ?? []).reduce((sum: number, p: any) => sum + Number(p.amount), 0).toFixed(2),
+        total: (body.payments ?? [])
+          .reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+          .toFixed(2),
         status: "posted",
         customer_id: body.customer_id ?? null,
       };
@@ -351,7 +522,9 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
       return json(envelope(sale));
     }
 
-    const attachmentsMatch = path.match(/^\/api\/v1\/products\/([^/]+)\/attachments$/);
+    const attachmentsMatch = path.match(
+      /^\/api\/v1\/products\/([^/]+)\/attachments$/,
+    );
     if (attachmentsMatch && method === "GET") {
       const productId = decodeURIComponent(attachmentsMatch[1]!);
       if (!state.products.some((product) => product.id === productId)) {
@@ -359,14 +532,22 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
       }
       const items = state.attachments
         .filter((entry) => entry.product_id === productId)
-        .map(({ id, filename, mime_type, size }) => ({ id, filename, mime_type, size }));
+        .map(({ id, filename, mime_type, size }) => ({
+          id,
+          filename,
+          mime_type,
+          size,
+        }));
       return json(envelope({ items }));
     }
 
     const attachmentMatch = path.match(/^\/api\/v1\/attachments\/([^/]+)$/);
     if (attachmentMatch && method === "GET") {
-      const attachment = state.attachments.find((entry) => entry.id === decodeURIComponent(attachmentMatch[1]!));
-      if (!attachment) return json(errorBody("NOT_FOUND", "Record not found"), 404);
+      const attachment = state.attachments.find(
+        (entry) => entry.id === decodeURIComponent(attachmentMatch[1]!),
+      );
+      if (!attachment)
+        return json(errorBody("NOT_FOUND", "Record not found"), 404);
       return new Response(attachment.bytes as unknown as ArrayBuffer, {
         status: 200,
         headers: {
@@ -378,11 +559,20 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
     }
 
     if (path === "/api/v1/customers/settlements" && method === "POST") {
-      return remember(envelope({ id: `erp-receipt-${randomUUID().slice(0, 8)}` }), 200);
+      return remember(
+        envelope({ id: `erp-receipt-${randomUUID().slice(0, 8)}` }),
+        200,
+      );
     }
 
     if (path === "/api/v1/sales/returns" && method === "POST") {
-      return remember(envelope({ id: `erp-return-${randomUUID().slice(0, 8)}`, number: nextNumber("CN") }), 200);
+      return remember(
+        envelope({
+          id: `erp-return-${randomUUID().slice(0, 8)}`,
+          number: nextNumber("CN"),
+        }),
+        200,
+      );
     }
 
     return json(errorBody("NOT_FOUND", "Endpoint not found"), 404);

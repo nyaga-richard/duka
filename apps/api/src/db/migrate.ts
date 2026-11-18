@@ -32,7 +32,9 @@ export function resolveMigrationsDir(): string {
     path.resolve(here, "../../database/migrations"),
   ];
   // Prefer a directory that actually exists: a bundled build runs from `dist/`.
-  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]!;
+  return (
+    candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]!
+  );
 }
 
 async function ensureMigrationTable(db: Database) {
@@ -66,7 +68,9 @@ export async function listMigrations(dir = resolveMigrationsDir()) {
   );
 }
 
-export async function appliedMigrations(db: Database): Promise<AppliedMigration[]> {
+export async function appliedMigrations(
+  db: Database,
+): Promise<AppliedMigration[]> {
   await ensureMigrationTable(db);
   const result = await db.query<AppliedMigration>(
     "SELECT version, name, checksum, applied_at::text, duration_ms FROM schema_migrations ORDER BY version",
@@ -87,12 +91,16 @@ export async function migrate(
     await db.query("SELECT pg_advisory_lock($1)", [config.db.migrationLockId]);
     locked = true;
   } catch {
-    log("advisory lock unavailable on this driver; continuing single-connection");
+    log(
+      "advisory lock unavailable on this driver; continuing single-connection",
+    );
   }
 
   try {
     const files = await listMigrations(dir);
-    const done = new Map((await appliedMigrations(db)).map((m) => [m.version, m]));
+    const done = new Map(
+      (await appliedMigrations(db)).map((m) => [m.version, m]),
+    );
     const applied: string[] = [];
 
     for (const migration of files) {
@@ -112,14 +120,22 @@ export async function migrate(
         await tx.exec(migration.sql);
         await tx.query(
           "INSERT INTO schema_migrations(version,name,checksum,duration_ms) VALUES($1,$2,$3,$4)",
-          [migration.version, migration.name, migration.checksum, Date.now() - started],
+          [
+            migration.version,
+            migration.name,
+            migration.checksum,
+            Date.now() - started,
+          ],
         );
       });
       applied.push(migration.name);
     }
     return { applied, alreadyApplied: files.length - applied.length };
   } finally {
-    if (locked) await db.query("SELECT pg_advisory_unlock($1)", [config.db.migrationLockId]).catch(() => undefined);
+    if (locked)
+      await db
+        .query("SELECT pg_advisory_unlock($1)", [config.db.migrationLockId])
+        .catch(() => undefined);
   }
 }
 
@@ -131,13 +147,18 @@ export async function migrationStatus(db: Database, dir?: string) {
     version: f.version,
     name: f.name,
     applied: applied.has(f.version),
-    checksum_matches: applied.has(f.version) ? applied.get(f.version)!.checksum === f.checksum : null,
+    checksum_matches: applied.has(f.version)
+      ? applied.get(f.version)!.checksum === f.checksum
+      : null,
     applied_at: applied.get(f.version)?.applied_at ?? null,
   }));
 }
 
 /** Every migration applied and no checksum drift — used by /health/ready. */
-export async function migrationsCurrent(db: Database, dir?: string): Promise<boolean> {
+export async function migrationsCurrent(
+  db: Database,
+  dir?: string,
+): Promise<boolean> {
   try {
     const statuses = await migrationStatus(db, dir);
     return statuses.every((s) => s.applied && s.checksum_matches !== false);

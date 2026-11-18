@@ -55,11 +55,13 @@ ERP is never a datastore for the shop.
 
 ## 0. Before you start
 
-On the host that runs the Duka Compose project (the ERP host; the storefront
-lives in the same project, see `deploy/ecommerce/README.md`):
+On the host that runs the Duka Compose project — the ERP host, with the two
+repositories checked out side by side (`/opt/duka` and `/opt/duka-ecommerce`).
+Shop-side commands run from the storefront checkout; the ERP's files are read
+through `../duka`. See `deploy/README.md` for the full layout.
 
 ```bash
-cd /opt/duka
+cd /opt/duka-ecommerce
 
 # Tools the commands below use. jq is not optional: steps 1.3 onwards build
 # JSON bodies with it and read ids out of responses.
@@ -69,8 +71,8 @@ done
 # On a Debian/Ubuntu host:  sudo apt-get update && sudo apt-get install -y jq
 
 # The ERP's public host and the storefront's public host.
-export ERP_HOST=$(sudo sed -n 's/^PUBLIC_HOST=//p' deploy/docker/.env.production | head -n1)
-export SHOP_HOST=$(sudo sed -n 's/^SHOP_PUBLIC_HOST=//p' deploy/ecommerce/.env.shop | head -n1)
+export ERP_HOST=$(sudo sed -n 's/^PUBLIC_HOST=//p' ../duka/deploy/docker/.env.production | head -n1)
+export SHOP_HOST=$(sudo sed -n 's/^SHOP_PUBLIC_HOST=//p' deploy/.env.shop | head -n1)
 echo "ERP=$ERP_HOST SHOP=$SHOP_HOST"
 ```
 
@@ -108,15 +110,15 @@ sudo docker exec duka-api-1 node -e \
 ```
 
 Expect `200 {"status":"ready",...}`. If it is not 200, stop: fix the ERP first
-(`bash deploy/go-live.sh` prints its diagnostics; `sudo docker logs duka-api-1`).
+(`bash ../duka/deploy/go-live.sh` prints its diagnostics; `sudo docker logs duka-api-1`).
 
 **1.2 — Confirm the origin allowlist already covers what the shop will send.**
 
 Both sides of this are in the deployment files, not in a database:
 
-- the shop presents `ERP_ALLOWED_ORIGIN`, which `deploy/ecommerce/compose.shop.yml`
+- the shop presents `ERP_ALLOWED_ORIGIN`, which `deploy/compose.shop.yml`
   sets to `https://${PUBLIC_HOST}` — that is `https://$ERP_HOST`;
-- the ERP accepts `ALLOWED_ORIGINS`, which `deploy/docker/compose.yml` sets to
+- the ERP accepts `ALLOWED_ORIGINS`, which `../duka/deploy/docker/compose.yml` sets to
   `https://${PUBLIC_HOST}` — the same string.
 
 So for the standard deployment **nothing needs editing here**. Verify the
@@ -132,7 +134,7 @@ same origin, plus (`ERP_BASE_URL=https://$ERP_HOST` once step 4 is done).
 
 > If, and only if, the storefront runs on a **different host** from the ERP:
 > the shop must present an origin the ERP already lists, or the ERP operator
-> must add it to `ALLOWED_ORIGINS` in `deploy/docker/.env.production`'s Compose
+> must add it to `ALLOWED_ORIGINS` in `../duka/deploy/docker/.env.production`'s Compose
 > environment. Production requires exact HTTPS origins, and the list must
 > include `WEB_ORIGIN` (`apps/api/src/index.ts` refuses to boot otherwise).
 > Do not widen the allowlist to a wildcard: it is the ERP's CSRF boundary.
@@ -322,7 +324,7 @@ numbering sequence.
 
 ## 4. Write the shop's configuration
 
-The shop reads six values out of `deploy/ecommerce/.env.shop`. Everything else
+The shop reads six values out of `deploy/.env.shop`. Everything else
 (`ERP_ALLOWED_ORIGIN`, timeouts, retry counts) is derived in
 `compose.shop.yml`/`apps/api/src/config.ts` and needs no operator input.
 
@@ -333,8 +335,8 @@ Back up first, then rewrite only the ERP lines, keeping mode `0600`:
 > first — the block below reads them from the environment.
 
 ```bash
-cd /opt/duka
-sudo cp -a deploy/ecommerce/.env.shop "deploy/ecommerce/.env.shop.bak-$(date +%F)"
+cd /opt/duka-ecommerce
+sudo cp -a deploy/.env.shop "deploy/.env.shop.bak-$(date +%F)"
 
 sudo env \
   SHOP_ERP_PASSWORD="$ERP_INT_PASS" \
@@ -344,7 +346,7 @@ sudo env \
   SHOP_ERP_PUBLIC_URL="https://$ERP_HOST" \
   python3 - <<'PY'
 import os, pathlib
-path = pathlib.Path('deploy/ecommerce/.env.shop')
+path = pathlib.Path('deploy/.env.shop')
 updates = {
     'SHOP_ERP_ENABLED':     'true',
     'SHOP_ERP_BASE_URL':    os.environ['SHOP_ERP_PUBLIC_URL'],
@@ -383,11 +385,11 @@ Why these values:
 > `apps/api/src/config.ts` refuses to boot a _production_ API whose
 > `ERP_BASE_URL` is not `https://` (`Production ERP integration requires
 ERP_BASE_URL to use https`). The shipped defaults —
-> `SHOP_ERP_BASE_URL=http://api:4000` in `deploy/ecommerce/init-shop-env.sh` and
-> in `deploy/ecommerce/compose.shop.yml` — therefore cannot start once
+> `SHOP_ERP_BASE_URL=http://api:4000` in `deploy/init-shop-env.sh` and
+> in `deploy/compose.shop.yml` — therefore cannot start once
 > `SHOP_ERP_ENABLED=true`. Until that default is corrected, use
 > `https://$ERP_HOST`: Caddy already routes `/api/*` **and** `/health/*` on that
-> host to `api:4000` (`deploy/docker/Caddyfile`), so every adapter call works
+> host to `api:4000` (`../duka/deploy/docker/Caddyfile`), so every adapter call works
 > over the public name, with a real certificate and the same origin the ERP's
 > allowlist already contains.
 >
@@ -401,13 +403,13 @@ ERP_BASE_URL to use https`). The shipped defaults —
 Confirm the containers will resolve the values (secrets redacted):
 
 ```bash
-sudo docker compose \
-  --env-file deploy/docker/.env.production \
-  --env-file deploy/ecommerce/.env.shop \
+sudo SHOP_REPO_DIR=$PWD docker compose \
+  --env-file ../duka/deploy/docker/.env.production \
+  --env-file deploy/.env.shop \
   -p duka \
-  -f deploy/docker/compose.yml \
-  -f deploy/cloudflare/compose.tunnel.yml \
-  -f deploy/ecommerce/compose.shop.yml \
+  -f ../duka/deploy/docker/compose.yml \
+  -f ../duka/deploy/cloudflare/compose.tunnel.yml \
+  -f deploy/compose.shop.yml \
   config 2>/dev/null \
   | sed -n '/^  shop-api:/,/^  shop-worker:/p' \
   | grep -E 'ERP_(ENABLED|BASE_URL|ALLOWED_ORIGIN|INTEGRATION_EMAIL|INTEGRATION_PASSWORD|DEFAULT_(BRANCH|WAREHOUSE)_ID)' \
@@ -444,7 +446,7 @@ sudo docker exec duka-shop-api-1 node -e \
   a bypass rule in place for the shop's egress or use the private hop.
 
 ```bash
-sudo bash deploy/ecommerce/shop.sh up
+sudo bash deploy/shop.sh up
 ```
 
 That rebuilds the images, re-runs migrations (forward-only, safe to re-run),
@@ -454,20 +456,20 @@ changed `.env.shop` and the images are already current, this is the quicker
 equivalent:
 
 ```bash
-sudo docker compose \
-  --env-file deploy/docker/.env.production \
-  --env-file deploy/ecommerce/.env.shop \
+sudo SHOP_REPO_DIR=$PWD docker compose \
+  --env-file ../duka/deploy/docker/.env.production \
+  --env-file deploy/.env.shop \
   -p duka \
-  -f deploy/docker/compose.yml \
-  -f deploy/cloudflare/compose.tunnel.yml \
-  -f deploy/ecommerce/compose.shop.yml \
+  -f ../duka/deploy/docker/compose.yml \
+  -f ../duka/deploy/cloudflare/compose.tunnel.yml \
+  -f deploy/compose.shop.yml \
   up -d --no-deps --force-recreate shop-api shop-worker
 ```
 
 Then confirm both are up and the API is ready:
 
 ```bash
-sudo bash deploy/ecommerce/shop.sh status
+sudo bash deploy/shop.sh status
 sudo docker inspect duka-shop-api-1 duka-shop-worker-1 \
   --format '{{.Name}} {{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}} (no healthcheck){{end}}'
 ```
@@ -772,7 +774,7 @@ stock, or approve its own document. Every push shows up in the ERP's own audit
 trail with that identity as the actor, and in the shop's **Activity** tab as
 `erp.order_pushed` / `erp.catalog_pulled`.
 
-**13.5 — Backups still cover both sides.** `bash deploy/update.sh` takes the ERP
+**13.5 — Backups still cover both sides.** `bash ../duka/deploy/update.sh` takes the ERP
 backup, then an encrypted, verified shop dump. Enabling the integration changes
 no backup behaviour, but the shop's dump now contains ERP-mapped foreign ids —
 restore both from the same point in time or re-run step 8 to rebuild the map.
@@ -885,7 +887,7 @@ schema.
 | ------------------------------ | ------------------------------------- | ------------------------------------------------------- |
 | create role + identity         | **Administration → Team & access**    | —                                                       |
 | observe branch/warehouse ids   | not shown; use `GET /api/v1/metadata` | —                                                       |
-| change `SHOP_ERP_*`            | —                                     | host shell + `deploy/ecommerce/.env.shop` (step 4)      |
+| change `SHOP_ERP_*`            | —                                     | host shell + `deploy/.env.shop` (step 4)                |
 | handshake                      | —                                     | **Operations → ERP sync** → Probe                       |
 | pull catalogue / stock         | —                                     | **Operations → ERP sync** → Pull catalogue / Pull stock |
 | push a customer                | —                                     | **Customers** → Push to ERP                             |

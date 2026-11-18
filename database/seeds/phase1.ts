@@ -21,7 +21,9 @@ async function main() {
   await migrate(db);
   const status = await migrationStatus(db);
   if (status.some((entry) => !entry.applied || !entry.checksum_matches)) {
-    throw new Error("Migrations are not current; refusing to seed a half-migrated database");
+    throw new Error(
+      "Migrations are not current; refusing to seed a half-migrated database",
+    );
   }
 
   const settings: Array<[string, string]> = [
@@ -43,10 +45,14 @@ async function main() {
   let admin: { created: boolean; email: string } | null = null;
   if (config.adminBootstrap.email || config.adminBootstrap.password) {
     if (!config.adminBootstrap.email || !config.adminBootstrap.password) {
-      throw new Error("Set both ADMIN_BOOTSTRAP_EMAIL and ADMIN_BOOTSTRAP_PASSWORD, or neither");
+      throw new Error(
+        "Set both ADMIN_BOOTSTRAP_EMAIL and ADMIN_BOOTSTRAP_PASSWORD, or neither",
+      );
     }
     if (config.adminBootstrap.password.length < 12) {
-      throw new Error("ADMIN_BOOTSTRAP_PASSWORD must be at least 12 characters");
+      throw new Error(
+        "ADMIN_BOOTSTRAP_PASSWORD must be at least 12 characters",
+      );
     }
     const result = await provisionAdmin(db, {
       email: config.adminBootstrap.email,
@@ -57,25 +63,39 @@ async function main() {
     admin = { created: result.created, email: config.adminBootstrap.email };
   }
 
-  const counts = await db.query<{ products: number; customers: number; orders: number }>(
+  const counts = await db.query<{
+    products: number;
+    customers: number;
+    orders: number;
+  }>(
     `SELECT (SELECT count(*) FROM product)::int AS products,
             (SELECT count(*) FROM customer)::int AS customers,
             (SELECT count(*) FROM customer_order)::int AS orders`,
   );
 
-  console.log(JSON.stringify({
-    seeded: true,
-    settings: settings.length,
-    admin,
-    data: counts.rows[0],
-    config: describeConfig(),
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        seeded: true,
+        settings: settings.length,
+        admin,
+        data: counts.rows[0],
+        config: describeConfig(),
+      },
+      null,
+      2,
+    ),
+  );
 
   if (!config.erp.enabled) {
-    console.log("ERP integration is disabled: the catalogue stays empty until you enable it and run a catalogue pull.");
+    console.log(
+      "ERP integration is disabled: the catalogue stays empty until you enable it and run a catalogue pull.",
+    );
   }
   if (!admin) {
-    console.log("No administrator was created. Set ADMIN_BOOTSTRAP_EMAIL and ADMIN_BOOTSTRAP_PASSWORD to create one.");
+    console.log(
+      "No administrator was created. Set ADMIN_BOOTSTRAP_EMAIL and ADMIN_BOOTSTRAP_PASSWORD to create one.",
+    );
   }
   await closeDatabase();
 }

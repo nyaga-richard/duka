@@ -1,7 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { D, money, normalizeKenyanPhone, slugify, moneyString, kenyanPhone } from "@ecom/shared";
-import { stableStringify, idempotencyHash } from "../../apps/api/src/http/route.ts";
+import {
+  D,
+  money,
+  normalizeKenyanPhone,
+  slugify,
+  moneyString,
+  kenyanPhone,
+} from "@ecom/shared";
+import {
+  stableStringify,
+  idempotencyHash,
+} from "../../apps/api/src/http/route.ts";
 
 test("money rounds half-up to two decimals and always returns a string", () => {
   assert.equal(money("12.345"), "12.35");

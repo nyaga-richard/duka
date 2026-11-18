@@ -22,12 +22,17 @@ export interface TickResult {
 
 export async function runWorkerTick(): Promise<TickResult> {
   const db = await getDatabase();
-  const expired = await db.withTransaction((tx) => expireStaleReservations(tx, 200));
+  const expired = await db.withTransaction((tx) =>
+    expireStaleReservations(tx, 200),
+  );
 
   let syncJobs: TickResult["sync_jobs"] = [];
   if (erpEnabled()) {
     await enqueuePeriodicPull(db).catch((error) =>
-      logger.warn({ err: error?.message }, "could not enqueue periodic ERP pull"),
+      logger.warn(
+        { err: error?.message },
+        "could not enqueue periodic ERP pull",
+      ),
     );
     syncJobs = await processSyncJobs(db, getErpAdapter(), 5);
   }
@@ -35,7 +40,13 @@ export async function runWorkerTick(): Promise<TickResult> {
   await db.query(
     `INSERT INTO worker_heartbeat(worker_name, last_seen_at, detail) VALUES($1, now(), $2)
      ON CONFLICT (worker_name) DO UPDATE SET last_seen_at = now(), detail = EXCLUDED.detail`,
-    [WORKER_NAME, JSON.stringify({ expired_reservations: expired.expired, sync_jobs: syncJobs.length })],
+    [
+      WORKER_NAME,
+      JSON.stringify({
+        expired_reservations: expired.expired,
+        sync_jobs: syncJobs.length,
+      }),
+    ],
   );
 
   return {
@@ -46,8 +57,14 @@ export async function runWorkerTick(): Promise<TickResult> {
 }
 
 async function main() {
-  const intervalMs = Math.max(Number(process.env.WORKER_INTERVAL_MS ?? 5000), 1000);
-  logger.info({ worker: WORKER_NAME, interval_ms: intervalMs, erp_enabled: erpEnabled() }, "worker starting");
+  const intervalMs = Math.max(
+    Number(process.env.WORKER_INTERVAL_MS ?? 5000),
+    1000,
+  );
+  logger.info(
+    { worker: WORKER_NAME, interval_ms: intervalMs, erp_enabled: erpEnabled() },
+    "worker starting",
+  );
   let stopping = false;
   const stop = async (signal: string) => {
     if (stopping) return;
@@ -66,7 +83,10 @@ async function main() {
         logger.info(result, "worker tick");
       }
     } catch (error: any) {
-      logger.error({ err: error?.message, stack: error?.stack }, "worker tick failed");
+      logger.error(
+        { err: error?.message, stack: error?.stack },
+        "worker tick failed",
+      );
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }

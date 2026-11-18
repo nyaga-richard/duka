@@ -8,7 +8,12 @@
  * create resources pass an Idempotency-Key so retries are safe.
  */
 export interface ApiErrorBody {
-  error: { code: string; message: string; details?: unknown; request_id: string };
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+    request_id: string;
+  };
 }
 
 export class ApiError extends Error {
@@ -26,13 +31,19 @@ export class ApiError extends Error {
 let csrfToken: string | null = null;
 
 export async function loadIdentity() {
-  const response = await fetch("/api/v1/auth/me", { credentials: "include", cache: "no-store" });
+  const response = await fetch("/api/v1/auth/me", {
+    credentials: "include",
+    cache: "no-store",
+  });
   if (!response.ok) return null;
   const body = await response.json();
   csrfToken = body?.data?.csrf_token ?? null;
-  return body?.data as
-    | { authenticated: boolean; kind?: "customer" | "guest" | "admin"; customer?: any; admin?: any }
-    | null;
+  return body?.data as {
+    authenticated: boolean;
+    kind?: "customer" | "guest" | "admin";
+    customer?: any;
+    admin?: any;
+  } | null;
 }
 
 async function ensureCsrf(): Promise<string | null> {
@@ -51,7 +62,8 @@ export async function api<T = any>(
   if (method !== "GET") {
     const token = await ensureCsrf();
     if (token) headers["x-csrf-token"] = token;
-    if (options.idempotencyKey) headers["idempotency-key"] = options.idempotencyKey;
+    if (options.idempotencyKey)
+      headers["idempotency-key"] = options.idempotencyKey;
   }
   const response = await fetch(`/api/v1${path}`, {
     method,

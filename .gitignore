@@ -8,3 +8,11 @@ coverage/
 .env.local
 .env.*.local
 *.tsbuildinfo
+
+# Shop operator state: generated once per host by deploy/init-shop-env.sh, and
+# never committed (it holds the shop database password and the ERP integration
+# user's secret). The dump key and backups are just as sensitive.
+deploy/.env.shop
+deploy/.env.shop.*
+deploy/secrets/
+deploy/backups/

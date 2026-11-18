@@ -100,9 +100,16 @@ export async function loadProductImage(
     const contentType = binary.contentType.startsWith("image/")
       ? binary.contentType
       : "application/octet-stream";
-    const entry: CacheEntry = { bytes: binary.bytes, contentType, etag, fetchedAt: Date.now() };
+    const entry: CacheEntry = {
+      bytes: binary.bytes,
+      contentType,
+      etag,
+      fetchedAt: Date.now(),
+    };
     if (cache.size >= CACHE_MAX) {
-      const oldest = [...cache.entries()].sort((a, b) => a[1].fetchedAt - b[1].fetchedAt)[0];
+      const oldest = [...cache.entries()].sort(
+        (a, b) => a[1].fetchedAt - b[1].fetchedAt,
+      )[0];
       if (oldest) cache.delete(oldest[0]);
     }
     cache.set(attachmentId, entry);

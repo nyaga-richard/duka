@@ -4,7 +4,12 @@ import { FakePaymentProvider } from "./fake.ts";
 import { ErpErrorLike } from "./errors.ts";
 import type { PaymentProvider } from "./types.ts";
 
-export { ManualPaymentProvider, MpesaPaymentProvider, FakePaymentProvider, ErpErrorLike };
+export {
+  ManualPaymentProvider,
+  MpesaPaymentProvider,
+  FakePaymentProvider,
+  ErpErrorLike,
+};
 export type * from "./types.ts";
 
 export interface PaymentRegistryConfig {
@@ -23,7 +28,9 @@ export interface PaymentRegistryConfig {
 }
 
 /** Resolve the active provider. `disabled` throws instead of silently degrading. */
-export function createPaymentProvider(config: PaymentRegistryConfig): PaymentProvider {
+export function createPaymentProvider(
+  config: PaymentRegistryConfig,
+): PaymentProvider {
   switch (config.mode) {
     case "manual":
       return new ManualPaymentProvider();
@@ -50,12 +57,17 @@ export function createPaymentProvider(config: PaymentRegistryConfig): PaymentPro
     }
     case "fake":
       if (process.env.NODE_ENV === "production") {
-        throw new ErpErrorLike("PAYMENTS_DISABLED", "The fake provider cannot run in production");
+        throw new ErpErrorLike(
+          "PAYMENTS_DISABLED",
+          "The fake provider cannot run in production",
+        );
       }
       return new FakePaymentProvider();
     case "disabled":
     default:
-      throw new ErpErrorLike("PAYMENTS_DISABLED", "Payment processing is disabled");
-
+      throw new ErpErrorLike(
+        "PAYMENTS_DISABLED",
+        "Payment processing is disabled",
+      );
   }
 }

@@ -26,7 +26,8 @@ export const ERP_CAPABILITIES: ErpCapability[] = [
     endpoint: "/api/v1/auth/login",
     method: "POST",
     permission: null,
-    purpose: "Create an ERP session (cookie + CSRF) for the integration identity",
+    purpose:
+      "Create an ERP session (cookie + CSRF) for the integration identity",
     evidence: "apps/api/src/services/auth.ts:186",
   },
   {
@@ -53,7 +54,8 @@ export const ERP_CAPABILITIES: ErpCapability[] = [
     endpoint: "/api/v1/metadata",
     method: "GET",
     permission: null,
-    purpose: "Branches, warehouses, registers, units, tax rules, payment methods",
+    purpose:
+      "Branches, warehouses, registers, units, tax rules, payment methods",
     evidence: "apps/api/src/services/admin.ts:345",
   },
   {
@@ -180,7 +182,8 @@ export const ERP_CAPABILITIES: ErpCapability[] = [
     method: "POST",
     permission: null,
     purpose: "Machine authentication without a browser session",
-    evidence: "No API-key/OAuth code path exists; only session cookies (auth.ts:259)",
+    evidence:
+      "No API-key/OAuth code path exists; only session cookies (auth.ts:259)",
     contract: "G1",
   },
   {
@@ -200,7 +203,8 @@ export const ERP_CAPABILITIES: ErpCapability[] = [
     method: "POST",
     permission: null,
     purpose: "TTL stock reservation for a web cart",
-    evidence: "stock_reservations only written by sales_order approval (business.ts:247)",
+    evidence:
+      "stock_reservations only written by sales_order approval (business.ts:247)",
     contract: "G3",
   },
   {
@@ -295,8 +299,12 @@ export const ERP_CAPABILITIES: ErpCapability[] = [
   },
 ];
 
-export const VERIFIED_CAPABILITIES = ERP_CAPABILITIES.filter((c) => c.support === "verified");
-export const MISSING_CAPABILITIES = ERP_CAPABILITIES.filter((c) => c.support === "unsupported");
+export const VERIFIED_CAPABILITIES = ERP_CAPABILITIES.filter(
+  (c) => c.support === "verified",
+);
+export const MISSING_CAPABILITIES = ERP_CAPABILITIES.filter(
+  (c) => c.support === "unsupported",
+);
 
 export function capability(id: string): ErpCapability | undefined {
   return ERP_CAPABILITIES.find((c) => c.id === id);

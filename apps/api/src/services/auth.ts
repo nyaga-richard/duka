@@ -11,7 +11,12 @@ import type { Request, Response } from "express";
 import type { Database, Queryable } from "../db/index.ts";
 import { config } from "../config.ts";
 import { fail } from "../errors.ts";
-import type { Actor, AdminActor, CustomerActor, GuestActor } from "../http/context.ts";
+import type {
+  Actor,
+  AdminActor,
+  CustomerActor,
+  GuestActor,
+} from "../http/context.ts";
 import type { Permission } from "@ecom/shared";
 import {
   hashPassword,
@@ -47,7 +52,11 @@ function cookieOptions(maxAgeSeconds: number, strict = false) {
   };
 }
 
-export function setSessionCookie(res: Response, kind: "customer" | "guest" | "admin", token: string) {
+export function setSessionCookie(
+  res: Response,
+  kind: "customer" | "guest" | "admin",
+  token: string,
+) {
   const maxAge =
     kind === "admin"
       ? config.sessions.adminHours * 3600
@@ -56,14 +65,24 @@ export function setSessionCookie(res: Response, kind: "customer" | "guest" | "ad
         : config.sessions.customerHours * 3600;
   res.append(
     "Set-Cookie",
-    serializeCookie(config.cookieNames[kind], token, cookieOptions(maxAge, kind === "admin")),
+    serializeCookie(
+      config.cookieNames[kind],
+      token,
+      cookieOptions(maxAge, kind === "admin"),
+    ),
   );
 }
 
-export function clearSessionCookie(res: Response, kind: "customer" | "guest" | "admin") {
+export function clearSessionCookie(
+  res: Response,
+  kind: "customer" | "guest" | "admin",
+) {
   res.append(
     "Set-Cookie",
-    serializeCookie(config.cookieNames[kind], "", { ...cookieOptions(0, kind === "admin"), maxAge: 0 }),
+    serializeCookie(config.cookieNames[kind], "", {
+      ...cookieOptions(0, kind === "admin"),
+      maxAge: 0,
+    }),
   );
 }
 
@@ -74,7 +93,10 @@ export interface ResolvedActors {
 }
 
 /** Resolve every realm present in the request (usually exactly one). */
-export async function resolveActors(db: Database, req: Request): Promise<ResolvedActors> {
+export async function resolveActors(
+  db: Database,
+  req: Request,
+): Promise<ResolvedActors> {
   const cookies = parseCookie(req.headers.cookie ?? "");
   const result: ResolvedActors = { customer: null, guest: null, admin: null };
 
@@ -176,7 +198,8 @@ export function verifyCsrf(actor: Actor, provided: string | undefined) {
   }
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);
-  if (!a.equals(b)) fail(403, "CSRF_INVALID", "Security token is missing or invalid");
+  if (!a.equals(b))
+    fail(403, "CSRF_INVALID", "Security token is missing or invalid");
 }
 
 interface CreateSessionInput {
@@ -194,7 +217,14 @@ async function insertCustomerSession(
   const row = await db.query<{ session_id: string }>(
     `INSERT INTO customer_session(customer_id, token_hash, csrf_token, expires_at, ip, user_agent)
      VALUES($1,$2,$3, now() + ($4 || ' hours')::interval, $5, $6) RETURNING session_id`,
-    [customerId, digest(token), csrf, String(config.sessions.customerHours), input.ip ?? null, input.userAgent ?? null],
+    [
+      customerId,
+      digest(token),
+      csrf,
+      String(config.sessions.customerHours),
+      input.ip ?? null,
+      input.userAgent ?? null,
+    ],
   );
   return { token, csrf, sessionId: row.rows[0]!.session_id };
 }
@@ -213,7 +243,9 @@ export async function registerCustomer(
   meta: CreateSessionInput,
 ): Promise<{ customer: any; token: string; csrf: string }> {
   await rateLimit(db, `register:${meta.ip ?? "unknown"}`, 10, 3600);
-  const existing = await db.query("SELECT 1 FROM customer WHERE email = $1", [input.email]);
+  const existing = await db.query("SELECT 1 FROM customer WHERE email = $1", [
+    input.email,
+  ]);
   if (existing.rowCount > 0) {
     fail(409, "EMAIL_TAKEN", "An account with that email already exists");
   }
@@ -222,7 +254,13 @@ export async function registerCustomer(
     `INSERT INTO customer(email, password_hash, first_name, last_name, phone)
      VALUES($1,$2,$3,$4,$5)
      RETURNING customer_id, email, first_name, last_name, phone, created_at`,
-    [input.email, passwordHash, input.firstName, input.lastName, input.phone ?? null],
+    [
+      input.email,
+      passwordHash,
+      input.firstName,
+      input.lastName,
+      input.phone ?? null,
+    ],
   );
   const customer = inserted.rows[0];
   const session = await insertCustomerSession(db, customer.customer_id, meta);
@@ -262,7 +300,10 @@ export async function loginCustomer(
   }
 
   const session = await insertCustomerSession(db, customer.customer_id, meta);
-  await db.query("UPDATE customer SET last_login_at = now() WHERE customer_id = $1", [customer.customer_id]);
+  await db.query(
+    "UPDATE customer SET last_login_at = now() WHERE customer_id = $1",
+    [customer.customer_id],
+  );
   await securityEvent(db, {
     subjectType: "customer",
     subjectId: String(customer.customer_id),
@@ -277,7 +318,12 @@ export async function createGuestSession(
   db: Database,
   input: { email?: string | null },
   meta: CreateSessionInput,
-): Promise<{ token: string; csrf: string; guestSessionId: string; email: string | null }> {
+): Promise<{
+  token: string;
+  csrf: string;
+  guestSessionId: string;
+  email: string | null;
+}> {
   await rateLimit(db, `guest:${meta.ip ?? "unknown"}`, 60, 3600);
   const token = randomToken(32);
   const csrf = randomToken(24);
@@ -285,16 +331,34 @@ export async function createGuestSession(
     `INSERT INTO guest_session(token_hash, csrf_token, email, expires_at, ip, user_agent)
      VALUES($1,$2,$3, now() + ($4 || ' hours')::interval, $5, $6)
      RETURNING guest_session_id`,
-    [digest(token), csrf, input.email ?? null, String(config.sessions.guestHours), meta.ip ?? null, meta.userAgent ?? null],
+    [
+      digest(token),
+      csrf,
+      input.email ?? null,
+      String(config.sessions.guestHours),
+      meta.ip ?? null,
+      meta.userAgent ?? null,
+    ],
   );
-  return { token, csrf, guestSessionId: row.rows[0]!.guest_session_id, email: input.email ?? null };
+  return {
+    token,
+    csrf,
+    guestSessionId: row.rows[0]!.guest_session_id,
+    email: input.email ?? null,
+  };
 }
 
 export async function loginAdmin(
   db: Database,
   input: { email: string; password: string },
   meta: CreateSessionInput,
-): Promise<{ admin: any; token: string; csrf: string; permissions: Permission[]; roles: string[] }> {
+): Promise<{
+  admin: any;
+  token: string;
+  csrf: string;
+  permissions: Permission[];
+  roles: string[];
+}> {
   await rateLimit(db, `admin-login:ip:${meta.ip ?? "unknown"}`, 20, 900);
   await rateLimit(db, `admin-login:email:${input.email}`, 10, 900);
   const found = await db.query<any>(
@@ -319,9 +383,19 @@ export async function loginAdmin(
   const session = await db.query<{ session_id: string }>(
     `INSERT INTO admin_session(admin_user_id, token_hash, csrf_token, expires_at, ip, user_agent)
      VALUES($1,$2,$3, now() + ($4 || ' hours')::interval, $5, $6) RETURNING session_id`,
-    [admin.admin_user_id, digest(token), csrf, String(config.sessions.adminHours), meta.ip ?? null, meta.userAgent ?? null],
+    [
+      admin.admin_user_id,
+      digest(token),
+      csrf,
+      String(config.sessions.adminHours),
+      meta.ip ?? null,
+      meta.userAgent ?? null,
+    ],
   );
-  await db.query("UPDATE admin_user SET last_login_at = now() WHERE admin_user_id = $1", [admin.admin_user_id]);
+  await db.query(
+    "UPDATE admin_user SET last_login_at = now() WHERE admin_user_id = $1",
+    [admin.admin_user_id],
+  );
   const [roles, permissions] = await Promise.all([
     db.query<{ role_name: string }>(
       `SELECT r.role_name FROM admin_user_role ur JOIN admin_role r ON r.role_id = ur.role_id
@@ -354,9 +428,23 @@ export async function loginAdmin(
 
 export async function revokeSession(db: Database, actor: Actor): Promise<void> {
   const table =
-    actor.kind === "admin" ? "admin_session" : actor.kind === "customer" ? "customer_session" : "guest_session";
-  const column = actor.kind === "admin" ? "admin_user_id" : actor.kind === "customer" ? "customer_id" : "guest_session_id";
-  const value = actor.kind === "admin" ? actor.adminUserId : actor.kind === "customer" ? actor.customerId : actor.guestSessionId;
+    actor.kind === "admin"
+      ? "admin_session"
+      : actor.kind === "customer"
+        ? "customer_session"
+        : "guest_session";
+  const column =
+    actor.kind === "admin"
+      ? "admin_user_id"
+      : actor.kind === "customer"
+        ? "customer_id"
+        : "guest_session_id";
+  const value =
+    actor.kind === "admin"
+      ? actor.adminUserId
+      : actor.kind === "customer"
+        ? actor.customerId
+        : actor.guestSessionId;
   await db.query(
     `UPDATE ${table} SET revoked_at = now() WHERE session_id = $1 AND ${column} = $2`,
     [actor.sessionId, value],
@@ -380,10 +468,12 @@ export async function provisionAdmin(
   if (existing.rows[0]) {
     return { created: false, adminUserId: existing.rows[0].admin_user_id };
   }
-  const role = await db.query<{ role_id: number }>("SELECT role_id FROM admin_role WHERE role_name = $1", [
-    input.role,
-  ]);
-  if (!role.rows[0]) fail(422, "VALIDATION_ERROR", `Unknown role: ${input.role}`);
+  const role = await db.query<{ role_id: number }>(
+    "SELECT role_id FROM admin_role WHERE role_name = $1",
+    [input.role],
+  );
+  if (!role.rows[0])
+    fail(422, "VALIDATION_ERROR", `Unknown role: ${input.role}`);
   const passwordHash = await hashPassword(input.password);
   return db.withTransaction(async (tx) => {
     const created = await tx.query<{ admin_user_id: string }>(
@@ -392,26 +482,40 @@ export async function provisionAdmin(
       [input.email, passwordHash, input.displayName],
     );
     const adminUserId = created.rows[0]!.admin_user_id;
-    await tx.query("INSERT INTO admin_user_role(admin_user_id, role_id) VALUES($1,$2)", [
-      adminUserId,
-      role.rows[0]!.role_id,
-    ]);
+    await tx.query(
+      "INSERT INTO admin_user_role(admin_user_id, role_id) VALUES($1,$2)",
+      [adminUserId, role.rows[0]!.role_id],
+    );
     return { created: true, adminUserId };
   });
 }
 
 /** Shared by admin guards: permission check with a stable error message. */
-export function requireAnyPermission(actor: AdminActor, permissions: Permission[]): void {
-  if (!permissions.some((permission) => actor.permissions.includes(permission))) {
-    fail(403, "FORBIDDEN", `One of these permissions is required: ${permissions.join(", ")}`);
+export function requireAnyPermission(
+  actor: AdminActor,
+  permissions: Permission[],
+): void {
+  if (
+    !permissions.some((permission) => actor.permissions.includes(permission))
+  ) {
+    fail(
+      403,
+      "FORBIDDEN",
+      `One of these permissions is required: ${permissions.join(", ")}`,
+    );
   }
 }
 
-export function requirePermission(actor: AdminActor, permission: Permission): void {
+export function requirePermission(
+  actor: AdminActor,
+  permission: Permission,
+): void {
   if (!actor.permissions.includes(permission)) {
     fail(403, "FORBIDDEN", `Permission required: ${permission}`);
   }
 }
 
 /** Test helper export to keep password rules in one place. */
-export const passwordInternals = { scryptParams: { ...{ N: 32_768, r: 8, p: 1 } } };
+export const passwordInternals = {
+  scryptParams: { ...{ N: 32_768, r: 8, p: 1 } },
+};

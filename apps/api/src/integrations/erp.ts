@@ -29,7 +29,10 @@ export function getErpAdapter(): ErpAdapter {
       origin: config.erp.allowedOrigin || new URL(config.erp.baseUrl).origin,
       timeoutMs: config.erp.timeoutMs,
       maxAttempts: config.erp.maxAttempts,
-      logger: { warn: (obj, msg) => logger.warn(obj, msg), info: (obj, msg) => logger.info(obj, msg) },
+      logger: {
+        warn: (obj, msg) => logger.warn(obj, msg),
+        info: (obj, msg) => logger.info(obj, msg),
+      },
     });
     adapter = new ErpAdapter(transport, {
       defaultBranchId: config.erp.defaultBranchId || undefined,
@@ -46,6 +49,7 @@ export function erpEnabled(): boolean {
 
 /** Test seam: inject a fake-backed adapter without touching module state graph. */
 export function setErpAdapterForTest(next: ErpAdapter | null) {
-  if (config.env === "production") throw new Error("Test seam is unavailable in production");
+  if (config.env === "production")
+    throw new Error("Test seam is unavailable in production");
   adapter = next;
 }

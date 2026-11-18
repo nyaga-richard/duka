@@ -27,9 +27,25 @@ const reservedOf = async (variantId: number) => {
 
 before(async () => {
   ctx = await startTestContext();
-  shirt = await seedCatalogue(ctx.db, { name: "Kanzu Shirt", sku: "KANZU-M", price: "1250.00", stock: 5 });
-  mug = await seedCatalogue(ctx.db, { name: "Ceramic Mug", sku: "MUG-01", price: "450.50", stock: 2 });
-  await seedCatalogue(ctx.db, { name: "Hidden Draft", sku: "DRAFT-1", price: "999.00", stock: 5, status: "draft" });
+  shirt = await seedCatalogue(ctx.db, {
+    name: "Kanzu Shirt",
+    sku: "KANZU-M",
+    price: "1250.00",
+    stock: 5,
+  });
+  mug = await seedCatalogue(ctx.db, {
+    name: "Ceramic Mug",
+    sku: "MUG-01",
+    price: "450.50",
+    stock: 2,
+  });
+  await seedCatalogue(ctx.db, {
+    name: "Hidden Draft",
+    sku: "DRAFT-1",
+    price: "999.00",
+    stock: 5,
+    status: "draft",
+  });
 });
 
 after(async () => {
@@ -41,20 +57,30 @@ beforeEach(async () => {
   await ctx.db.query("DELETE FROM inventory_reservation");
   await ctx.db.query("DELETE FROM cart_item");
   await ctx.db.query("DELETE FROM cart");
-  await ctx.db.query("UPDATE product_variant SET qty_in_stock = 5 WHERE variant_id = $1", [shirt.variant_id]);
-  await ctx.db.query("UPDATE product_variant SET qty_in_stock = 2 WHERE variant_id = $1", [mug.variant_id]);
+  await ctx.db.query(
+    "UPDATE product_variant SET qty_in_stock = 5 WHERE variant_id = $1",
+    [shirt.variant_id],
+  );
+  await ctx.db.query(
+    "UPDATE product_variant SET qty_in_stock = 2 WHERE variant_id = $1",
+    [mug.variant_id],
+  );
 });
 
 test("the public catalogue exposes published products with live availability only", async () => {
   const client = apiClient(ctx.baseUrl);
   const list = await client.get("/api/v1/catalog/products?limit=10");
   assert.equal(list.status, 200);
-  const names = list.data.items.map((item: any) => item.name ?? item.product_name);
+  const names = list.data.items.map(
+    (item: any) => item.name ?? item.product_name,
+  );
   assert.ok(names.includes("Kanzu Shirt"));
   assert.ok(names.includes("Ceramic Mug"));
   assert.ok(!names.includes("Hidden Draft"), "draft products stay private");
 
-  const withPrices = list.data.items.find((item: any) => (item.name ?? item.product_name) === "Kanzu Shirt");
+  const withPrices = list.data.items.find(
+    (item: any) => (item.name ?? item.product_name) === "Kanzu Shirt",
+  );
   assert.equal(withPrices.variants[0].price, "1250.00");
   assert.equal(withPrices.variants[0].available, 5);
 
@@ -93,18 +119,31 @@ test("categories and brands are listed with counts", async () => {
 
 test("an anonymous visitor gets a guest cart and a CSRF token, then can keep shopping", async () => {
   const client = apiClient(ctx.baseUrl);
-  const first = await client.post("/api/v1/cart/items", { variant_id: shirt.variant_id, quantity: 2 });
+  const first = await client.post("/api/v1/cart/items", {
+    variant_id: shirt.variant_id,
+    quantity: 2,
+  });
   assert.equal(first.status, 201);
   assert.ok(client.cookies.has("ecom_guest"), "guest session cookie issued");
-  assert.ok(first.data.csrf_token, "CSRF token returned so the SPA can continue");
+  assert.ok(
+    first.data.csrf_token,
+    "CSRF token returned so the SPA can continue",
+  );
   client.setCsrfFromBody(first.data);
 
   assert.equal(first.data.cart.item_count, 2);
   assert.equal(first.data.cart.subtotal, "2500.00");
   assert.equal(await reservedOf(shirt.variant_id), 2);
 
-  const second = await client.post("/api/v1/cart/items", { variant_id: mug.variant_id, quantity: 1 });
-  assert.equal(second.status, 201, "second write succeeds with the returned CSRF token");
+  const second = await client.post("/api/v1/cart/items", {
+    variant_id: mug.variant_id,
+    quantity: 1,
+  });
+  assert.equal(
+    second.status,
+    201,
+    "second write succeeds with the returned CSRF token",
+  );
   assert.equal(second.data.cart.item_count, 3);
   assert.equal(second.data.cart.subtotal, "2950.50");
 });
@@ -121,12 +160,20 @@ test("quantities update, zero removes, and removal releases the hold", async () 
   const guest = await guestClient(ctx.baseUrl, "quantities@example.test");
   await addToCart(guest, shirt.variant_id, 1);
 
-  const update = await guest.request("PATCH", `/api/v1/cart/items/${shirt.variant_id}`, { body: { quantity: 3 } });
+  const update = await guest.request(
+    "PATCH",
+    `/api/v1/cart/items/${shirt.variant_id}`,
+    { body: { quantity: 3 } },
+  );
   assert.equal(update.status, 200);
   assert.equal(update.data.items[0].quantity, 3);
   assert.equal(await reservedOf(shirt.variant_id), 3);
 
-  const zero = await guest.request("PATCH", `/api/v1/cart/items/${shirt.variant_id}`, { body: { quantity: 0 } });
+  const zero = await guest.request(
+    "PATCH",
+    `/api/v1/cart/items/${shirt.variant_id}`,
+    { body: { quantity: 0 } },
+  );
   assert.equal(zero.status, 200);
   assert.equal(zero.data.items.length, 0);
   assert.equal(await reservedOf(shirt.variant_id), 0);

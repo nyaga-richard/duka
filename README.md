@@ -1,25 +1,42 @@
 # Duka E-commerce — Phase 1 foundation
 
-An independent e-commerce service for Duka. It is a separate TypeScript/Express
-application with its own PostgreSQL database; it **never** writes to the ERP
-database and only talks to the ERP over its documented HTTP API.
+An independent e-commerce service for Duka, in **its own repository**. It is a
+separate TypeScript/Express application with its own PostgreSQL database; it
+**never** writes to the ERP database and only talks to the ERP over its documented
+HTTP API.
 
 The ERP remains the master of products, prices and stock. This service owns the
 storefront: identity, carts, stock holds, orders, payment records and the audit
 trail that explains every state change.
 
+## Two repositories, one stack
+
+| Repository                                | Holds                 | Runs                                             |
+| ----------------------------------------- | --------------------- | ------------------------------------------------ |
+| `nyaga-richard/duka`                      | the ERP (business OS) | `api`, `web`, `db`, proxy, tunnel                |
+| `nyaga-richard/duka-ecommerce` (this one) | the shop              | `shop-api`, `shop-worker`, `shop-web`, `shop-db` |
+
+They version, test and release independently — this repo's tests never touch the
+ERP's code — but they run in **one Compose project** so the shop sits behind the
+same proxy and Cloudflare Tunnel on its own hostname. `deploy/` here holds the
+shop's overlay and its operator scripts; they read the ERP's Compose files from a
+sibling checkout (`../duka`, or `ERP_DIR`). Nothing is copied between the repos at
+run time except HTTP.
+
+This repository was split out of the ERP monorepo with its history intact.
+
 ## What is in the box
 
-| Area                               | Where                    | State                                                   |
-| ---------------------------------- | ------------------------ | ------------------------------------------------------- |
-| Schema (6 forward-only migrations) | `database/migrations`    | Applied and tested                                      |
-| HTTP API (49 endpoints)            | `apps/api/src`           | Implemented, tested                                     |
-| Background worker                  | `apps/api/src/worker.ts` | Heartbeat, hold expiry, ERP retries                     |
-| ERP adapter (isolated)             | `packages/erp-adapter`   | Verified capabilities only                              |
-| Payments boundary                  | `packages/payments`      | `manual` default; M-Pesa untested live                  |
-| Storefront + staff UI              | `apps/web`               | Catalogue, cart, checkout, orders, manual capture       |
-| Tests                              | `tests`                  | 87 automated tests (plus a gated real-PostgreSQL proof) |
-| Deployment                         | `docker`                 | Compose: PostgreSQL, API, worker, web                   |
+| Area                               | Where                    | State                                                    |
+| ---------------------------------- | ------------------------ | -------------------------------------------------------- |
+| Schema (6 forward-only migrations) | `database/migrations`    | Applied and tested                                       |
+| HTTP API (58 endpoints)            | `apps/api/src`           | Implemented, tested                                      |
+| Background worker                  | `apps/api/src/worker.ts` | Heartbeat, hold expiry, ERP retries                      |
+| ERP adapter (isolated)             | `packages/erp-adapter`   | Verified capabilities only                               |
+| Payments boundary                  | `packages/payments`      | `manual` default; M-Pesa untested live                   |
+| Storefront + staff UI              | `apps/web`               | Catalogue, cart, checkout, orders, manual capture        |
+| Tests                              | `tests`                  | 112 automated tests (plus a gated real-PostgreSQL proof) |
+| Deployment                         | `docker`, `deploy`       | Standalone Compose, or the overlay into a Duka stack     |
 
 Read first:
 
@@ -34,7 +51,6 @@ Read first:
 ## Quick start (local, no PostgreSQL needed)
 
 ```bash
-cd ecommerce
 npm install
 cp .env.example .env             # DATABASE_URL defaults to embedded PGlite
 npm run db:migrate               # 6 migrations
@@ -82,8 +98,8 @@ docker compose --env-file docker/.env -f docker/docker-compose.yml up -d --build
 
 This standalone stack is for development/demo. In a real Duka deployment the
 storefront is created and upgraded as part of Duka's own Compose project
-(`deploy/ecommerce/compose.shop.yml`, driven by `deploy/go-live.sh` and
-`deploy/update.sh`) with a separate hostname, database and backup key.
+(`deploy/compose.shop.yml`, driven by `../duka/deploy/go-live.sh` and
+`../duka/deploy/update.sh`) with a separate hostname, database and backup key.
 
 Services here: `db` (PostgreSQL 17.11, not published), one-shot `migrate`,
 `api`, `worker`, `web` (port 3100). Both `api` and `migrate` build from

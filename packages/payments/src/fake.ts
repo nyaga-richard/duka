@@ -1,5 +1,13 @@
 import { createHmac } from "node:crypto";
-import type { CreateIntentInput, PaymentIntentResult, PaymentProvider, RefundInput, RefundResult, WebhookInput, WebhookVerification } from "./types.ts";
+import type {
+  CreateIntentInput,
+  PaymentIntentResult,
+  PaymentProvider,
+  RefundInput,
+  RefundResult,
+  WebhookInput,
+  WebhookVerification,
+} from "./types.ts";
 
 /**
  * Deterministic provider used only by automated tests. Refuses to run in
@@ -9,8 +17,14 @@ export class FakePaymentProvider implements PaymentProvider {
   readonly name = "fake" as const;
   readonly captureEnabled = true;
 
-  constructor(private readonly options: { secret?: string; failWebhookSignature?: boolean } = {}) {
-    if (process.env.NODE_ENV === "production") throw new Error("FakePaymentProvider is test-only");
+  constructor(
+    private readonly options: {
+      secret?: string;
+      failWebhookSignature?: boolean;
+    } = {},
+  ) {
+    if (process.env.NODE_ENV === "production")
+      throw new Error("FakePaymentProvider is test-only");
   }
 
   async createIntent(input: CreateIntentInput): Promise<PaymentIntentResult> {
@@ -35,13 +49,22 @@ export class FakePaymentProvider implements PaymentProvider {
       eventType: String(parsed.event_type ?? "payment.updated"),
       providerReference: parsed.reference ? String(parsed.reference) : null,
       amount: parsed.amount ? String(parsed.amount) : undefined,
-      status: parsed.status === "succeeded" ? "succeeded" : parsed.status === "failed" ? "failed" : "pending",
+      status:
+        parsed.status === "succeeded"
+          ? "succeeded"
+          : parsed.status === "failed"
+            ? "failed"
+            : "pending",
       reason: valid ? undefined : "Signature mismatch",
       raw: parsed,
     };
   }
 
   async refund(input: RefundInput): Promise<RefundResult> {
-    return { status: "succeeded", providerReference: `fake-refund-${input.idempotencyKey}`, raw: { amount: input.amount } };
+    return {
+      status: "succeeded",
+      providerReference: `fake-refund-${input.idempotencyKey}`,
+      raw: { amount: input.amount },
+    };
   }
 }

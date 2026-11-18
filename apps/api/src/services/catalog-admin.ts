@@ -291,7 +291,11 @@ export async function createProduct(db: Queryable, input: ProductInput) {
  * anything else — `javascript:`, `data:`, `//elsewhere` — is refused, because the
  * value ends up in an `<img src>` on a public page.
  */
-export async function setProductImage(db: Queryable, productId: number, imageUrl: string | null) {
+export async function setProductImage(
+  db: Queryable,
+  productId: number,
+  imageUrl: string | null,
+) {
   const product = await db.query<{ product_name: string }>(
     "SELECT product_name FROM product WHERE product_id = $1",
     [productId],
@@ -305,7 +309,9 @@ export async function setProductImage(db: Queryable, productId: number, imageUrl
 
   if (!imageUrl) {
     if (existing.rows[0]) {
-      await db.query("DELETE FROM product_image WHERE image_id = $1", [existing.rows[0].image_id]);
+      await db.query("DELETE FROM product_image WHERE image_id = $1", [
+        existing.rows[0].image_id,
+      ]);
     }
     return getAdminProduct(db, productId);
   }
@@ -313,18 +319,18 @@ export async function setProductImage(db: Queryable, productId: number, imageUrl
   const url = imageUrl.trim();
   // Absolute https, or a path this site serves itself (files in `public/`).
   // Never protocol-relative (`//host`), which would escape the site.
-  const acceptable = /^https?:\/\/[^\s]+$/i.test(url) || /^\/(?!\/)[^\s]*$/.test(url);
+  const acceptable =
+    /^https?:\/\/[^\s]+$/i.test(url) || /^\/(?!\/)[^\s]*$/.test(url);
   if (!acceptable) {
     fail(422, "VALIDATION_ERROR", "Use an https image URL, or clear the image");
   }
 
   const alt = product.rows[0].product_name.slice(0, 255);
   if (existing.rows[0]) {
-    await db.query("UPDATE product_image SET image_url = $2, alt_text = $3 WHERE image_id = $1", [
-      existing.rows[0].image_id,
-      url,
-      alt,
-    ]);
+    await db.query(
+      "UPDATE product_image SET image_url = $2, alt_text = $3 WHERE image_id = $1",
+      [existing.rows[0].image_id, url, alt],
+    );
   } else {
     await db.query(
       `INSERT INTO product_image(product_id, image_url, alt_text, is_primary, sort_order)

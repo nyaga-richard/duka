@@ -38,7 +38,10 @@ const checkoutBody = (email?: string) => ({
   ...(email ? { email } : {}),
 });
 
-async function readyShopper(email: string, items: Array<[CatalogueFixture, number]>) {
+async function readyShopper(
+  email: string,
+  items: Array<[CatalogueFixture, number]>,
+) {
   const client = await customerClient(ctx.baseUrl, email);
   for (const [fixture, quantity] of items) {
     const added = await addToCart(client, fixture.variant_id, quantity);
@@ -49,8 +52,18 @@ async function readyShopper(email: string, items: Array<[CatalogueFixture, numbe
 
 before(async () => {
   ctx = await startTestContext();
-  shirt = await seedCatalogue(ctx.db, { name: "Kanzu Shirt", sku: "KANZU-M", price: "1250.00", stock: 5 });
-  mug = await seedCatalogue(ctx.db, { name: "Ceramic Mug", sku: "MUG-01", price: "450.50", stock: 2 });
+  shirt = await seedCatalogue(ctx.db, {
+    name: "Kanzu Shirt",
+    sku: "KANZU-M",
+    price: "1250.00",
+    stock: 5,
+  });
+  mug = await seedCatalogue(ctx.db, {
+    name: "Ceramic Mug",
+    sku: "MUG-01",
+    price: "450.50",
+    stock: 2,
+  });
 });
 
 after(async () => {
@@ -61,10 +74,18 @@ after(async () => {
 beforeEach(async () => {
   // Reservations are never deleted: inventory_movement references them and they
   // are the audit trail. Consumed holds are already inactive.
-  await ctx.db.query("UPDATE inventory_reservation SET status = 'released', closed_at = now() WHERE status = 'active'");
+  await ctx.db.query(
+    "UPDATE inventory_reservation SET status = 'released', closed_at = now() WHERE status = 'active'",
+  );
   await ctx.db.query("DELETE FROM cart_item");
-  await ctx.db.query("UPDATE product_variant SET qty_in_stock = 5 WHERE variant_id = $1", [shirt.variant_id]);
-  await ctx.db.query("UPDATE product_variant SET qty_in_stock = 2 WHERE variant_id = $1", [mug.variant_id]);
+  await ctx.db.query(
+    "UPDATE product_variant SET qty_in_stock = 5 WHERE variant_id = $1",
+    [shirt.variant_id],
+  );
+  await ctx.db.query(
+    "UPDATE product_variant SET qty_in_stock = 2 WHERE variant_id = $1",
+    [mug.variant_id],
+  );
 });
 
 test("checkout creates an order, snapshots prices, consumes stock and converts the cart", async () => {
@@ -96,23 +117,32 @@ test("checkout creates an order, snapshots prices, consumes stock and converts t
   assert.equal(view.data.items[0].unit_price, "1250.00");
   assert.equal(view.data.items[0].line_total, "2500.00");
 
-  const cartRow = await ctx.db.query<{ status: string }>("SELECT status FROM cart WHERE converted_order_id = $1", [
-    order.order_id,
-  ]);
+  const cartRow = await ctx.db.query<{ status: string }>(
+    "SELECT status FROM cart WHERE converted_order_id = $1",
+    [order.order_id],
+  );
   assert.equal(cartRow.rows[0]!.status, "converted");
 
   const active = await ctx.db.query<{ count: number }>(
     "SELECT count(*)::int AS count FROM inventory_reservation WHERE order_id = $1 AND status = 'active'",
     [order.order_id],
   );
-  assert.equal(active.rows[0]!.count, 0, "holds are consumed, not left dangling");
+  assert.equal(
+    active.rows[0]!.count,
+    0,
+    "holds are consumed, not left dangling",
+  );
 
   const list = await client.get("/api/v1/orders");
   assert.equal(list.data.items.length, 1);
   assert.equal(list.data.items[0].order_id, order.order_id);
 
   const emptyCart = await client.get("/api/v1/cart");
-  assert.equal(emptyCart.data.item_count, 0, "a new cart is started after conversion");
+  assert.equal(
+    emptyCart.data.item_count,
+    0,
+    "a new cart is started after conversion",
+  );
 });
 
 test("orders are invisible to other customers", async () => {
@@ -121,7 +151,9 @@ test("orders are invisible to other customers", async () => {
   assert.equal(placed.status, 201);
 
   const stranger = await customerClient(ctx.baseUrl, "stranger@example.test");
-  const stolen = await stranger.get(`/api/v1/orders/${placed.data.order.order_id}`);
+  const stolen = await stranger.get(
+    `/api/v1/orders/${placed.data.order.order_id}`,
+  );
   assert.equal(stolen.status, 404, "existence is not disclosed");
   const list = await stranger.get("/api/v1/orders");
   assert.equal(list.data.items.length, 0);
@@ -130,16 +162,32 @@ test("orders are invisible to other customers", async () => {
 test("checkout is idempotent: the same key and body replay the same order", async () => {
   const client = await readyShopper("idempotent@example.test", [[shirt, 1]]);
   const body = checkoutBody();
-  const first = await client.post("/api/v1/orders", body, { "idempotency-key": "replay-key-1" });
+  const first = await client.post("/api/v1/orders", body, {
+    "idempotency-key": "replay-key-1",
+  });
   assert.equal(first.status, 201);
   const afterFirst = await stockOf(shirt.variant_id);
-  const replay = await client.post("/api/v1/orders", body, { "idempotency-key": "replay-key-1" });
+  const replay = await client.post("/api/v1/orders", body, {
+    "idempotency-key": "replay-key-1",
+  });
   assert.equal(replay.status, 201);
   assert.equal(replay.data.order.order_id, first.data.order.order_id);
-  assert.equal(replay.data.payment.status, first.data.payment.status, "replayed payment state is identical");
-  assert.equal(await stockOf(shirt.variant_id), afterFirst, "the second call did not consume more stock");
+  assert.equal(
+    replay.data.payment.status,
+    first.data.payment.status,
+    "replayed payment state is identical",
+  );
+  assert.equal(
+    await stockOf(shirt.variant_id),
+    afterFirst,
+    "the second call did not consume more stock",
+  );
 
-  const changed = await client.post("/api/v1/orders", { ...body, ship_name: "Someone Else" }, { "idempotency-key": "replay-key-1" });
+  const changed = await client.post(
+    "/api/v1/orders",
+    { ...body, ship_name: "Someone Else" },
+    { "idempotency-key": "replay-key-1" },
+  );
   assert.equal(changed.status, 409);
   assert.equal(changed.body.error.code, "IDEMPOTENCY_KEY_REUSED");
 });
@@ -179,9 +227,13 @@ test("guest checkout needs an email and stays scoped to that guest session", asy
   assert.equal(noEmail.body.error.code, "VALIDATION_ERROR");
   assert.match(noEmail.body.error.message, /email/i);
 
-  const withEmail = await guest.post("/api/v1/orders", checkoutBody("guest-checkout@example.test"), {
-    "idempotency-key": "guest-with-email",
-  });
+  const withEmail = await guest.post(
+    "/api/v1/orders",
+    checkoutBody("guest-checkout@example.test"),
+    {
+      "idempotency-key": "guest-with-email",
+    },
+  );
   assert.equal(withEmail.status, 201, JSON.stringify(withEmail.body));
 
   const guestOrders = await guest.get("/api/v1/orders");
@@ -189,7 +241,9 @@ test("guest checkout needs an email and stays scoped to that guest session", asy
   assert.equal(guestOrders.data.items[0].email, "guest-checkout@example.test");
 
   const otherGuest = await guestClient(ctx.baseUrl, "other-guest@example.test");
-  const denied = await otherGuest.get(`/api/v1/orders/${withEmail.data.order.order_id}`);
+  const denied = await otherGuest.get(
+    `/api/v1/orders/${withEmail.data.order.order_id}`,
+  );
   assert.equal(denied.status, 404);
 });
 
@@ -199,25 +253,40 @@ test("cancelling an unpaid order restores stock and is terminal", async () => {
   assert.equal(placed.status, 201);
   assert.equal(await stockOf(mug.variant_id), 0);
 
-  const cancelled = await client.post(`/api/v1/orders/${placed.data.order.order_id}/cancel`, {
-    reason: "Changed my mind about the colour",
-  });
+  const cancelled = await client.post(
+    `/api/v1/orders/${placed.data.order.order_id}/cancel`,
+    {
+      reason: "Changed my mind about the colour",
+    },
+  );
   assert.equal(cancelled.status, 200);
   assert.equal(await stockOf(mug.variant_id), 2, "stock returns to the shelf");
 
-  const detail = await client.get(`/api/v1/orders/${placed.data.order.order_id}`);
+  const detail = await client.get(
+    `/api/v1/orders/${placed.data.order.order_id}`,
+  );
   assert.equal(detail.data.status, "cancelled");
 
-  const again = await client.post(`/api/v1/orders/${placed.data.order.order_id}/cancel`, {
-    reason: "Trying to cancel twice",
-  });
+  const again = await client.post(
+    `/api/v1/orders/${placed.data.order.order_id}/cancel`,
+    {
+      reason: "Trying to cancel twice",
+    },
+  );
   assert.equal(again.status, 409);
   assert.equal(again.body.error.code, "INVALID_STATE_TRANSITION");
 });
 
 test("concurrent checkouts of the last unit cannot oversell", async () => {
-  await seedCatalogue(ctx.db, { name: "Last One", sku: "LAST-1", price: "100.00", stock: 1 });
-  const last = await ctx.db.query<{ variant_id: number }>("SELECT variant_id FROM product_variant WHERE sku = 'LAST-1'");
+  await seedCatalogue(ctx.db, {
+    name: "Last One",
+    sku: "LAST-1",
+    price: "100.00",
+    stock: 1,
+  });
+  const last = await ctx.db.query<{ variant_id: number }>(
+    "SELECT variant_id FROM product_variant WHERE sku = 'LAST-1'",
+  );
   const variantId = last.rows[0]!.variant_id;
 
   const a = await customerClient(ctx.baseUrl, "race-a@example.test");

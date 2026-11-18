@@ -912,13 +912,19 @@ export function registerAdminRoutes(router: Router) {
             ),
         })
         .strict(),
-      summary: "Set or clear a product's primary image (an https URL or the ERP proxy path)",
+      summary:
+        "Set or clear a product's primary image (an https URL or the ERP proxy path)",
       tags: ["admin"],
     },
     async ({ ctx, body, tx }) => {
       const productId = Number((ctx.req.params as any).productId);
-      if (!Number.isInteger(productId) || productId <= 0) fail(404, "NOT_FOUND", "Product not found");
-      const product = await setProductImage(tx!, productId, body.image_url || null);
+      if (!Number.isInteger(productId) || productId <= 0)
+        fail(404, "NOT_FOUND", "Product not found");
+      const product = await setProductImage(
+        tx!,
+        productId,
+        body.image_url || null,
+      );
       await audit(tx!, {
         actorType: "admin",
         actorId: (ctx.actor as any).adminUserId,

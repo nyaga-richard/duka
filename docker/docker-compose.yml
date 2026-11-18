@@ -1,7 +1,7 @@
 # STANDALONE Phase 1 stack (development/demo): PostgreSQL, the API, the worker
 # and the Next web app. The Duka-integrated stack lives at
-# deploy/ecommerce/compose.shop.yml and is created/upgraded by
-# deploy/go-live.sh and deploy/update.sh.
+# deploy/compose.shop.yml and is created/upgraded by
+# ../duka/deploy/go-live.sh and ../duka/deploy/update.sh.
 #
 # The ERP is intentionally NOT part of this stack: this repository never runs,
 # modifies or fakes the ERP. Set ERP_ENABLED=true and ERP_BASE_URL only after

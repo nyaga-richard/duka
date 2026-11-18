@@ -2,7 +2,13 @@ import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { ErpAdapter, ErpError, HttpErpTransport } from "@ecom/erp-adapter";
 import { createFakeErp } from "@ecom/erp-adapter/testing/fake-erp.ts";
-import { startTestContext, seedCatalogue, customerClient, addToCart, type TestContext } from "../helpers.ts";
+import {
+  startTestContext,
+  seedCatalogue,
+  customerClient,
+  addToCart,
+  type TestContext,
+} from "../helpers.ts";
 
 // ERP stays disabled here: the worker's own bookkeeping must work without it.
 // WORKER_EMBEDDED keeps module import from starting the standalone poll loop.
@@ -36,7 +42,12 @@ after(async () => {
 });
 
 test("a worker tick expires stale holds and records a heartbeat", async () => {
-  const product = await seedCatalogue(ctx.db, { name: "Kanzu Shirt", sku: "WORK-M", price: "1250.00", stock: 3 });
+  const product = await seedCatalogue(ctx.db, {
+    name: "Kanzu Shirt",
+    sku: "WORK-M",
+    price: "1250.00",
+    stock: 3,
+  });
   const customer = await customerClient(ctx.baseUrl, "worker@example.test");
   const added = await addToCart(customer, product.variant_id, 2);
   assert.equal(added.status, 201);
@@ -46,7 +57,11 @@ test("a worker tick expires stale holds and records a heartbeat", async () => {
   );
   const tick = await runWorkerTick();
   assert.ok(tick.expired_reservations >= 1);
-  assert.equal(tick.erp_enabled, false, "the worker reports the real integration state");
+  assert.equal(
+    tick.erp_enabled,
+    false,
+    "the worker reports the real integration state",
+  );
 
   const heartbeat = await ctx.db.query<{ age_seconds: number }>(
     `SELECT extract(epoch FROM (now() - last_seen_at))::int AS age_seconds
@@ -56,10 +71,16 @@ test("a worker tick expires stale holds and records a heartbeat", async () => {
   assert.ok(heartbeat.rows[0]);
   assert.ok(heartbeat.rows[0]!.age_seconds <= 5);
 
-  const health = (await (await fetch(`${ctx.baseUrl}/health/ready`)).json()) as any;
+  const health = (await (
+    await fetch(`${ctx.baseUrl}/health/ready`)
+  ).json()) as any;
   assert.equal(health.status, "ready");
   assert.equal(health.checks.worker.stale, false);
-  assert.equal(health.checks.worker.required, false, "worker freshness is only a hard requirement in production");
+  assert.equal(
+    health.checks.worker.required,
+    false,
+    "worker freshness is only a hard requirement in production",
+  );
 });
 
 test("a job that needs an unsupported ERP capability dies with the contract reference", async () => {
@@ -74,9 +95,16 @@ test("a job that needs an unsupported ERP capability dies with the contract refe
   const processed = await sync.processSyncJobs(ctx.db, adapter, 5);
   const entry = processed.find((item: any) => item.job_id === job.job_id);
   assert.ok(entry, "the due job was claimed by the worker");
-  assert.equal(entry.status, "dead", "an unsupported capability is not retried forever");
+  assert.equal(
+    entry.status,
+    "dead",
+    "an unsupported capability is not retried forever",
+  );
 
-  const stored = await ctx.db.query<any>("SELECT status, last_error FROM erp_sync_job WHERE job_id = $1", [job.job_id]);
+  const stored = await ctx.db.query<any>(
+    "SELECT status, last_error FROM erp_sync_job WHERE job_id = $1",
+    [job.job_id],
+  );
   assert.equal(stored.rows[0].status, "dead");
   assert.match(stored.rows[0].last_error, /does not expose/i);
 
@@ -90,7 +118,13 @@ test("a job that needs an unsupported ERP capability dies with the contract refe
 test("a transient ERP failure schedules a retry with backoff instead of losing the job", async () => {
   const failing = {
     iterateProducts: async function* () {
-      throw new ErpError("ERP_UNAVAILABLE", "ERP is down", 503, undefined, true);
+      throw new ErpError(
+        "ERP_UNAVAILABLE",
+        "ERP is down",
+        503,
+        undefined,
+        true,
+      );
     },
   } as any;
 
@@ -119,11 +153,17 @@ test("a transient ERP failure schedules a retry with backoff instead of losing t
   assert.ok(due.rows[0]!.seconds > 0, "retry is not immediately due (backoff)");
 
   const processed = await sync.processSyncJobs(ctx.db, adapter, 5);
-  assert.ok(!processed.some((entry: any) => entry.job_id === job.job_id), "a backed-off job is not claimed again");
+  assert.ok(
+    !processed.some((entry: any) => entry.job_id === job.job_id),
+    "a backed-off job is not claimed again",
+  );
 });
 
 test("a successful job is drained, logged and marked succeeded", async () => {
-  const customer = await customerClient(ctx.baseUrl, "worker-push@example.test");
+  const customer = await customerClient(
+    ctx.baseUrl,
+    "worker-push@example.test",
+  );
   const customerRow = await ctx.db.query<{ customer_id: number }>(
     "SELECT customer_id FROM customer WHERE email = 'worker-push@example.test'",
   );
@@ -137,7 +177,12 @@ test("a successful job is drained, logged and marked succeeded", async () => {
   });
 
   const processed = await sync.processSyncJobs(ctx.db, adapter, 5);
-  assert.ok(processed.some((entry: any) => entry.job_id === job.job_id && entry.status === "succeeded"));
+  assert.ok(
+    processed.some(
+      (entry: any) =>
+        entry.job_id === job.job_id && entry.status === "succeeded",
+    ),
+  );
 
   const mapping = await ctx.db.query<any>(
     "SELECT erp_id FROM erp_entity_map WHERE entity_type = 'customer' AND local_id = $1",

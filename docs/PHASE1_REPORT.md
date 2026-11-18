@@ -47,17 +47,17 @@ the foundation is tested. Report first, then implement with verification.
 
 ## Verification evidence
 
-| Claim | Evidence |
-| --- | --- |
-| Migrations apply, are idempotent and tamper-evident | `tests/integration/migrations.test.ts`; `npm run db:status` |
-| Database invariants are enforced | `tests/integration/constraints.test.ts` |
-| Auth, CSRF, realms and RBAC work | `tests/integration/auth.test.ts` |
-| Stock cannot oversell; holds expire | `cart.test.ts`, `orders.test.ts` (+ gated PG proof) |
-| Checkout is idempotent and stock-correct | `orders.test.ts` |
-| Only verified events mark an order paid | `payments-manual.test.ts`, `payments-webhook.test.ts` |
-| ERP adapter handles the real constraints | `erp-adapter.test.ts` |
-| Sync pulls/pushes without duplicates | `sync.test.ts`, `worker.test.ts` |
-| The app boots and serves the storefront | `npm run dev`, `npm run dev:web` (manual smoke: `/health/ready`, `/api/v1/catalog/products`, `/admin`) |
+| Claim                                               | Evidence                                                                                               |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Migrations apply, are idempotent and tamper-evident | `tests/integration/migrations.test.ts`; `npm run db:status`                                            |
+| Database invariants are enforced                    | `tests/integration/constraints.test.ts`                                                                |
+| Auth, CSRF, realms and RBAC work                    | `tests/integration/auth.test.ts`                                                                       |
+| Stock cannot oversell; holds expire                 | `cart.test.ts`, `orders.test.ts` (+ gated PG proof)                                                    |
+| Checkout is idempotent and stock-correct            | `orders.test.ts`                                                                                       |
+| Only verified events mark an order paid             | `payments-manual.test.ts`, `payments-webhook.test.ts`                                                  |
+| ERP adapter handles the real constraints            | `erp-adapter.test.ts`                                                                                  |
+| Sync pulls/pushes without duplicates                | `sync.test.ts`, `worker.test.ts`                                                                       |
+| The app boots and serves the storefront             | `npm run dev`, `npm run dev:web` (manual smoke: `/health/ready`, `/api/v1/catalog/products`, `/admin`) |
 
 Type checking: `npm run typecheck` (API and web). Build: `npm run build`,
 `npm run build:web`.

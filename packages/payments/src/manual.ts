@@ -1,4 +1,11 @@
-import type { CreateIntentInput, PaymentIntentResult, PaymentProvider, RefundInput, RefundResult, WebhookVerification } from "./types.ts";
+import type {
+  CreateIntentInput,
+  PaymentIntentResult,
+  PaymentProvider,
+  RefundInput,
+  RefundResult,
+  WebhookVerification,
+} from "./types.ts";
 
 /**
  * Manual settlement: the order is placed and paid outside the system (cash on
@@ -36,7 +43,10 @@ export class ManualPaymentProvider implements PaymentProvider {
     return {
       status: "pending",
       providerReference: `manual-refund:${input.idempotencyKey}`,
-      raw: { mode: "manual", note: "Refund must be paid out and confirmed by the store team" },
+      raw: {
+        mode: "manual",
+        note: "Refund must be paid out and confirmed by the store team",
+      },
     };
   }
 }

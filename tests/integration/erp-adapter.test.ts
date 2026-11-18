@@ -5,7 +5,13 @@ import { createFakeErp } from "@ecom/erp-adapter/testing/fake-erp.ts";
 
 const ORIGIN = "https://erp.example.test";
 
-function harness(options: { permissions?: string[]; allowSelfApproval?: boolean; openShifts?: Set<string> } = {}) {
+function harness(
+  options: {
+    permissions?: string[];
+    allowSelfApproval?: boolean;
+    openShifts?: Set<string>;
+  } = {},
+) {
   const fake = createFakeErp({
     permissions: options.permissions,
     allowSelfApproval: options.allowSelfApproval ?? false,
@@ -33,7 +39,11 @@ test("the adapter logs in once, sends Origin on mutations and reports identity",
   assert.equal(fake.state.loginAttempts, 1, "single-flight login");
 
   await adapter.probe();
-  assert.equal(fake.state.loginAttempts, 1, "the session is reused across calls");
+  assert.equal(
+    fake.state.loginAttempts,
+    1,
+    "the session is reused across calls",
+  );
 });
 
 test("a single 401 forces exactly one re-login", async () => {
@@ -49,8 +59,17 @@ test("a single 401 forces exactly one re-login", async () => {
 test("catalogue pages map cleanly and pagination terminates", async () => {
   const { fake, adapter } = harness();
   fake.createProduct({ sku: "SHIRT-M", name: "Kanzu Shirt", price: "1250.00" });
-  const parent = fake.createProduct({ sku: "MUG", name: "Ceramic Mug", price: "450.50" });
-  fake.createProduct({ sku: "MUG-RED", name: "Ceramic Mug – Red", price: "470.00", parent_id: parent.id });
+  const parent = fake.createProduct({
+    sku: "MUG",
+    name: "Ceramic Mug",
+    price: "450.50",
+  });
+  fake.createProduct({
+    sku: "MUG-RED",
+    name: "Ceramic Mug – Red",
+    price: "470.00",
+    parent_id: parent.id,
+  });
 
   const first = await adapter.listProducts({ limit: 2 });
   assert.equal(first.items.length, 2);
@@ -58,12 +77,23 @@ test("catalogue pages map cleanly and pagination terminates", async () => {
   const all: string[] = [];
   for await (const product of adapter.iterateProducts(2)) all.push(product.sku);
   assert.deepEqual(all.sort(), ["MUG", "MUG-RED", "SHIRT-M"]);
-  assert.equal(fake.state.requests.filter((request) => request.path === "/api/v1/products").length, 3, "one page read plus two pages of the walk");
+  assert.equal(
+    fake.state.requests.filter((request) => request.path === "/api/v1/products")
+      .length,
+    3,
+    "one page read plus two pages of the walk",
+  );
 });
 
 test("inventory balances are read-only and paginated", async () => {
   const { fake, adapter } = harness();
-  const product = fake.createProduct({ sku: "SHIRT-M", name: "Kanzu Shirt", price: "1250.00", stock: "6", reserved: "1" });
+  const product = fake.createProduct({
+    sku: "SHIRT-M",
+    name: "Kanzu Shirt",
+    price: "1250.00",
+    stock: "6",
+    reserved: "1",
+  });
   fake.state.inventory.push({
     product_id: product.id,
     warehouse_id: "wh-1",
@@ -81,13 +111,26 @@ test("inventory balances are read-only and paginated", async () => {
 
 test("customer create is idempotent and conflicts are typed", async () => {
   const { adapter } = harness();
-  const created = await adapter.createCustomer({ name: "Amina Wanjiku", code: "WEB-1", email: "amina@example.test" });
+  const created = await adapter.createCustomer({
+    name: "Amina Wanjiku",
+    code: "WEB-1",
+    email: "amina@example.test",
+  });
   assert.ok(created.id);
-  const replay = await adapter.createCustomer({ name: "Amina Wanjiku", code: "WEB-1", email: "amina@example.test" });
+  const replay = await adapter.createCustomer({
+    name: "Amina Wanjiku",
+    code: "WEB-1",
+    email: "amina@example.test",
+  });
   assert.equal(replay.id, created.id);
 
   await assert.rejects(
-    () => adapter.createCustomer({ name: "Someone Else", code: "WEB-1", email: "other@example.test" }),
+    () =>
+      adapter.createCustomer({
+        name: "Someone Else",
+        code: "WEB-1",
+        email: "other@example.test",
+      }),
     (error: any) => error instanceof ErpError && error.code === "ERP_CONFLICT",
   );
 });
@@ -101,7 +144,12 @@ test("sales order approval refuses self-approval and lacks stock reservation (re
   });
   assert.ok(document.id);
   await assert.rejects(
-    () => adapter.transitionDocument(document.id, "approved", "self approval attempt"),
+    () =>
+      adapter.transitionDocument(
+        document.id,
+        "approved",
+        "self approval attempt",
+      ),
     (error: any) => error instanceof ErpError && error.code === "ERP_FORBIDDEN",
   );
 });
@@ -134,10 +182,13 @@ test("transient ERP failures are retried with backoff, then surface as unavailab
     fetchImpl: async (input: any, init?: RequestInit) => {
       if (String(input).includes("/api/v1/products")) {
         attempts += 1;
-        return new Response(JSON.stringify({ error: { code: "INTERNAL", message: "boom" } }), {
-          status: 500,
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: { code: "INTERNAL", message: "boom" } }),
+          {
+            status: 500,
+            headers: { "content-type": "application/json" },
+          },
+        );
       }
       return fake.fetch(input, init);
     },
@@ -147,7 +198,8 @@ test("transient ERP failures are retried with backoff, then surface as unavailab
   const retrying = new ErpAdapter(transport);
   await assert.rejects(
     () => retrying.listProducts({}),
-    (error: any) => error instanceof ErpError && error.code === "ERP_UNAVAILABLE",
+    (error: any) =>
+      error instanceof ErpError && error.code === "ERP_UNAVAILABLE",
   );
   assert.equal(attempts, 3, "three attempts before giving up");
 });
@@ -163,10 +215,15 @@ test("429 is retryable and rate limiting is typed", async () => {
     fetchImpl: async (input: any, init?: RequestInit) => {
       if (String(input).includes("/api/v1/inventory/balances")) {
         calls += 1;
-        return new Response(JSON.stringify({ error: { code: "RATE_LIMITED", message: "slow down" } }), {
-          status: 429,
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({
+            error: { code: "RATE_LIMITED", message: "slow down" },
+          }),
+          {
+            status: 429,
+            headers: { "content-type": "application/json" },
+          },
+        );
       }
       return fake.fetch(input, init);
     },
@@ -176,7 +233,8 @@ test("429 is retryable and rate limiting is typed", async () => {
   const limited = new ErpAdapter(transport);
   await assert.rejects(
     () => limited.listInventory({}),
-    (error: any) => error instanceof ErpError && error.code === "ERP_RATE_LIMITED",
+    (error: any) =>
+      error instanceof ErpError && error.code === "ERP_RATE_LIMITED",
   );
   assert.equal(calls, 2);
 });

@@ -5,7 +5,12 @@
  * N=2^15, r=8, p=1, 64-byte digest, 16-byte random salt, stored with its
  * parameters so a future upgrade can re-hash on next login.
  */
-import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  randomBytes,
+  scrypt as scryptCb,
+  timingSafeEqual,
+} from "node:crypto";
 import { promisify } from "node:util";
 import { fail } from "../errors.ts";
 import type { Database, Queryable } from "../db/index.ts";
@@ -27,12 +32,17 @@ export async function hashPassword(password: string): Promise<string> {
     fail(422, "VALIDATION_ERROR", "Password must include letters and numbers");
   }
   const salt = randomBytes(16);
-  const derived = await scrypt(password.normalize("NFKC"), salt, SCRYPT.keylen, {
-    N: SCRYPT.N,
-    r: SCRYPT.r,
-    p: SCRYPT.p,
-    maxmem: 64 * 1024 * 1024,
-  });
+  const derived = await scrypt(
+    password.normalize("NFKC"),
+    salt,
+    SCRYPT.keylen,
+    {
+      N: SCRYPT.N,
+      r: SCRYPT.r,
+      p: SCRYPT.p,
+      maxmem: 64 * 1024 * 1024,
+    },
+  );
   return [
     "scrypt",
     SCRYPT.N,
@@ -43,18 +53,29 @@ export async function hashPassword(password: string): Promise<string> {
   ].join("$");
 }
 
-export async function verifyPassword(encoded: string, password: string): Promise<boolean> {
+export async function verifyPassword(
+  encoded: string,
+  password: string,
+): Promise<boolean> {
   const parts = encoded.split("$");
   if (parts.length !== 6 || parts[0] !== "scrypt") return false;
   const [, n, r, p, salt, expected] = parts;
-  const derived = await scrypt(password.normalize("NFKC"), Buffer.from(salt!, "base64url"), SCRYPT.keylen, {
-    N: Number(n),
-    r: Number(r),
-    p: Number(p),
-    maxmem: 64 * 1024 * 1024,
-  });
+  const derived = await scrypt(
+    password.normalize("NFKC"),
+    Buffer.from(salt!, "base64url"),
+    SCRYPT.keylen,
+    {
+      N: Number(n),
+      r: Number(r),
+      p: Number(p),
+      maxmem: 64 * 1024 * 1024,
+    },
+  );
   const expectedBuffer = Buffer.from(expected!, "base64url");
-  return derived.length === expectedBuffer.length && timingSafeEqual(derived, expectedBuffer);
+  return (
+    derived.length === expectedBuffer.length &&
+    timingSafeEqual(derived, expectedBuffer)
+  );
 }
 
 /** Fixed dummy hash so failed logins cost the same as successful ones. */
@@ -64,8 +85,10 @@ export async function verifyDummyPassword(password: string): Promise<void> {
   await verifyPassword(dummyHash, password).catch(() => false);
 }
 
-export const randomToken = (bytes = 32) => randomBytes(bytes).toString("base64url");
-export const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
+export const randomToken = (bytes = 32) =>
+  randomBytes(bytes).toString("base64url");
+export const sha256 = (value: string) =>
+  createHash("sha256").update(value).digest("hex");
 
 /** Rate limit buckets are keyed by a digest, never by a raw email or IP. */
 export async function rateLimit(
@@ -134,7 +157,9 @@ export async function audit(
       entry.actorId ?? null,
       entry.action,
       entry.entityType,
-      entry.entityId === undefined || entry.entityId === null ? null : String(entry.entityId),
+      entry.entityId === undefined || entry.entityId === null
+        ? null
+        : String(entry.entityId),
       entry.before === undefined ? null : JSON.stringify(entry.before),
       entry.after === undefined ? null : JSON.stringify(entry.after),
       entry.ip ?? null,

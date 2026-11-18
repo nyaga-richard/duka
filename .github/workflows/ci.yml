@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Typecheck (API + storefront)
+        run: npm run typecheck
+      # Tests start a real PostgreSQL engine (PGlite) in a temp directory per
+      # file: no service containers, no external database, nothing to seed.
+      - name: Tests (unit + integration)
+        run: npm test
+      - name: Formatting
+        run: npm run format:check

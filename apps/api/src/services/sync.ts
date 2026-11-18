@@ -26,7 +26,10 @@ export interface SyncJobInput {
 }
 
 export function syncKey(operation: string, localId: string | number): string {
-  return `ecommerce:${operation}:${String(localId).replace(/[^A-Za-z0-9._:-]/g, "-")}`.slice(0, 150);
+  return `ecommerce:${operation}:${String(localId).replace(/[^A-Za-z0-9._:-]/g, "-")}`.slice(
+    0,
+    150,
+  );
 }
 
 export async function enqueueSyncJob(db: Queryable, input: SyncJobInput) {
@@ -36,7 +39,14 @@ export async function enqueueSyncJob(db: Queryable, input: SyncJobInput) {
      VALUES($1,$2,$3,$4,$5,$6)
      ON CONFLICT (idempotency_key) DO NOTHING
      RETURNING job_id, status, operation`,
-    [input.entityType, input.direction, input.operation, key, JSON.stringify(input.payload ?? {}), input.maxAttempts ?? 5],
+    [
+      input.entityType,
+      input.direction,
+      input.operation,
+      key,
+      JSON.stringify(input.payload ?? {}),
+      input.maxAttempts ?? 5,
+    ],
   );
   if (inserted.rows[0]) return inserted.rows[0];
   const existing = await db.query<any>(
@@ -46,7 +56,16 @@ export async function enqueueSyncJob(db: Queryable, input: SyncJobInput) {
   return existing.rows[0];
 }
 
-async function startLog(db: Queryable, input: { key: string; entityType: string; direction: string; operation: string; attempt: number }) {
+async function startLog(
+  db: Queryable,
+  input: {
+    key: string;
+    entityType: string;
+    direction: string;
+    operation: string;
+    attempt: number;
+  },
+) {
   const logKey = `${input.key}:attempt:${input.attempt}`.slice(0, 160);
   const inserted = await db.query<{ log_id: string }>(
     `INSERT INTO erp_sync_log(entity_type, direction, operation, idempotency_key, status, attempts)
@@ -130,7 +149,11 @@ export async function completeSyncJob(
       `UPDATE erp_sync_job SET status='retry', last_error=$2, locked_at=NULL,
               next_attempt_at = now() + ($3 || ' milliseconds')::interval
         WHERE job_id=$1`,
-      [job.job_id, String(outcome.error ?? "retry").slice(0, 500), String(retryDelayMs(job.attempts))],
+      [
+        job.job_id,
+        String(outcome.error ?? "retry").slice(0, 500),
+        String(retryDelayMs(job.attempts)),
+      ],
     );
   } else {
     await db.query(
@@ -166,7 +189,11 @@ export async function pullCatalog(db: Database, adapter: ErpAdapter) {
           `INSERT INTO brand(brand_name, slug) VALUES($1,$2)
            ON CONFLICT (brand_name) DO UPDATE SET updated_at = now()
            RETURNING brand_id`,
-          [erpProduct.brand.slice(0, 120), slugify(erpProduct.brand).slice(0, 140) || `brand-${erpProduct.id.slice(0, 8)}`],
+          [
+            erpProduct.brand.slice(0, 120),
+            slugify(erpProduct.brand).slice(0, 140) ||
+              `brand-${erpProduct.id.slice(0, 8)}`,
+          ],
         );
         brandId = brand.rows[0]!.brand_id;
         brands += 1;
@@ -174,7 +201,9 @@ export async function pullCatalog(db: Database, adapter: ErpAdapter) {
 
       let categoryId: number | null = null;
       if (erpProduct.category) {
-        const slug = slugify(erpProduct.category).slice(0, 140) || `category-${erpProduct.category_id?.slice(0, 8) ?? "unknown"}`;
+        const slug =
+          slugify(erpProduct.category).slice(0, 140) ||
+          `category-${erpProduct.category_id?.slice(0, 8) ?? "unknown"}`;
         const category = await tx.query<{ category_id: number }>(
           `INSERT INTO category(category_name, slug) VALUES($1,$2)
            ON CONFLICT (slug) WHERE slug IS NOT NULL DO UPDATE SET category_name = EXCLUDED.category_name, updated_at = now()
@@ -200,11 +229,22 @@ export async function pullCatalog(db: Database, adapter: ErpAdapter) {
                     status = CASE WHEN $6::boolean THEN 'active' ELSE 'archived' END,
                     updated_at=now(), erp_updated_at=now(), sync_state='synced'
               WHERE product_id=$1`,
-            [productId, erpProduct.name.slice(0, 255), erpProduct.description, erpProduct.brand, brandId, erpProduct.active],
+            [
+              productId,
+              erpProduct.name.slice(0, 255),
+              erpProduct.description,
+              erpProduct.brand,
+              brandId,
+              erpProduct.active,
+            ],
           );
           products += 1;
         } else {
-          const slug = `${slugify(erpProduct.name)}-${slugify(erpProduct.sku)}`.slice(0, 180);
+          const slug =
+            `${slugify(erpProduct.name)}-${slugify(erpProduct.sku)}`.slice(
+              0,
+              180,
+            );
           const inserted = await tx.query<{ product_id: number }>(
             `INSERT INTO product(product_name, description, brand, brand_id, slug, status, summary, sync_state, erp_updated_at)
              VALUES($1,$2,$3,$4,$5,$6,$7,'synced',now())
@@ -231,7 +271,11 @@ export async function pullCatalog(db: Database, adapter: ErpAdapter) {
           `INSERT INTO erp_entity_map(entity_type, local_id, erp_id, metadata, last_synced_at)
            VALUES('product',$1,$2,$3,now())
            ON CONFLICT (entity_type, local_id) DO UPDATE SET erp_id = EXCLUDED.erp_id, last_synced_at = now(), metadata = EXCLUDED.metadata`,
-          [String(productId), erpProduct.id, JSON.stringify({ sku: erpProduct.sku })],
+          [
+            String(productId),
+            erpProduct.id,
+            JSON.stringify({ sku: erpProduct.sku }),
+          ],
         );
         if (categoryId) {
           await tx.query(
@@ -257,7 +301,11 @@ export async function pullCatalog(db: Database, adapter: ErpAdapter) {
           );
         }
         const productId = Number(parentMap.rows[0].local_id);
-        const variant = await syncVariant(tx, { productId, erpProduct, isDefault: false });
+        const variant = await syncVariant(tx, {
+          productId,
+          erpProduct,
+          isDefault: false,
+        });
         variants += 1;
       }
     }
@@ -265,7 +313,14 @@ export async function pullCatalog(db: Database, adapter: ErpAdapter) {
     await tx.query(
       `INSERT INTO app_setting(key, value) VALUES('erp.last_catalog_sync', $1)
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-      [JSON.stringify({ at: new Date().toISOString(), run_id: runId, products, variants })],
+      [
+        JSON.stringify({
+          at: new Date().toISOString(),
+          run_id: runId,
+          products,
+          variants,
+        }),
+      ],
     );
   });
 
@@ -289,7 +344,11 @@ export async function pullCatalog(db: Database, adapter: ErpAdapter) {
  */
 async function syncProductImage(
   tx: Queryable,
-  input: { productId: number; attachmentId: string | null; productName: string },
+  input: {
+    productId: number;
+    attachmentId: string | null;
+    productName: string;
+  },
 ): Promise<void> {
   if (!input.attachmentId) return;
   const url = erpImageUrl(input.attachmentId);
@@ -307,11 +366,10 @@ async function syncProductImage(
     return;
   }
   if (current.image_url !== url && isErpImageUrl(current.image_url)) {
-    await tx.query("UPDATE product_image SET image_url = $2, alt_text = $3 WHERE image_id = $1", [
-      current.image_id,
-      url,
-      input.productName.slice(0, 255),
-    ]);
+    await tx.query(
+      "UPDATE product_image SET image_url = $2, alt_text = $3 WHERE image_id = $1",
+      [current.image_id, url, input.productName.slice(0, 255)],
+    );
   }
 }
 
@@ -330,11 +388,18 @@ async function syncVariant(
     await tx.query(
       `UPDATE product_variant SET sku=$2, price=$3, barcode=$4, is_active=$5, updated_at=now()
         WHERE variant_id=$1`,
-      [variantId, erpProduct.sku.slice(0, 50), toMoney(erpProduct.price), erpProduct.barcode, erpProduct.active],
+      [
+        variantId,
+        erpProduct.sku.slice(0, 50),
+        toMoney(erpProduct.price),
+        erpProduct.barcode,
+        erpProduct.active,
+      ],
     );
-    await tx.query("UPDATE erp_entity_map SET last_synced_at=now() WHERE entity_type='variant' AND local_id=$1", [
-      String(variantId),
-    ]);
+    await tx.query(
+      "UPDATE erp_entity_map SET last_synced_at=now() WHERE entity_type='variant' AND local_id=$1",
+      [String(variantId)],
+    );
     return "updated";
   }
 
@@ -360,7 +425,11 @@ async function syncVariant(
     `INSERT INTO erp_entity_map(entity_type, local_id, erp_id, metadata, last_synced_at)
      VALUES('variant',$1,$2,$3,now())
      ON CONFLICT (entity_type, local_id) DO UPDATE SET erp_id = EXCLUDED.erp_id, last_synced_at = now()`,
-    [String(variantId), erpProduct.id, JSON.stringify({ sku: erpProduct.sku, is_variant_of: productId })],
+    [
+      String(variantId),
+      erpProduct.id,
+      JSON.stringify({ sku: erpProduct.sku, is_variant_of: productId }),
+    ],
   );
   return "created";
 }
@@ -379,7 +448,10 @@ export async function pullInventory(db: Database, adapter: ErpAdapter) {
   let skipped = 0;
 
   await db.withTransaction(async (tx) => {
-    for await (const row of adapter.iterateInventory(100, config.erp.defaultWarehouseId || undefined)) {
+    for await (const row of adapter.iterateInventory(
+      100,
+      config.erp.defaultWarehouseId || undefined,
+    )) {
       const mapped = await tx.query<{ local_id: string }>(
         "SELECT local_id FROM erp_entity_map WHERE entity_type = 'variant' AND erp_id = $1",
         [row.product_id],
@@ -400,10 +472,10 @@ export async function pullInventory(db: Database, adapter: ErpAdapter) {
       const next = Math.max(0, priceNumber(row.quantity));
       const delta = next - Number(current.rows[0].qty_in_stock);
       if (delta !== 0) {
-        await tx.query("UPDATE product_variant SET qty_in_stock = $2, updated_at = now() WHERE variant_id = $1", [
-          variantId,
-          next,
-        ]);
+        await tx.query(
+          "UPDATE product_variant SET qty_in_stock = $2, updated_at = now() WHERE variant_id = $1",
+          [variantId, next],
+        );
         await tx.query(
           `INSERT INTO inventory_movement(variant_id, quantity_delta, quantity_after, reason, source_type, source_id, actor, note)
            VALUES($1,$2,$3,'erp_sync','erp_sync',$4,'erp', 'Stock aligned from ERP inventory balances')
@@ -417,7 +489,12 @@ export async function pullInventory(db: Database, adapter: ErpAdapter) {
           WHERE entity_type = 'variant' AND local_id = $1`,
         [
           String(variantId),
-          JSON.stringify({ erp_reserved: row.reserved ?? null, erp_available: row.available ?? null, erp_version: row.version ?? null, warehouse_id: row.warehouse_id }),
+          JSON.stringify({
+            erp_reserved: row.reserved ?? null,
+            erp_available: row.available ?? null,
+            erp_version: row.version ?? null,
+            warehouse_id: row.warehouse_id,
+          }),
         ],
       );
     }
@@ -425,7 +502,14 @@ export async function pullInventory(db: Database, adapter: ErpAdapter) {
     await tx.query(
       `INSERT INTO app_setting(key, value) VALUES('erp.last_inventory_sync', $1)
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-      [JSON.stringify({ at: new Date().toISOString(), run_id: runId, updated, skipped })],
+      [
+        JSON.stringify({
+          at: new Date().toISOString(),
+          run_id: runId,
+          updated,
+          skipped,
+        }),
+      ],
     );
   });
 
@@ -442,7 +526,11 @@ export async function pullInventory(db: Database, adapter: ErpAdapter) {
 // ---------------------------------------------------------------------------
 // Push: order document, payment, refund
 // ---------------------------------------------------------------------------
-export async function pushOrderDocument(db: Database, adapter: ErpAdapter, orderId: number) {
+export async function pushOrderDocument(
+  db: Database,
+  adapter: ErpAdapter,
+  orderId: number,
+) {
   return db.withTransaction(async (tx) => {
     const orders = await tx.query<any>(
       `SELECT o.order_id, o.order_number, o.customer_id, o.email, o.order_total::text AS total
@@ -456,7 +544,8 @@ export async function pushOrderDocument(db: Database, adapter: ErpAdapter, order
       "SELECT erp_id, metadata FROM erp_entity_map WHERE entity_type = 'order' AND local_id = $1",
       [String(orderId)],
     );
-    if (existing.rows[0]) return { skipped: true, erp_id: existing.rows[0].erp_id };
+    if (existing.rows[0])
+      return { skipped: true, erp_id: existing.rows[0].erp_id };
 
     let erpCustomerId: string | undefined;
     if (order.customer_id) {
@@ -483,11 +572,17 @@ export async function pushOrderDocument(db: Database, adapter: ErpAdapter, order
           `Variant ${line.variant_id} has no ERP mapping. Run the catalogue sync before pushing orders.`,
         );
       }
-      erpLines.push({ productId: mapping.rows[0].erp_id, quantity: line.quantity });
+      erpLines.push({
+        productId: mapping.rows[0].erp_id,
+        quantity: line.quantity,
+      });
     }
 
     if (!config.erp.defaultBranchId) {
-      throw new ErpError("ERP_CONTRACT_UNSUPPORTED", "ERP_DEFAULT_BRANCH_ID is not configured; cannot create an ERP sales order");
+      throw new ErpError(
+        "ERP_CONTRACT_UNSUPPORTED",
+        "ERP_DEFAULT_BRANCH_ID is not configured; cannot create an ERP sales order",
+      );
     }
 
     const document = await adapter.createSalesOrderDocument(
@@ -516,21 +611,39 @@ export async function pushOrderDocument(db: Database, adapter: ErpAdapter, order
       `INSERT INTO erp_entity_map(entity_type, local_id, erp_id, metadata, last_synced_at)
        VALUES('order',$1,$2,$3,now())
        ON CONFLICT (entity_type, local_id) DO UPDATE SET erp_id = EXCLUDED.erp_id, metadata = EXCLUDED.metadata, last_synced_at = now()`,
-      [String(orderId), document.id, JSON.stringify({ document_status: approval ?? document.status, order_number: order.order_number, reserved: config.erp.reserveOrders })],
+      [
+        String(orderId),
+        document.id,
+        JSON.stringify({
+          document_status: approval ?? document.status,
+          order_number: order.order_number,
+          reserved: config.erp.reserveOrders,
+        }),
+      ],
     );
-    await tx.query("UPDATE customer_order SET erp_state = 'synced', updated_at = now() WHERE order_id = $1", [orderId]);
+    await tx.query(
+      "UPDATE customer_order SET erp_state = 'synced', updated_at = now() WHERE order_id = $1",
+      [orderId],
+    );
     await audit(tx, {
       actorType: "system",
       action: "erp.order_pushed",
       entityType: "customer_order",
       entityId: orderId,
-      after: { erp_document_id: document.id, reserved: config.erp.reserveOrders },
+      after: {
+        erp_document_id: document.id,
+        reserved: config.erp.reserveOrders,
+      },
     });
     return { erp_document_id: document.id, reserved: config.erp.reserveOrders };
   });
 }
 
-export async function pushCustomer(db: Database, adapter: ErpAdapter, customerId: number) {
+export async function pushCustomer(
+  db: Database,
+  adapter: ErpAdapter,
+  customerId: number,
+) {
   return db.withTransaction(async (tx) => {
     const customers = await tx.query<any>(
       "SELECT customer_id, email, first_name, last_name, phone FROM customer WHERE customer_id = $1",
@@ -543,12 +656,17 @@ export async function pushCustomer(db: Database, adapter: ErpAdapter, customerId
       "SELECT erp_id FROM erp_entity_map WHERE entity_type = 'customer' AND local_id = $1",
       [String(customerId)],
     );
-    if (existing.rows[0]) return { skipped: true, erp_id: existing.rows[0].erp_id };
+    if (existing.rows[0])
+      return { skipped: true, erp_id: existing.rows[0].erp_id };
 
     const code = `WEB-${customerId}`.slice(0, 40);
-    const name = `${customer.first_name} ${customer.last_name}`.trim().slice(0, 160);
+    const name = `${customer.first_name} ${customer.last_name}`
+      .trim()
+      .slice(0, 160);
     const matches = await adapter.searchCustomers(customer.email);
-    const match = matches.find((entry) => entry.code === code) ?? matches.find((entry) => entry.email === customer.email);
+    const match =
+      matches.find((entry) => entry.code === code) ??
+      matches.find((entry) => entry.email === customer.email);
     const erpCustomer =
       match ??
       (await adapter.createCustomer(
@@ -566,13 +684,24 @@ export async function pushCustomer(db: Database, adapter: ErpAdapter, customerId
       `INSERT INTO erp_entity_map(entity_type, local_id, erp_id, metadata, last_synced_at)
        VALUES('customer',$1,$2,$3,now())
        ON CONFLICT (entity_type, local_id) DO UPDATE SET erp_id = EXCLUDED.erp_id, last_synced_at = now()`,
-      [String(customerId), erpCustomer.id, JSON.stringify({ code: erpCustomer.code })],
+      [
+        String(customerId),
+        erpCustomer.id,
+        JSON.stringify({ code: erpCustomer.code }),
+      ],
     );
-    return { erp_customer_id: erpCustomer.id, matched_existing: Boolean(match) };
+    return {
+      erp_customer_id: erpCustomer.id,
+      matched_existing: Boolean(match),
+    };
   });
 }
 
-export async function pushPayment(db: Database, adapter: ErpAdapter, input: { orderId: number; paymentId: number }) {
+export async function pushPayment(
+  db: Database,
+  adapter: ErpAdapter,
+  input: { orderId: number; paymentId: number },
+) {
   return db.withTransaction(async (tx) => {
     const payment = await tx.query<any>(
       `SELECT p.payment_id, p.order_id, p.amount::text AS amount, p.provider_reference, o.customer_id
@@ -594,9 +723,14 @@ export async function pushPayment(db: Database, adapter: ErpAdapter, input: { or
       [String(row.customer_id)],
     );
     if (!customerMap.rows[0]) {
-      throw new ErpError("ERP_CONTRACT_UNSUPPORTED", "The customer has no ERP mapping yet. Push the customer first.");
+      throw new ErpError(
+        "ERP_CONTRACT_UNSUPPORTED",
+        "The customer has no ERP mapping yet. Push the customer first.",
+      );
     }
-    const methodSetting = await tx.query<{ value: any }>("SELECT value FROM app_setting WHERE key = 'erp'");
+    const methodSetting = await tx.query<{ value: any }>(
+      "SELECT value FROM app_setting WHERE key = 'erp'",
+    );
     const paymentMethodId = methodSetting.rows[0]?.value?.payment_method_id;
     if (!paymentMethodId) {
       throw new ErpError(
@@ -619,32 +753,63 @@ export async function pushPayment(db: Database, adapter: ErpAdapter, input: { or
       `INSERT INTO erp_entity_map(entity_type, local_id, erp_id, metadata, last_synced_at)
        VALUES('payment',$1,$2,$3,now())
        ON CONFLICT (entity_type, local_id) DO UPDATE SET erp_id = EXCLUDED.erp_id, last_synced_at = now()`,
-      [String(row.payment_id), result.id ?? result.receipt_id ?? `payment-${row.payment_id}`, JSON.stringify({ order_id: row.order_id })],
+      [
+        String(row.payment_id),
+        result.id ?? result.receipt_id ?? `payment-${row.payment_id}`,
+        JSON.stringify({ order_id: row.order_id }),
+      ],
     );
     return { erp_reference: result.id ?? result.receipt_id ?? null };
   });
 }
 
-export async function pushRefund(db: Database, adapter: ErpAdapter, refundId: string) {
+export async function pushRefund(
+  db: Database,
+  adapter: ErpAdapter,
+  refundId: string,
+) {
   // Explicitly unsupported: refunds by external reference need contract G6.
   await adapter.createRefundByReference();
-  throw new Error(`unreachable: refund ${refundId} should have raised ERP_CONTRACT_UNSUPPORTED`);
+  throw new Error(
+    `unreachable: refund ${refundId} should have raised ERP_CONTRACT_UNSUPPORTED`,
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Worker-facing dispatcher
 // ---------------------------------------------------------------------------
-export async function executeSyncJob(db: Database, adapter: ErpAdapter, job: any): Promise<JobOutcome> {
+export async function executeSyncJob(
+  db: Database,
+  adapter: ErpAdapter,
+  job: any,
+): Promise<JobOutcome> {
   try {
     switch (job.operation) {
       case "pull_catalog":
         return { status: "succeeded", summary: await pullCatalog(db, adapter) };
       case "pull_inventory":
-        return { status: "succeeded", summary: await pullInventory(db, adapter) };
+        return {
+          status: "succeeded",
+          summary: await pullInventory(db, adapter),
+        };
       case "push_order_document":
-        return { status: "succeeded", summary: await pushOrderDocument(db, adapter, Number(job.payload.orderId ?? job.payload.order_id)) };
+        return {
+          status: "succeeded",
+          summary: await pushOrderDocument(
+            db,
+            adapter,
+            Number(job.payload.orderId ?? job.payload.order_id),
+          ),
+        };
       case "push_customer":
-        return { status: "succeeded", summary: await pushCustomer(db, adapter, Number(job.payload.customerId)) };
+        return {
+          status: "succeeded",
+          summary: await pushCustomer(
+            db,
+            adapter,
+            Number(job.payload.customerId),
+          ),
+        };
       case "push_payment":
         return {
           status: "succeeded",
@@ -654,23 +819,42 @@ export async function executeSyncJob(db: Database, adapter: ErpAdapter, job: any
           }),
         };
       case "push_refund":
-        return { status: "succeeded", summary: await pushRefund(db, adapter, String(job.payload.refundId)) };
+        return {
+          status: "succeeded",
+          summary: await pushRefund(db, adapter, String(job.payload.refundId)),
+        };
       default:
-        throw new ErpError("ERP_CONTRACT_UNSUPPORTED", `Unknown sync operation: ${job.operation}`);
+        throw new ErpError(
+          "ERP_CONTRACT_UNSUPPORTED",
+          `Unknown sync operation: ${job.operation}`,
+        );
     }
   } catch (error: any) {
-    const retryable = error instanceof ErpError && (error.retryable || error.code === "ERP_UNAVAILABLE" || error.code === "ERP_RATE_LIMITED");
-    logger.warn({ jobId: job.job_id, operation: job.operation, err: error?.message }, "ERP sync job failed");
+    const retryable =
+      error instanceof ErpError &&
+      (error.retryable ||
+        error.code === "ERP_UNAVAILABLE" ||
+        error.code === "ERP_RATE_LIMITED");
+    logger.warn(
+      { jobId: job.job_id, operation: job.operation, err: error?.message },
+      "ERP sync job failed",
+    );
     return {
       status: retryable ? "retry" : "dead",
       error: String(error?.message ?? error),
-      errorCode: error instanceof ErpError ? (error.erpCode ?? error.code) : undefined,
+      errorCode:
+        error instanceof ErpError ? (error.erpCode ?? error.code) : undefined,
     };
   }
 }
 
-export async function processSyncJobs(db: Database, adapter: ErpAdapter, max = 10) {
-  const results: Array<{ job_id: number; operation: string; status: string }> = [];
+export async function processSyncJobs(
+  db: Database,
+  adapter: ErpAdapter,
+  max = 10,
+) {
+  const results: Array<{ job_id: number; operation: string; status: string }> =
+    [];
   for (let index = 0; index < max; index++) {
     const job = await claimDueSyncJob(db);
     if (!job) break;
@@ -683,25 +867,35 @@ export async function processSyncJobs(db: Database, adapter: ErpAdapter, max = 1
     });
     const outcome = await executeSyncJob(db, adapter, job);
     await completeSyncJob(db, job, outcome, logId);
-    results.push({ job_id: job.job_id, operation: job.operation, status: outcome.status });
+    results.push({
+      job_id: job.job_id,
+      operation: job.operation,
+      status: outcome.status,
+    });
   }
   return results;
 }
 
 export async function syncOverview(db: Queryable) {
   const [jobs, logs, settings] = await Promise.all([
-    db.query<any>("SELECT status, count(*)::int AS count FROM erp_sync_job GROUP BY status ORDER BY status"),
+    db.query<any>(
+      "SELECT status, count(*)::int AS count FROM erp_sync_job GROUP BY status ORDER BY status",
+    ),
     db.query<any>(
       `SELECT log_id, entity_type, direction, operation, status, attempts, error_code, error_message, started_at, finished_at
          FROM erp_sync_log ORDER BY log_id DESC LIMIT 25`,
     ),
-    db.query<any>("SELECT key, value FROM app_setting WHERE key LIKE 'erp.%' ORDER BY key"),
+    db.query<any>(
+      "SELECT key, value FROM app_setting WHERE key LIKE 'erp.%' ORDER BY key",
+    ),
   ]);
   return {
     enabled: config.erp.enabled,
     jobs: Object.fromEntries(jobs.rows.map((row) => [row.status, row.count])),
     recent_logs: logs.rows,
-    settings: Object.fromEntries(settings.rows.map((row) => [row.key, row.value])),
+    settings: Object.fromEntries(
+      settings.rows.map((row) => [row.key, row.value]),
+    ),
   };
 }
 

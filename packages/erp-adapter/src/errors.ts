@@ -25,7 +25,11 @@ export class ErpError extends Error {
   }
 }
 
-export function unsupported(capability: string, endpoint: string, contract: string): ErpError {
+export function unsupported(
+  capability: string,
+  endpoint: string,
+  contract: string,
+): ErpError {
   return new ErpError(
     "ERP_CONTRACT_UNSUPPORTED",
     `The ERP does not expose ${capability} (${endpoint}). Requested contract: ${contract}. ` +

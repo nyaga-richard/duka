@@ -9,7 +9,9 @@ import { createApp } from "./app.ts";
 const db = await getDatabase();
 
 if (process.env.AUTO_MIGRATE === "true") {
-  const result = await migrate(db, { log: (line) => logger.info({ migration: line }, "migration") });
+  const result = await migrate(db, {
+    log: (line) => logger.info({ migration: line }, "migration"),
+  });
   logger.info({ applied: result.applied.length }, "migrations applied at boot");
 }
 
@@ -22,7 +24,10 @@ if (!(await migrationsCurrent(db))) {
 
 const app = createApp({ db });
 const server = app.listen(config.port, "0.0.0.0", () => {
-  logger.info({ ...describeConfig(), port: config.port }, "ecommerce-api listening");
+  logger.info(
+    { ...describeConfig(), port: config.port },
+    "ecommerce-api listening",
+  );
 });
 
 async function shutdown(signal: string) {

@@ -51,7 +51,9 @@ function mapProduct(row: any) {
     variant_id: variant.variant_id,
     sku: variant.sku,
     price: toMoney(variant.price),
-    compare_at_price: variant.compare_at_price ? toMoney(variant.compare_at_price) : null,
+    compare_at_price: variant.compare_at_price
+      ? toMoney(variant.compare_at_price)
+      : null,
     available: variant.available,
     in_stock: variant.available > 0,
     is_default: variant.is_default,
@@ -71,7 +73,13 @@ function mapProduct(row: any) {
     images: row.images ?? [],
     attributes: row.attributes ?? [],
     variants,
-    price_from: variants.length ? variants.reduce((min: string, v: any) => (Number(v.price) < Number(min) ? v.price : min), variants[0].price) : null,
+    price_from: variants.length
+      ? variants.reduce(
+          (min: string, v: any) =>
+            Number(v.price) < Number(min) ? v.price : min,
+          variants[0].price,
+        )
+      : null,
     in_stock: variants.some((v: any) => v.in_stock),
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -125,7 +133,15 @@ export async function listProducts(db: Queryable, query: ProductListQuery) {
         CASE WHEN $5 = 'name' THEN p.product_name END ASC,
         p.created_at DESC
       LIMIT $6 OFFSET $7`,
-    [search, query.category ?? null, query.brand ?? null, query.featured ?? false, query.sort ?? "newest", query.limit, offset],
+    [
+      search,
+      query.category ?? null,
+      query.brand ?? null,
+      query.featured ?? false,
+      query.sort ?? "newest",
+      query.limit,
+      offset,
+    ],
   );
   const total = rows.rows[0]?._count ?? 0;
   return {

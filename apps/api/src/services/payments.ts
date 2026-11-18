@@ -36,13 +36,19 @@ export function paymentProvider(): PaymentProvider {
 
 /** Test seam: reset the cached provider after changing configuration. */
 export function resetPaymentProviderForTest() {
-  if (config.env === "production") throw new Error("Test seam is unavailable in production");
+  if (config.env === "production")
+    throw new Error("Test seam is unavailable in production");
   provider = null;
 }
 
 export async function beginPaymentIntent(
   db: Database,
-  input: { orderId: number; transactionId: string; phone?: string; email?: string },
+  input: {
+    orderId: number;
+    transactionId: string;
+    phone?: string;
+    email?: string;
+  },
 ) {
   const orders = await db.query<any>(
     `SELECT o.order_id, o.order_number, o.order_total::text AS total, o.currency, o.email,
@@ -54,7 +60,12 @@ export async function beginPaymentIntent(
   const order = orders.rows[0];
   if (!order) fail(404, "NOT_FOUND", "Payment transaction not found");
   if (["succeeded", "failed", "cancelled"].includes(order.status)) {
-    return { provider: config.payments.mode, status: order.status, reference: null, instructions: undefined };
+    return {
+      provider: config.payments.mode,
+      status: order.status,
+      reference: null,
+      instructions: undefined,
+    };
   }
 
   const active = paymentProvider();
@@ -76,7 +87,13 @@ export async function beginPaymentIntent(
               failure_reason = CASE WHEN $3::text = 'failed' THEN coalesce($5, 'Provider rejected the payment') ELSE NULL END,
               completed_at = CASE WHEN $3::text IN ('succeeded','failed') THEN now() ELSE completed_at END
         WHERE transaction_id = $1`,
-      [order.transaction_id, intent.providerReference, intent.status, JSON.stringify(intent.raw ?? null), intent.instructions ?? null],
+      [
+        order.transaction_id,
+        intent.providerReference,
+        intent.status,
+        JSON.stringify(intent.raw ?? null),
+        intent.instructions ?? null,
+      ],
     );
 
     if (intent.status === "failed") {
@@ -85,9 +102,10 @@ export async function beginPaymentIntent(
         [order.order_id],
       );
     } else {
-      await db.query("UPDATE customer_order SET payment_status = 'pending', updated_at = now() WHERE order_id = $1", [
-        order.order_id,
-      ]);
+      await db.query(
+        "UPDATE customer_order SET payment_status = 'pending', updated_at = now() WHERE order_id = $1",
+        [order.order_id],
+      );
     }
 
     return {
@@ -98,11 +116,17 @@ export async function beginPaymentIntent(
       redirect_url: intent.redirectUrl ?? null,
     };
   } catch (error: any) {
-    logger.warn({ orderId: order.order_id, err: error?.message }, "payment intent failed");
+    logger.warn(
+      { orderId: order.order_id, err: error?.message },
+      "payment intent failed",
+    );
     await db.query(
       `UPDATE payment_transaction SET status = 'failed', failure_reason = $2, updated_at = now(), completed_at = now()
         WHERE transaction_id = $1`,
-      [order.transaction_id, String(error?.message ?? "Provider unavailable").slice(0, 250)],
+      [
+        order.transaction_id,
+        String(error?.message ?? "Provider unavailable").slice(0, 250),
+      ],
     );
     await db.query(
       "UPDATE customer_order SET payment_status = 'failed', order_status_id = 9, updated_at = now() WHERE order_id = $1",
@@ -112,7 +136,8 @@ export async function beginPaymentIntent(
       provider: active.name,
       status: "failed" as const,
       reference: null,
-      instructions: "The payment provider is unavailable. Your order is saved; choose another payment method or contact support.",
+      instructions:
+        "The payment provider is unavailable. Your order is saved; choose another payment method or contact support.",
     };
   }
 }
@@ -127,15 +152,28 @@ export interface IngestResult {
 
 export async function ingestPaymentWebhook(
   db: Database,
-  input: { providerName: string; headers: Record<string, string | undefined>; rawBody: string },
+  input: {
+    providerName: string;
+    headers: Record<string, string | undefined>;
+    rawBody: string;
+  },
 ): Promise<IngestResult> {
   const active = paymentProvider();
   if (active.name !== input.providerName) {
-    fail(404, "NOT_FOUND", `No active webhook provider named ${input.providerName}`);
+    fail(
+      404,
+      "NOT_FOUND",
+      `No active webhook provider named ${input.providerName}`,
+    );
   }
 
-  const verification = active.verifyWebhook({ headers: input.headers, rawBody: input.rawBody });
-  const eventId = verification.eventId || `unidentified:${createHash("sha256").update(input.rawBody).digest("hex").slice(0, 32)}`;
+  const verification = active.verifyWebhook({
+    headers: input.headers,
+    rawBody: input.rawBody,
+  });
+  const eventId =
+    verification.eventId ||
+    `unidentified:${createHash("sha256").update(input.rawBody).digest("hex").slice(0, 32)}`;
 
   const inserted = await db.query<{ webhook_id: string }>(
     `INSERT INTO payment_webhook(provider, event_id, event_type, signature_valid, payload, headers, status, error)
@@ -150,24 +188,38 @@ export async function ingestPaymentWebhook(
       input.rawBody,
       JSON.stringify({ "content-type": input.headers["content-type"] ?? null }),
       verification.valid ? "received" : "ignored",
-      verification.valid ? null : verification.reason ?? "Invalid signature",
+      verification.valid ? null : (verification.reason ?? "Invalid signature"),
     ],
   );
 
   if (inserted.rowCount === 0) {
-    return { accepted: true, duplicate: true, processed: true, reason: "Duplicate event" };
+    return {
+      accepted: true,
+      duplicate: true,
+      processed: true,
+      reason: "Duplicate event",
+    };
   }
   const webhookId = inserted.rows[0]!.webhook_id;
 
   if (!verification.valid) {
-    fail(401, "FORBIDDEN", "Webhook signature is invalid; the event was recorded and rejected");
+    fail(
+      401,
+      "FORBIDDEN",
+      "Webhook signature is invalid; the event was recorded and rejected",
+    );
   }
   if (!verification.providerReference) {
-    await db.query("UPDATE payment_webhook SET status='failed', error=$2, processed_at=now() WHERE webhook_id=$1", [
-      webhookId,
-      "No provider reference in the event",
-    ]);
-    return { accepted: true, duplicate: false, processed: false, reason: "No provider reference" };
+    await db.query(
+      "UPDATE payment_webhook SET status='failed', error=$2, processed_at=now() WHERE webhook_id=$1",
+      [webhookId, "No provider reference in the event"],
+    );
+    return {
+      accepted: true,
+      duplicate: false,
+      processed: false,
+      reason: "No provider reference",
+    };
   }
 
   return db.withTransaction(async (tx) => {
@@ -184,7 +236,12 @@ export async function ingestPaymentWebhook(
         "UPDATE payment_webhook SET status='failed', error=$2, processed_at=now(), attempts=attempts+1 WHERE webhook_id=$1",
         [webhookId, "No matching payment transaction"],
       );
-      return { accepted: true, duplicate: false, processed: false, reason: "No matching payment transaction" };
+      return {
+        accepted: true,
+        duplicate: false,
+        processed: false,
+        reason: "No matching payment transaction",
+      };
     }
 
     if (verification.status === "succeeded") {
@@ -198,7 +255,12 @@ export async function ingestPaymentWebhook(
           `INSERT INTO payment(order_id, provider_reference, amount, payment_status, currency, payment_transaction_id)
            VALUES($1,$2,$3,'succeeded','KES',$4)
            ON CONFLICT DO NOTHING`,
-          [transaction.order_id, verification.providerReference, toMoney(transaction.amount), transaction.transaction_id],
+          [
+            transaction.order_id,
+            verification.providerReference,
+            toMoney(transaction.amount),
+            transaction.transaction_id,
+          ],
         );
         await tx.query(
           "UPDATE customer_order SET payment_status='paid', order_status_id = CASE WHEN order_status_id IN (2,9) THEN 3 ELSE order_status_id END, updated_at=now() WHERE order_id=$1",
@@ -209,7 +271,11 @@ export async function ingestPaymentWebhook(
           action: "payment.succeeded",
           entityType: "payment_transaction",
           entityId: transaction.transaction_id,
-          after: { provider: active.name, reference: verification.providerReference, amount: toMoney(transaction.amount) },
+          after: {
+            provider: active.name,
+            reference: verification.providerReference,
+            amount: toMoney(transaction.amount),
+          },
         });
       }
     } else if (verification.status === "failed") {
@@ -217,7 +283,10 @@ export async function ingestPaymentWebhook(
         await tx.query(
           `UPDATE payment_transaction SET status='failed', failure_reason=$2, updated_at=now(), completed_at=now()
             WHERE transaction_id=$1`,
-          [transaction.transaction_id, verification.reason ?? "Provider reported failure"],
+          [
+            transaction.transaction_id,
+            verification.reason ?? "Provider reported failure",
+          ],
         );
         await tx.query(
           "UPDATE customer_order SET payment_status='failed', order_status_id = CASE WHEN order_status_id = 3 THEN order_status_id ELSE 9 END, updated_at=now() WHERE order_id=$1",
@@ -230,7 +299,12 @@ export async function ingestPaymentWebhook(
       "UPDATE payment_webhook SET status='processed', processed_at=now(), attempts=attempts+1, error=NULL WHERE webhook_id=$1",
       [webhookId],
     );
-    return { accepted: true, duplicate: false, processed: true, orderId: transaction.order_id };
+    return {
+      accepted: true,
+      duplicate: false,
+      processed: true,
+      orderId: transaction.order_id,
+    };
   });
 }
 
@@ -278,7 +352,8 @@ export async function recordManualPayment(
   const order = orders.rows[0];
   if (!order) fail(404, "NOT_FOUND", "Order not found");
   const amount = toMoney(input.amount);
-  if (Number(amount) <= 0) fail(422, "VALIDATION_ERROR", "Payment amount must be greater than zero");
+  if (Number(amount) <= 0)
+    fail(422, "VALIDATION_ERROR", "Payment amount must be greater than zero");
 
   const captured = await tx.query<{ total: string }>(
     "SELECT coalesce(sum(amount),0)::text AS total FROM payment WHERE order_id = $1 AND payment_status = 'succeeded'",
@@ -286,20 +361,41 @@ export async function recordManualPayment(
   );
   const remaining = Number(order.total) - Number(captured.rows[0]?.total ?? 0);
   if (Number(amount) > remaining + 0.001) {
-    fail(422, "VALIDATION_ERROR", `Payment exceeds the outstanding balance of ${remaining.toFixed(2)}`);
+    fail(
+      422,
+      "VALIDATION_ERROR",
+      `Payment exceeds the outstanding balance of ${remaining.toFixed(2)}`,
+    );
   }
 
   const transaction = await tx.query<{ transaction_id: string }>(
     `INSERT INTO payment_transaction(order_id, provider, provider_reference, amount, status, idempotency_key, completed_at, response_payload)
      VALUES($1,'manual',$2,$3,'succeeded',$4, now(), $5) RETURNING transaction_id`,
-    [input.orderId, input.reference, amount, `admin-manual:${input.orderId}:${input.reference}`.slice(0, 120), JSON.stringify({ note: input.note ?? null, admin_user_id: input.adminUserId })],
+    [
+      input.orderId,
+      input.reference,
+      amount,
+      `admin-manual:${input.orderId}:${input.reference}`.slice(0, 120),
+      JSON.stringify({
+        note: input.note ?? null,
+        admin_user_id: input.adminUserId,
+      }),
+    ],
   );
   await tx.query(
     `INSERT INTO payment(order_id, provider_reference, amount, payment_status, currency, payment_transaction_id)
      VALUES($1,$2,$3,'succeeded','KES',$4)`,
-    [input.orderId, input.reference, amount, transaction.rows[0]!.transaction_id],
+    [
+      input.orderId,
+      input.reference,
+      amount,
+      transaction.rows[0]!.transaction_id,
+    ],
   );
-  const newPaymentStatus = Number(amount) + Number(captured.rows[0]?.total ?? 0) >= Number(order.total) ? "paid" : "pending";
+  const newPaymentStatus =
+    Number(amount) + Number(captured.rows[0]?.total ?? 0) >= Number(order.total)
+      ? "paid"
+      : "pending";
   await tx.query(
     `UPDATE customer_order SET payment_status = $2::text,
             order_status_id = CASE WHEN $2::text = 'paid' AND order_status_id IN (2,9) THEN 3 ELSE order_status_id END,
@@ -315,7 +411,11 @@ export async function recordManualPayment(
     entityId: transaction.rows[0]!.transaction_id,
     after: { order_id: input.orderId, amount, reference: input.reference },
   });
-  return { transactionId: transaction.rows[0]!.transaction_id, paymentStatus: newPaymentStatus, order: await getOrderView(tx, input.orderId) };
+  return {
+    transactionId: transaction.rows[0]!.transaction_id,
+    paymentStatus: newPaymentStatus,
+    order: await getOrderView(tx, input.orderId),
+  };
 }
 
 export async function requestRefund(
@@ -332,7 +432,8 @@ export async function requestRefund(
   },
 ) {
   const amount = toMoney(input.amount);
-  if (Number(amount) <= 0) fail(422, "VALIDATION_ERROR", "Refund amount must be greater than zero");
+  if (Number(amount) <= 0)
+    fail(422, "VALIDATION_ERROR", "Refund amount must be greater than zero");
 
   const replay = await db.query<any>(
     `SELECT refund_id, order_id, amount::text AS amount, currency, status, reason, created_at, processed_at
@@ -340,7 +441,11 @@ export async function requestRefund(
     [input.idempotencyKey],
   );
   if (replay.rows[0]) {
-    return { ...replay.rows[0], amount: toMoney(replay.rows[0].amount), replayed: true };
+    return {
+      ...replay.rows[0],
+      amount: toMoney(replay.rows[0].amount),
+      replayed: true,
+    };
   }
 
   const prepared = await db.withTransaction(async (tx) => {
@@ -354,17 +459,24 @@ export async function requestRefund(
       [input.orderId, input.transactionId ?? null],
     );
     const transaction = transactions.rows[0];
-    if (!transaction) fail(409, "CONFLICT", "There is no captured payment to refund");
-    if (!transaction.provider_reference) fail(409, "CONFLICT", "The payment has no provider reference");
+    if (!transaction)
+      fail(409, "CONFLICT", "There is no captured payment to refund");
+    if (!transaction.provider_reference)
+      fail(409, "CONFLICT", "The payment has no provider reference");
 
     const refunded = await tx.query<{ total: string }>(
       `SELECT coalesce(sum(amount),0)::text AS total FROM refund
         WHERE payment_transaction_id = $1 AND status IN ('requested','approved','processing','succeeded')`,
       [transaction.transaction_id],
     );
-    const refundable = Number(transaction.amount) - Number(refunded.rows[0]?.total ?? 0);
+    const refundable =
+      Number(transaction.amount) - Number(refunded.rows[0]?.total ?? 0);
     if (Number(amount) > refundable + 0.001) {
-      fail(422, "VALIDATION_ERROR", `Refund exceeds the refundable amount of ${refundable.toFixed(2)}`);
+      fail(
+        422,
+        "VALIDATION_ERROR",
+        `Refund exceeds the refundable amount of ${refundable.toFixed(2)}`,
+      );
     }
 
     const refund = await tx.query<any>(
@@ -372,36 +484,57 @@ export async function requestRefund(
        VALUES($1,$2,$3,$4,'processing',$5,$6)
        ON CONFLICT (idempotency_key) DO NOTHING
        RETURNING refund_id, amount::text AS amount, status`,
-      [input.orderId, transaction.transaction_id, amount, input.reason, input.idempotencyKey, input.adminUserId],
+      [
+        input.orderId,
+        transaction.transaction_id,
+        amount,
+        input.reason,
+        input.idempotencyKey,
+        input.adminUserId,
+      ],
     );
     if (!refund.rows[0]) {
       fail(409, "CONFLICT", "This refund request is already being processed");
     }
 
     if (input.restock) {
-      const lines = await tx.query<any>("SELECT variant_id, quantity FROM order_line WHERE order_id = $1", [input.orderId]);
+      const lines = await tx.query<any>(
+        "SELECT variant_id, quantity FROM order_line WHERE order_id = $1",
+        [input.orderId],
+      );
       await restockOrder(tx, {
         orderId: input.orderId,
-        lines: lines.rows.map((line) => ({ variantId: line.variant_id, quantity: line.quantity })),
+        lines: lines.rows.map((line) => ({
+          variantId: line.variant_id,
+          quantity: line.quantity,
+        })),
         reason: "refund_restock",
       });
     }
 
     const totalRefunded = Number(refunded.rows[0]?.total ?? 0) + Number(amount);
-    const orderPaymentStatus = totalRefunded >= Number(transaction.amount) ? "refunded" : "partially_refunded";
-    await tx.query("UPDATE customer_order SET payment_status = $2, updated_at = now() WHERE order_id = $1", [
-      input.orderId,
-      orderPaymentStatus,
-    ]);
+    const orderPaymentStatus =
+      totalRefunded >= Number(transaction.amount)
+        ? "refunded"
+        : "partially_refunded";
+    await tx.query(
+      "UPDATE customer_order SET payment_status = $2, updated_at = now() WHERE order_id = $1",
+      [input.orderId, orderPaymentStatus],
+    );
     if (orderPaymentStatus === "refunded") {
-      await tx.query("UPDATE customer_order SET order_status_id = 8, updated_at = now() WHERE order_id = $1", [input.orderId]);
-      await tx.query("UPDATE payment_transaction SET status = 'refunded', updated_at = now() WHERE transaction_id = $1", [
-        transaction.transaction_id,
-      ]);
+      await tx.query(
+        "UPDATE customer_order SET order_status_id = 8, updated_at = now() WHERE order_id = $1",
+        [input.orderId],
+      );
+      await tx.query(
+        "UPDATE payment_transaction SET status = 'refunded', updated_at = now() WHERE transaction_id = $1",
+        [transaction.transaction_id],
+      );
     } else {
-      await tx.query("UPDATE payment_transaction SET status = 'partially_refunded', updated_at = now() WHERE transaction_id = $1", [
-        transaction.transaction_id,
-      ]);
+      await tx.query(
+        "UPDATE payment_transaction SET status = 'partially_refunded', updated_at = now() WHERE transaction_id = $1",
+        [transaction.transaction_id],
+      );
     }
 
     await audit(tx, {
@@ -410,7 +543,12 @@ export async function requestRefund(
       action: "refund.requested",
       entityType: "refund",
       entityId: refund.rows[0]!.refund_id,
-      after: { order_id: input.orderId, amount, reason: input.reason, restock: input.restock },
+      after: {
+        order_id: input.orderId,
+        amount,
+        reason: input.reason,
+        restock: input.restock,
+      },
     });
 
     return {
@@ -432,7 +570,11 @@ export async function requestRefund(
     // Provider vocabulary differs (e.g. manual settlement is asynchronous), so
     // map it onto the refund status machine instead of storing it verbatim.
     const providerStatus =
-      result.status === "succeeded" ? "succeeded" : result.status === "failed" ? "failed" : "processing";
+      result.status === "succeeded"
+        ? "succeeded"
+        : result.status === "failed"
+          ? "failed"
+          : "processing";
     await db.query(
       `UPDATE refund SET status = $2::text, provider_reference = $3,
               processed_at = CASE WHEN $2::text IN ('succeeded','failed') THEN now() ELSE processed_at END, updated_at = now()
@@ -444,7 +586,10 @@ export async function requestRefund(
       `UPDATE refund SET status = 'failed', updated_at = now(), processed_at = now() WHERE refund_id = $1`,
       [prepared.refundId],
     );
-    logger.warn({ refundId: prepared.refundId, err: error?.message }, "provider refund failed");
+    logger.warn(
+      { refundId: prepared.refundId, err: error?.message },
+      "provider refund failed",
+    );
   }
 
   if (config.erp.enabled) {
@@ -462,5 +607,9 @@ export async function requestRefund(
        FROM refund WHERE refund_id = $1`,
     [prepared.refundId],
   );
-  return { ...refund.rows[0], amount: toMoney(refund.rows[0].amount), replayed: false };
+  return {
+    ...refund.rows[0],
+    amount: toMoney(refund.rows[0].amount),
+    replayed: false,
+  };
 }

@@ -52,9 +52,18 @@ export interface Database extends Queryable {
   exec(sql: string): Promise<void>;
   withTransaction<T>(
     fn: (tx: Transaction) => Promise<T>,
-    options?: { isolation?: "repeatable read" | "serializable"; readOnly?: boolean; maxAttempts?: number },
+    options?: {
+      isolation?: "repeatable read" | "serializable";
+      readOnly?: boolean;
+      maxAttempts?: number;
+    },
   ): Promise<T>;
-  healthCheck(): Promise<{ ok: boolean; driver: string; latency_ms: number; error?: string }>;
+  healthCheck(): Promise<{
+    ok: boolean;
+    driver: string;
+    latency_ms: number;
+    error?: string;
+  }>;
   close(): Promise<void>;
 }
 
@@ -78,11 +87,17 @@ class PostgresDatabase implements Database {
     });
   }
 
-  async query<T = DbRow>(sql: string, params: unknown[] = []): Promise<QueryResult<T>> {
+  async query<T = DbRow>(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<QueryResult<T>> {
     const tx = activeTransaction.getStore();
     if (tx) return tx.query<T>(sql, params);
     const result = await this.pool.query(sql, params as any[]);
-    return { rows: result.rows as T[], rowCount: result.rowCount ?? result.rows.length };
+    return {
+      rows: result.rows as T[],
+      rowCount: result.rowCount ?? result.rows.length,
+    };
   }
 
   async exec(sql: string): Promise<void> {
@@ -93,10 +108,16 @@ class PostgresDatabase implements Database {
 
   async withTransaction<T>(
     fn: (tx: Transaction) => Promise<T>,
-    options: { isolation?: "repeatable read" | "serializable"; readOnly?: boolean; maxAttempts?: number } = {},
+    options: {
+      isolation?: "repeatable read" | "serializable";
+      readOnly?: boolean;
+      maxAttempts?: number;
+    } = {},
   ): Promise<T> {
     if (activeTransaction.getStore()) {
-      throw new Error("withTransaction() called inside an open transaction; pass the existing tx instead");
+      throw new Error(
+        "withTransaction() called inside an open transaction; pass the existing tx instead",
+      );
     }
     const maxAttempts = options.maxAttempts ?? 3;
     for (let attempt = 1; ; attempt++) {
@@ -105,7 +126,10 @@ class PostgresDatabase implements Database {
         txid: randomUUID(),
         query: async (sql, params = []) => {
           const result = await client.query(sql as string, params as any[]);
-          return { rows: result.rows as any[], rowCount: result.rowCount ?? result.rows.length };
+          return {
+            rows: result.rows as any[],
+            rowCount: result.rowCount ?? result.rows.length,
+          };
         },
         exec: async (sql) => {
           await client.query(sql);
@@ -114,10 +138,14 @@ class PostgresDatabase implements Database {
       try {
         await client.query(
           "BEGIN" +
-            (options.isolation ? ` ISOLATION LEVEL ${options.isolation.toUpperCase()}` : "") +
+            (options.isolation
+              ? ` ISOLATION LEVEL ${options.isolation.toUpperCase()}`
+              : "") +
             (options.readOnly ? " READ ONLY" : ""),
         );
-        await client.query("SELECT set_config('statement_timeout','15000',true), set_config('lock_timeout','8000',true)");
+        await client.query(
+          "SELECT set_config('statement_timeout','15000',true), set_config('lock_timeout','8000',true)",
+        );
         const result = await activeTransaction.run(tx, () => fn(tx));
         await client.query("COMMIT");
         return result;
@@ -125,7 +153,9 @@ class PostgresDatabase implements Database {
         await client.query("ROLLBACK").catch(() => undefined);
         const retryable = ["40001", "40P01"].includes(error?.code);
         if (retryable && attempt < maxAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, 25 * attempt + Math.floor(Math.random() * 40)));
+          await new Promise((resolve) =>
+            setTimeout(resolve, 25 * attempt + Math.floor(Math.random() * 40)),
+          );
           continue;
         }
         throw error;
@@ -139,9 +169,18 @@ class PostgresDatabase implements Database {
     const started = Date.now();
     try {
       await this.pool.query("SELECT 1");
-      return { ok: true, driver: this.driver, latency_ms: Date.now() - started };
+      return {
+        ok: true,
+        driver: this.driver,
+        latency_ms: Date.now() - started,
+      };
     } catch (error: any) {
-      return { ok: false, driver: this.driver, latency_ms: Date.now() - started, error: error.message };
+      return {
+        ok: false,
+        driver: this.driver,
+        latency_ms: Date.now() - started,
+        error: error.message,
+      };
     }
   }
 
@@ -174,12 +213,18 @@ class EmbeddedDatabase implements Database {
     return next;
   }
 
-  async query<T = DbRow>(sql: string, params: unknown[] = []): Promise<QueryResult<T>> {
+  async query<T = DbRow>(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<QueryResult<T>> {
     const tx = activeTransaction.getStore();
     if (tx) return tx.query<T>(sql, params);
     return this.run(async () => {
       const result = await this.instance.query(sql, params);
-      return { rows: (result.rows ?? []) as T[], rowCount: (result.rows ?? []).length };
+      return {
+        rows: (result.rows ?? []) as T[],
+        rowCount: (result.rows ?? []).length,
+      };
     });
   }
 
@@ -193,10 +238,15 @@ class EmbeddedDatabase implements Database {
 
   async withTransaction<T>(
     fn: (tx: Transaction) => Promise<T>,
-    options: { isolation?: "repeatable read" | "serializable"; readOnly?: boolean } = {},
+    options: {
+      isolation?: "repeatable read" | "serializable";
+      readOnly?: boolean;
+    } = {},
   ): Promise<T> {
     if (this.inTransaction || activeTransaction.getStore()) {
-      throw new Error("Nested transactions are not supported by the embedded driver");
+      throw new Error(
+        "Nested transactions are not supported by the embedded driver",
+      );
     }
     this.inTransaction = true;
     try {
@@ -204,14 +254,19 @@ class EmbeddedDatabase implements Database {
         const txid = randomUUID();
         await this.instance.exec(
           "BEGIN" +
-            (options.isolation ? ` ISOLATION LEVEL ${options.isolation.toUpperCase()}` : "") +
+            (options.isolation
+              ? ` ISOLATION LEVEL ${options.isolation.toUpperCase()}`
+              : "") +
             (options.readOnly ? " READ ONLY" : ""),
         );
         const tx: Transaction = {
           txid,
           query: async (sql, params = []) => {
             const result = await this.instance.query(sql, params);
-            return { rows: (result.rows ?? []) as any[], rowCount: (result.rows ?? []).length };
+            return {
+              rows: (result.rows ?? []) as any[],
+              rowCount: (result.rows ?? []).length,
+            };
           },
           exec: async (sql) => {
             await this.instance.exec(sql);
@@ -235,9 +290,18 @@ class EmbeddedDatabase implements Database {
     const started = Date.now();
     try {
       await this.query("SELECT 1");
-      return { ok: true, driver: this.driver, latency_ms: Date.now() - started };
+      return {
+        ok: true,
+        driver: this.driver,
+        latency_ms: Date.now() - started,
+      };
     } catch (error: any) {
-      return { ok: false, driver: this.driver, latency_ms: Date.now() - started, error: error.message };
+      return {
+        ok: false,
+        driver: this.driver,
+        latency_ms: Date.now() - started,
+        error: error.message,
+      };
     }
   }
 
@@ -260,13 +324,16 @@ export async function getDatabase(): Promise<Database> {
 }
 
 /** Explicit embedded database factory used by tests and local tooling. */
-export async function createEmbeddedDatabase(dataDir: string): Promise<Database> {
+export async function createEmbeddedDatabase(
+  dataDir: string,
+): Promise<Database> {
   return EmbeddedDatabase.create(dataDir);
 }
 
 /** Test helper: install an isolated database instance. */
 export async function setDatabase(next: Database | undefined) {
-  if (database && database !== next) await database.close().catch(() => undefined);
+  if (database && database !== next)
+    await database.close().catch(() => undefined);
   database = next;
 }
 

@@ -18,7 +18,12 @@ export interface ErpResponse<T> {
 
 export interface ErpTransport {
   request<T = unknown>(request: ErpRequest): Promise<ErpResponse<T>>;
-  health(): Promise<{ ok: boolean; live: boolean; ready: boolean; detail?: unknown }>;
+  health(): Promise<{
+    ok: boolean;
+    live: boolean;
+    ready: boolean;
+    detail?: unknown;
+  }>;
   /** Binary download (product images). Optional: a transport may not offer it. */
   download?(path: string): Promise<ErpBinary>;
   close?(): Promise<void>;
@@ -102,14 +107,42 @@ export interface ErpCustomer {
 }
 
 export interface ErpMetadata {
-  company: { id: string; name: string; currency: string; timezone: string; settings: Record<string, unknown> };
+  company: {
+    id: string;
+    name: string;
+    currency: string;
+    timezone: string;
+    settings: Record<string, unknown>;
+  };
   branches: Array<{ id: string; name: string; code: string }>;
-  warehouses: Array<{ id: string; name: string; code: string; branch_id: string }>;
-  registers: Array<{ id: string; name: string; branch_id: string; warehouse_id: string; active: boolean }>;
+  warehouses: Array<{
+    id: string;
+    name: string;
+    code: string;
+    branch_id: string;
+  }>;
+  registers: Array<{
+    id: string;
+    name: string;
+    branch_id: string;
+    warehouse_id: string;
+    active: boolean;
+  }>;
   units: Array<{ id: string; name: string; symbol: string }>;
   categories: Array<{ id: string; name: string; parent_id: string | null }>;
-  tax_rules: Array<{ id: string; name: string; code: string; rate: string; kind: string }>;
-  payment_methods: Array<{ id: string; name: string; kind: string; requires_reference: boolean }>;
+  tax_rules: Array<{
+    id: string;
+    name: string;
+    code: string;
+    rate: string;
+    kind: string;
+  }>;
+  payment_methods: Array<{
+    id: string;
+    name: string;
+    kind: string;
+    requires_reference: boolean;
+  }>;
   price_lists: Array<{ id: string; name: string }>;
   actor?: { id: string; email: string; permissions?: string[] };
 }

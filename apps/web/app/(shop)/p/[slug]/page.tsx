@@ -141,8 +141,8 @@ export default async function ProductPage({
           </div>
 
           <p className="notice">
-            Stock and price are the ERP&apos;s. Choose an option to hold it for 15
-            minutes; delivery or store pickup is confirmed after checkout.
+            Stock and price are the ERP&apos;s. Choose an option to hold it for
+            15 minutes; delivery or store pickup is confirmed after checkout.
           </p>
 
           <div className="card">

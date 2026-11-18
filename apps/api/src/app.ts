@@ -5,7 +5,11 @@
  * enforcement, then body parsing that retains the raw body for webhook HMAC
  * verification, then identity resolution, then routes.
  */
-import express, { type NextFunction, type Request, type Response } from "express";
+import express, {
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import helmet from "helmet";
 import { randomUUID } from "node:crypto";
 import { config } from "./config.ts";
@@ -59,7 +63,8 @@ export function createApp({ db }: AppDependencies) {
 
   app.use((req, res, next) => {
     const given = req.header("X-Request-Id");
-    const requestId = given && /^[\w-]{8,100}$/.test(given) ? given : randomUUID();
+    const requestId =
+      given && /^[\w-]{8,100}$/.test(given) ? given : randomUUID();
     (req as any).requestId = requestId;
     (req as any).db = db;
     res.setHeader("X-Request-Id", requestId);
@@ -91,7 +96,9 @@ export function createApp({ db }: AppDependencies) {
     if (req.path.startsWith("/api/v1/webhooks/")) return next();
     const origin = req.header("origin");
     if (!origin || !originAllowed(origin)) {
-      return next(new AppError(403, "ORIGIN_DENIED", "Request origin is not allowed"));
+      return next(
+        new AppError(403, "ORIGIN_DENIED", "Request origin is not allowed"),
+      );
     }
     next();
   });
@@ -106,7 +113,9 @@ export function createApp({ db }: AppDependencies) {
     }),
   );
 
-  app.get("/health/live", (_req, res) => res.json({ status: "ok", service: "ecommerce-api" }));
+  app.get("/health/live", (_req, res) =>
+    res.json({ status: "ok", service: "ecommerce-api" }),
+  );
 
   app.get("/health/ready", async (_req, res) => {
     const database = await db.healthCheck();
@@ -119,7 +128,8 @@ export function createApp({ db }: AppDependencies) {
         )
       : { rows: [] as any[] };
     const heartbeat = workers.rows[0];
-    const workerStale = !heartbeat?.last_seen_at || Number(heartbeat.age_seconds ?? 1e9) > 120;
+    const workerStale =
+      !heartbeat?.last_seen_at || Number(heartbeat.age_seconds ?? 1e9) > 120;
     const ready = database.ok && migrations;
     res.status(ready ? 200 : 503).json({
       status: ready ? "ready" : "not_ready",
@@ -163,7 +173,9 @@ export function createApp({ db }: AppDependencies) {
 
   app.use("/api/v1", api);
 
-  app.use((_req, _res, next) => next(new AppError(404, "NOT_FOUND", "Endpoint not found")));
+  app.use((_req, _res, next) =>
+    next(new AppError(404, "NOT_FOUND", "Endpoint not found")),
+  );
   app.use(errorHandler());
   return app;
 }
