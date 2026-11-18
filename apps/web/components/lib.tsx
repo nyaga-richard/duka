@@ -288,37 +288,66 @@ export function scopedQuery(params: Record<string, any>, branch: string) {
   return q.toString();
 }
 export async function printPdf(path: string) {
+  // Open a same-origin window synchronously from the click so popup blockers
+  // do not prevent the print flow.
   const popup = window.open("about:blank", "_blank");
   if (!popup) throw new Error("Allow pop-ups to print the receipt.");
   popup.document.title = "Preparing receipt…";
-  popup.document.body.innerHTML = "<p style='font:14px sans-serif;padding:24px'>Preparing receipt for printing…</p>";
+  popup.document.body.innerHTML =
+    "<p style='font:14px sans-serif;padding:24px'>Preparing receipt for printing…</p>";
+
+  let objectUrl: string | null = null;
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    if (!popup.closed) popup.close();
+  };
+
   try {
-    const res = await fetch("/api/v1" + path, { credentials: "same-origin", cache: "no-store" });
+    const res = await fetch("/api/v1" + path, {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
     if (!res.ok) {
       const e = await res.json().catch(() => null);
-      throw new Error(e?.error?.message ?? "Unable to prepare receipt for printing.");
+      throw new Error(
+        e?.error?.message ?? "Unable to prepare receipt for printing.",
+      );
     }
-    const url = URL.createObjectURL(await res.blob());
-    let cleanedUp = false;
-    const closeAfterPrint = () => {
-      if (cleanedUp) return;
-      cleanedUp = true;
-      URL.revokeObjectURL(url);
-      if (!popup.closed) popup.close();
+
+    objectUrl = URL.createObjectURL(await res.blob());
+    popup.document.open();
+    popup.document.write(`<!doctype html>
+      <html>
+        <head><title>Receipt</title></head>
+        <body style="margin:0">
+          <iframe title="Receipt" style="border:0;width:100%;height:100vh"></iframe>
+        </body>
+      </html>`);
+    popup.document.close();
+
+    const frame = popup.document.querySelector("iframe");
+    if (!frame) throw new Error("Unable to open the receipt for printing.");
+
+    const printFrame = () => {
+      if (popup.closed || !frame.contentWindow) return;
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
     };
-    // Close the temporary receipt window once the native print dialog is
-    // dismissed, whether the user prints or cancels.
-    popup.onafterprint = closeAfterPrint;
-    popup.onload = () => {
-      popup.focus();
-      popup.print();
-    };
-    popup.location.href = url;
+    frame.addEventListener("load", printFrame, { once: true });
+    popup.addEventListener("afterprint", cleanup, { once: true });
+    popup.addEventListener("pagehide", () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }, { once: true });
+    frame.src = objectUrl;
   } catch (error) {
-    popup.close();
+    cleanup();
     throw error;
   }
 }
+
 export async function download(path: string, filename: string) {
   const res = await fetch("/api/v1" + path, { credentials: "same-origin" });
   if (!res.ok) {
