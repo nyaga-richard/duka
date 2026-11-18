@@ -16,6 +16,15 @@ import {
   LockKeyhole,
   Monitor,
   ArrowRight,
+  ChevronRight,
+  ChevronLeft,
+  Key,
+  Globe,
+  Send,
+  ShieldAlert,
+  CheckCircle2,
+  AlertCircle,
+  RotateCcw,
 } from "lucide-react";
 import {
   api,
@@ -41,15 +50,331 @@ import {
   SearchSelect,
 } from "../ui";
 import { useList, useAction } from "./common";
+
+/** ------------------------------------------------------------------ */
+/*  Small reusable step indicator                                       */
+/** ------------------------------------------------------------------ */
+function Stepper({ step, total }: { step: number; total: number }) {
+  return (
+    <div className="stepper">
+      {[1, 2, 3, 4].map((n) => (
+        <div key={n} className={`step ${n < step ? "done" : n === step ? "current" : "todo"}`}>
+          <span className="step-badge">{n <= step ? (n < step ? "✓" : n) : "•"}</span>
+          <span className="step-label">
+            {n === 1 && "Environment"}
+            {n === 2 && "Credentials"}
+            {n === 3 && "Test connection"}
+            {n === 4 && "Enable"}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** ------------------------------------------------------------------ */
+/*  M-Pesa setup wizard: guided, field-by-field onboarding             */
+/** ------------------------------------------------------------------ */
+function MpesaSetupWizard({
+  open,
+  onComplete,
+  onClose,
+  existing,
+}: {
+  open: boolean;
+  onComplete: () => void;
+  onClose: () => void;
+  existing: any;
+}) {
+  const [step, setStep] = useState(1);
+  const [env, setEnv] = useState<"sandbox" | "production">(
+    existing?.base_url?.includes("api.safaricom.co.ke") ? "production" : "sandbox",
+  );
+  const [values, setValues] = useState({
+    consumer_key: "",
+    consumer_secret: "",
+    shortcode: existing?.shortcode ?? "",
+    passkey: existing?.passkey ?? "",
+    callback_secret: existing?.callback_secret ?? "",
+    transaction_type: existing?.transaction_type ?? "CustomerPayBillOnline",
+  });
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const isFirstTime = !existing?.configured;
+  const requiredFilled =
+    values.consumer_key &&
+    values.consumer_secret &&
+    values.shortcode &&
+    values.passkey &&
+    values.callback_secret;
+
+  const baseUrl = env === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke";
+
+  async function testConnection() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      // Validate credentials by calling Daraja OAuth token endpoint
+      const response = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+        headers: {
+          Authorization:
+            "Basic " +
+            Buffer.from(values.consumer_key + ":" + values.consumer_secret).toString("base64"),
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await response.json();
+      if (response.ok && data.access_token) {
+        setTestResult({ ok: true, msg: "Credentials validated with Daraja." });
+      } else {
+        setTestResult({ ok: false, msg: data.errorMessage || "Daraja rejected the credentials." });
+      }
+    } catch (e: any) {
+      setTestResult({ ok: false, msg: e.message || "Could not reach Daraja." });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function save() {
+    setSaveError(null);
+    setSaving(true);
+    try {
+      await api("/integrations/config", {
+        method: "PUT",
+        body: {
+          provider: "mpesa",
+          enabled: true,
+          config: {
+            consumer_key: values.consumer_key.trim(),
+            consumer_secret: values.consumer_secret.trim(),
+            shortcode: values.shortcode.trim(),
+            passkey: values.passkey.trim(),
+            callback_secret: values.callback_secret.trim(),
+            transaction_type: values.transaction_type,
+            base_url: baseUrl,
+          },
+        },
+      });
+      onComplete();
+    } catch (e: any) {
+      setSaveError(e?.message ?? "Failed to save configuration.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const stepTitles = {
+    1: "Choose your environment",
+    2: "Enter your Daraja credentials",
+    3: "Test the connection",
+    4: "Enable for your business",
+  };
+
+  const stepDescriptions = {
+    1: "Start with Sandbox to test. Switch to Production when you have live Daraja credentials.",
+    2: "Get your Consumer Key, Consumer Secret and Passkey from the Daraja developer portal.",
+    3: "We call Daraja directly to confirm your credentials work before saving.",
+    4: "Once enabled, M-Pesa Express appears as a payment method at the POS.",
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} title="Set up M-Pesa payments" description="Step-by-step connection to Safaricom Daraja." wide>
+      <div className="wizard">
+        <Stepper step={step} total={4} />
+        <h3 className="wizard-title">{stepTitles[step as keyof typeof stepTitles]}</h3>
+        <p className="wizard-sub">{stepDescriptions[step as keyof typeof stepDescriptions]}</p>
+
+        {/* Step 1: Environment */}
+        {step === 1 && (
+          <>
+            <div className="env-choice">
+              <button
+                className={`env-btn ${env === "sandbox" ? "active" : ""}`}
+                onClick={() => setEnv("sandbox")}
+              >
+                <Globe size={18} />
+                <div>
+                  <strong>Sandbox (test)</strong>
+                  <p>Test with Daraja simulator credentials. No real money moves.</p>
+                </div>
+              </button>
+              <button
+                className={`env-btn ${env === "production" ? "active" : ""}`}
+                onClick={() => setEnv("production")}
+              >
+                <ShieldCheck size={18} />
+                <div>
+                  <strong>Production (live)</strong>
+                  <p>Live pay bill / till number. Real customer payments.</p>
+                </div>
+              </button>
+            </div>
+            <div className="env-note">
+              The callback URL Daraja calls is pre-configured from your public host. You only need
+              the API credentials below.
+            </div>
+          </>
+        )}
+
+        {/* Step 2: Credentials */}
+        {step === 2 && (
+          <>
+            <Fields
+              fields={[
+                {
+                  key: "consumer_key",
+                  label: "Consumer key",
+                  type: "text",
+                  required: true,
+                  help: "From your Daraja app (My Apps → App credentials).",
+                },
+                {
+                  key: "consumer_secret",
+                  label: "Consumer secret",
+                  type: "password",
+                  required: true,
+                  help: "From your Daraja app (My Apps → App credentials).",
+                },
+                {
+                  key: "shortcode",
+                  label: "Shortcode (Pay Bill or Till number)",
+                  type: "text",
+                  required: true,
+                  help: "5–6 digits. Sandbox uses the test shortcode from the simulator.",
+                },
+                {
+                  key: "passkey",
+                  label: "Passkey (Lipa Na M-Pesa)",
+                  type: "password",
+                  required: true,
+                  help: "Sandbox: from the simulator test data. Production: sent by Safaricom after go-live.",
+                },
+                {
+                  key: "callback_secret",
+                  label: "Callback secret (32+ characters)",
+                  type: "password",
+                  required: true,
+                  help: "Any strong secret you create. It signs callbacks so only Daraja can reach your server.",
+                },
+                {
+                  key: "transaction_type",
+                  label: "Transaction type",
+                  type: "select",
+                  options: [
+                    { id: "CustomerPayBillOnline", name: "Pay Bill (CustomerPayBillOnline)" },
+                    { id: "CustomerBuyGoodsOnline", name: "Buy Goods / Till (CustomerBuyGoodsOnline)" },
+                  ],
+                  required: true,
+                },
+              ]}
+              value={values}
+              onChange={setValues}
+            />
+            <div className="callback-url">
+              <strong>Callback URL (auto-configured):</strong>{" "}
+              <code>{`${window.location.origin}/api/v1/integrations/mpesa/callback`}</code>
+            </div>
+          </>
+        )}
+
+        {/* Step 3: Test connection */}
+        {step === 3 && (
+          <div className="test-card">
+            {testResult && (
+              <div className={`test-result ${testResult.ok ? "ok" : "fail"}`}>
+                {testResult.ok ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+                {testResult.msg}
+              </div>
+            )}
+            <Button
+              variant="primary"
+              busy={testing}
+              onClick={testConnection}
+              disabled={!requiredFilled}
+            >
+              {testing ? "Validating with Daraja…" : "Test connection with Daraja"}
+            </Button>
+            {!requiredFilled && (
+              <p className="hint">Fill in all credential fields above to enable testing.</p>
+            )}
+            {testResult?.ok && (
+              <p className="hint ok">Your credentials are valid. Proceed to enable.</p>
+            )}
+          </div>
+        )}
+
+        {/* Step 4: Enable */}
+        {step === 4 && (
+          <div className="enable-card">
+            <div className="enable-summary">
+              <div>
+                <strong>Environment:</strong> {env.charAt(0).toUpperCase() + env.slice(1)}
+              </div>
+              <div>
+                <strong>Shortcode:</strong> {values.shortcode}
+              </div>
+              <div>
+                <strong>Transaction type:</strong> {values.transaction_type}
+              </div>
+              <div>
+                <strong>Status:</strong> Will be enabled for this business
+              </div>
+            </div>
+            <div className="enable-note">
+              Credentials are encrypted at rest and never shown back. Customers will see M-Pesa
+              Express as a payment option at the POS once enabled.
+            </div>
+          </div>
+        )}
+
+        <div className="wizard-actions">
+          {step > 1 && (
+            <Button variant="ghost" onClick={() => setStep(step - 1)}>
+              <ChevronLeft size={16} /> Back
+            </Button>
+          )}
+          {step < 4 ? (
+            <Button
+              variant="primary"
+              busy={saving}
+              disabled={
+                step === 3 && !testResult?.ok ? true : step === 2 && !requiredFilled
+              }
+              onClick={() =>
+                step === 3 ? (testResult?.ok ? setStep(4) : null) : setStep(step + 1)
+              }
+            >
+              {step === 3 && testResult?.ok ? "Enable M-Pesa" : "Next"}
+            </Button>
+          ) : (
+            <Button variant="primary" busy={saving} onClick={save}>
+              Save and enable
+            </Button>
+          )}
+          {step === 4 && (
+            <Button variant="ghost" onClick={() => setStep(1)}>
+              Start over
+            </Button>
+          )}
+        </div>
+        {saveError && <ErrorCard error={{ message: saveError }} />}
+      </div>
+    </Dialog>
+  );
+}
+
+/** ------------------------------------------------------------------ */
+/*  Integrations page                                                   */
+/** ------------------------------------------------------------------ */
 export function IntegrationsPage() {
   const { meta } = useWorkspace();
   const status = useQuery<any>("/integrations/status");
   const config = useQuery<any>("/integrations/config");
-  const [setupProvider, setSetupProvider] = useState<
-    "mpesa" | "etims" | null
-  >(null);
-  const [setupValues, setSetupValues] = useState<any>({});
-  const [setupEnable, setSetupEnable] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
   const [tab, setTab] = useState("mpesa"),
     [refund, setRefund] = useState<any>(null),
     [form, setForm] = useState<any>({});
@@ -64,51 +389,124 @@ export function IntegrationsPage() {
     setRefund(null);
     list.refresh();
   });
+
+  const mpesa = config.data?.mpesa;
+  const etims = config.data?.etims;
+  const mpesaConfigured = status.data?.mpesa_mode === "daraja" || mpesa?.configured;
+  const mpesaEnabled = mpesa?.enabled ?? false;
+  const mpesaCreds = status.data?.mpesa_credentials_configured;
+
+  const canConfigure = meta.actor.permissions.includes("integrations.manage");
+
   return (
     <>
       <PageHeading
         eyebrow="CONNECTED SERVICES"
         title="Integrations"
-        description="Explicit confirmation. Visible failures. No invented payment or fiscal success."
+        description="Connect M-Pesa payments and KRA eTIMS fiscalization. No invented payment or fiscal success — every result is verified with the provider."
       >
-        <Button
-          variant="secondary"
-          onClick={() => {
-            list.refresh();
-            status.refresh();
-          }}
-        >
-          <RefreshCw size={16} /> Refresh status
+        <Button variant="secondary" onClick={() => { list.refresh(); status.refresh(); config.refresh(); }}>
+          <RefreshCw size={16} /> Refresh
         </Button>
+        {!mpesaConfigured && canConfigure && (
+          <Button variant="primary" onClick={() => setSetupOpen(true)}>
+            <Plus size={16} /> Set up M-Pesa
+          </Button>
+        )}
       </PageHeading>
+
+      {/* Status cards */}
       <div className="integration-grid">
-        <section className="card integration-card">
+        <section className="card integration-card mpesa-card">
           <div className="integration-logo mpesa">
             <Smartphone size={26} />
           </div>
           <div>
             <h2>M-Pesa / Daraja</h2>
             <p>
-              STK initiation → token-bound callback → independent provider query
-              → allocation.
+              STK push → token-bound callback → independent provider query →
+              allocation.
             </p>
-            <Badge
-              status={
-                status.data?.mpesa_mode === "daraja" ? "pending" : "neutral"
-              }
-            >
-              {status.data?.mpesa_mode ?? "Loading"}
-            </Badge>
+            <div className="status-row">
+              <Badge
+                status={
+                  mpesaEnabled ? "active" : mpesaConfigured ? "pending" : "neutral"
+                }
+              >
+                {mpesaEnabled
+                  ? "Enabled"
+                  : mpesaConfigured
+                    ? "Configured, not enabled"
+                    : "Not configured"}
+              </Badge>
+              <Badge
+                status={mpesaCreds ? "active" : "neutral"}
+              >
+                {mpesaCreds ? "Live credentials" : "Sandbox / none"}
+              </Badge>
+            </div>
+          </div>
+          <div className="card-actions">
+            {!mpesaConfigured && canConfigure && (
+              <Button variant="ghost" onClick={() => setSetupOpen(true)}>
+                Set up now
+              </Button>
+            )}
+            {mpesaConfigured && !mpesaEnabled && canConfigure && (
+              <Button
+                variant="secondary"
+                busy={action.busy}
+                onClick={() =>
+                  action.run(
+                    () =>
+                      api("/integrations/config", {
+                        method: "PUT",
+                        body: { provider: "mpesa", enabled: true },
+                      }).then(() => {
+                        config.refresh();
+                        status.refresh();
+                        return {};
+                      }),
+                    "M-Pesa enabled.",
+                  )
+                }
+              >
+                Enable
+              </Button>
+            )}
+            {mpesaEnabled && canConfigure && (
+              <Button
+                variant="secondary"
+                busy={action.busy}
+                onClick={() =>
+                  action.run(
+                    () =>
+                      api("/integrations/config", {
+                        method: "PUT",
+                        body: { provider: "mpesa", enabled: false },
+                      }).then(() => {
+                        config.refresh();
+                        status.refresh();
+                        return {};
+                      }),
+                    "M-Pesa disabled.",
+                  )
+                }
+              >
+                Disable
+              </Button>
+            )}
           </div>
           <small>
-            {status.data?.mpesa_credentials_configured
-              ? "Credentials configured; merchant and production acceptance testing still required."
-              : config.data?.mpesa?.configured
-                ? "Credentials are saved for this business; live merchant acceptance testing remains yours."
-                : "No live merchant credentials yet. Set up below with your Daraja values, or keep the deployment default. Results from the test provider are not real money."}
+            {mpesaCreds
+              ? "Credentials configured. Test with a small sale at the POS before going live."
+              : mpesaConfigured
+                ? "Settings saved; enable to offer M-Pesa at checkout."
+                : "No live merchant credentials yet. Set up below with your Daraja values."}
           </small>
         </section>
-        <section className="card integration-card">
+
+        <section className="card integration-card fiscal-card">
           <div className="integration-logo fiscal">
             <ShieldCheck size={26} />
           </div>
@@ -118,13 +516,31 @@ export function IntegrationsPage() {
               Certified gateway adapter with idempotency, identifiers, retries
               and failure visibility.
             </p>
-            <Badge
-              status={
-                status.data?.fiscal_mode === "adapter" ? "pending" : "neutral"
-              }
-            >
+            <Badge status={status.data?.fiscal_mode === "adapter" ? "pending" : "neutral"}>
               {status.data?.fiscal_mode ?? "Loading"}
             </Badge>
+          </div>
+          <div className="card-actions">
+            {etims?.configured && canConfigure && (
+              <Button
+                variant={etims.enabled ? "secondary" : "primary"}
+                onClick={() =>
+                  action.run(
+                    () =>
+                      api("/integrations/config", {
+                        method: "PUT",
+                        body: { provider: "etims", enabled: !etims.enabled },
+                      }).then(() => {
+                        config.refresh();
+                        status.refresh();
+                      }),
+                    etims.enabled ? "eTIMS disabled." : "eTIMS enabled.",
+                  )
+                }
+              >
+                {etims.enabled ? "Disable" : "Enable"}
+              </Button>
+            )}
           </div>
           <small>
             No direct KRA certification is claimed. OSCU/VSCU onboarding and
@@ -132,76 +548,68 @@ export function IntegrationsPage() {
           </small>
         </section>
       </div>
+
       {config.error && <ErrorCard error={config.error} />}
+
       {!config.error && (
-      <div className="integration-config-bar">
-        {(["mpesa", "etims"] as const).map((pv) => {
-          const c = config.data?.[pv];
-          return (
-            <div className="card integration-config" key={pv}>
-              <div className="integration-config-text">
-                <h3>
-                  {pv === "mpesa" ? "M-Pesa credentials" : "eTIMS gateway"}
-                </h3>
-                <p>
-                  {config.loading && !config.data
-                    ? "Loading configuration…"
-                    : c?.configured
-                      ? `Configured by ${c.updated_by} · values are never shown back.`
-                      : "Not configured yet; the deployment environment stays the default."}
-                </p>
-              </div>
-              <div className="integration-config-side">
-                <Badge status={c?.enabled ? "active" : "neutral"}>
-                  {c?.configured
-                    ? c.enabled
-                      ? "Enabled"
-                      : "Disabled"
-                    : "Not configured"}
-                </Badge>
-                <div className="form-actions compact">
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setSetupProvider(pv);
-                      setSetupValues({});
-                      setSetupEnable(!!c?.enabled);
-                      action.setError(null);
-                    }}
-                  >
-                    {c?.configured ? "Reconfigure" : "Set up"}
-                  </Button>
-                  {c?.configured && (
-                    <Button
-                      variant={c.enabled ? "secondary" : "primary"}
-                      busy={action.busy}
-                      onClick={() =>
-                        action.run(
-                          () =>
-                            api("/integrations/config", {
-                              method: "PUT",
-                              body: { provider: pv, enabled: !c.enabled },
-                            }).then((r) => {
-                              config.refresh();
-                              status.refresh();
-                              return r;
-                            }),
-                          c.enabled
-                            ? "Integration disabled."
-                            : "Integration enabled.",
-                        )
-                      }
-                    >
-                      {c.enabled ? "Disable" : "Enable"}
-                    </Button>
-                  )}
+        <div className="integration-config-bar">
+          {["mpesa", "etims"].map((pv) => {
+            const c = config.data?.[pv];
+            return (
+              <div className="card integration-config" key={pv}>
+                <div className="integration-config-text">
+                  <h3>{pv === "mpesa" ? "M-Pesa credentials" : "eTIMS gateway"}</h3>
+                  <p>
+                    {config.loading && !config.data
+                      ? "Loading configuration…"
+                      : c?.configured
+                        ? `Configured by ${c.updated_by} · values are never shown back.`
+                        : "Not configured yet."}
+                  </p>
+                </div>
+                <div className="integration-config-side">
+                  <Badge status={c?.enabled ? "active" : "neutral"}>
+                    {c?.configured ? (c.enabled ? "Enabled" : "Disabled") : "Not configured"}
+                  </Badge>
+                  <div className="form-actions compact">
+                    {c?.configured && canConfigure && pv === "mpesa" && (
+                      <Button
+                        variant="ghost"
+                        onClick={() => setSetupOpen(true)}
+                      >
+                        Reconfigure
+                      </Button>
+                    )}
+                    {c?.configured && (
+                      <Button
+                        variant={c.enabled ? "secondary" : "primary"}
+                        busy={action.busy}
+                        onClick={() =>
+                          action.run(
+                            () =>
+                              api("/integrations/config", {
+                                method: "PUT",
+                                body: { provider: pv, enabled: !c.enabled },
+                              }).then(() => {
+                                config.refresh();
+                                status.refresh();
+                                return {};
+                              }),
+                            c.enabled ? "Integration disabled." : "Integration enabled.",
+                          )
+                        }
+                      >
+                        {c.enabled ? "Disable" : "Enable"}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
       )}
+
       <div className="warning-box">
         <AlertTriangle size={20} />
         <p>
@@ -212,28 +620,21 @@ export function IntegrationsPage() {
           Normal PDF receipts are not fiscal invoices.
         </p>
       </div>
+
       <div className="page-tabs">
-        <button
-          className={tab === "mpesa" ? "active" : ""}
-          onClick={() => setTab("mpesa")}
-        >
+        <button className={tab === "mpesa" ? "active" : ""} onClick={() => setTab("mpesa")}>
           Mobile-money intents
         </button>
-        <button
-          className={tab === "fiscal" ? "active" : ""}
-          onClick={() => setTab("fiscal")}
-        >
+        <button className={tab === "fiscal" ? "active" : ""} onClick={() => setTab("fiscal")}>
           Fiscal submissions
         </button>
-        <button
-          className={tab === "refunds" ? "active" : ""}
-          onClick={() => setTab("refunds")}
-        >
+        <button className={tab === "refunds" ? "active" : ""} onClick={() => setTab("refunds")}>
           External refunds
         </button>
       </div>
+
       <section className="card">
-        {list.error && <ErrorCard error={list.error} />}{" "}
+        {list.error && <ErrorCard error={list.error} />}
         {action.error && !refund && <ErrorCard error={action.error} />}
         <DataTable
           loading={list.loading}
@@ -268,9 +669,7 @@ export function IntegrationsPage() {
                     {
                       key: "status",
                       title: "Fiscal state",
-                      render: (r) => (
-                        <Badge status={r.status}>{r.status}</Badge>
-                      ),
+                      render: (r) => <Badge status={r.status}>{r.status}</Badge>,
                     },
                     { key: "fiscal_id", title: "Provider identifier" },
                     { key: "attempts", title: "Attempts" },
@@ -311,14 +710,9 @@ export function IntegrationsPage() {
                     {
                       key: "status",
                       title: "Settlement",
-                      render: (r) => (
-                        <Badge status={r.status}>{r.status}</Badge>
-                      ),
+                      render: (r) => <Badge status={r.status}>{r.status}</Badge>,
                     },
-                    {
-                      key: "provider_reference",
-                      title: "Reconciled reference",
-                    },
+                    { key: "provider_reference", title: "Reconciled reference" },
                     {
                       key: "action",
                       title: "",
@@ -345,12 +739,9 @@ export function IntegrationsPage() {
           onChange={list.setPage}
         />
       </section>
+
       <div className="integration-links">
-        <a
-          href="https://developer.safaricom.co.ke/"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href="https://developer.safaricom.co.ke/" target="_blank" rel="noreferrer">
           Safaricom Daraja onboarding <ArrowUpRight size={15} />
         </a>
         <a
@@ -364,6 +755,20 @@ export function IntegrationsPage() {
           API documentation <ArrowUpRight size={15} />
         </a>
       </div>
+
+      {/* M-Pesa setup wizard dialog */}
+      <MpesaSetupWizard
+        open={setupOpen}
+        onClose={() => setSetupOpen(false)}
+        onComplete={() => {
+          setSetupOpen(false);
+          config.refresh();
+          status.refresh();
+        }}
+        existing={mpesa}
+      />
+
+      {/* Refund confirmation dialog (existing) */}
       <Dialog
         open={!!refund}
         onClose={() => setRefund(null)}
@@ -409,170 +814,15 @@ export function IntegrationsPage() {
           </div>
         </form>
       </Dialog>
-      <Dialog
-        open={!!setupProvider}
-        onClose={() => setSetupProvider(null)}
-        title={
-          setupProvider === "mpesa"
-            ? "Configure M-Pesa / Daraja"
-            : "Configure KRA eTIMS gateway"
-        }
-        description="Credentials encrypt at rest and are never shown back. Leave every field blank to toggle enablement only."
-      >
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const pv = setupProvider as "mpesa" | "etims";
-            const body: any = {
-              provider: pv,
-              enabled: setupEnable,
-            };
-            const draft: any = {};
-            for (const [k, v] of Object.entries(setupValues)) {
-              const sv = String(v ?? "").trim();
-              if (sv) draft[k] = sv;
-            }
-            if (Object.keys(draft).length) body.config = draft;
-            const already = config.data?.[pv]?.configured;
-            if (
-              Object.keys(draft).length &&
-              !already &&
-              ((pv === "mpesa" &&
-                ![
-                  "consumer_key",
-                  "consumer_secret",
-                  "shortcode",
-                  "passkey",
-                  "callback_secret",
-                ].every((k) => draft[k])) ||
-                (pv === "etims" &&
-                  !["adapter_url", "adapter_token"].every((k) => draft[k])))
-            ) {
-              action.setError({
-                message:
-                  "A first-time configuration needs every required field; leave all blank to keep the deployment default.",
-              });
-              return;
-            }
-            if (Object.keys(draft).length && already) {
-              const required =
-                pv === "mpesa"
-                  ? [
-                      "consumer_key",
-                      "consumer_secret",
-                      "shortcode",
-                      "passkey",
-                      "callback_secret",
-                    ]
-                  : ["adapter_url", "adapter_token"];
-              if (!required.every((k) => draft[k])) {
-                action.setError({
-                  message:
-                    "Re-enter the complete credential set to rotate; values are stored write-only and cannot be merged.",
-                });
-                return;
-              }
-            }
-            await action.run(
-              () =>
-                api("/integrations/config", {
-                  method: "PUT",
-                  body,
-                }).then((r) => {
-                  config.refresh();
-                  status.refresh();
-                  setSetupProvider(null);
-                  return r;
-                }),
-              "Integration settings saved.",
-            );
-          }}
-        >
-          {action.error && <ErrorCard error={action.error} />}
-          <Fields
-            fields={
-              (setupProvider === "mpesa"
-                ? [
-                    { key: "consumer_key", label: "Consumer key", required: true },
-                    {
-                      key: "consumer_secret",
-                      label: "Consumer secret",
-                      type: "password",
-                      required: true,
-                    },
-                    { key: "shortcode", label: "Shortcode", required: true },
-                    {
-                      key: "passkey",
-                      label: "Passkey (Lipa Na M-Pesa)",
-                      type: "password",
-                      required: true,
-                    },
-                    {
-                      key: "callback_secret",
-                      label: "Callback secret (32+ characters)",
-                      type: "password",
-                      required: true,
-                    },
-                    {
-                      key: "transaction_type",
-                      label: "Transaction type",
-                      type: "select",
-                      options: [
-                        {
-                          id: "CustomerPayBillOnline",
-                          name: "Pay Bill (CustomerPayBillOnline)",
-                        },
-                        {
-                          id: "CustomerBuyGoodsOnline",
-                          name: "Buy Goods (CustomerBuyGoodsOnline)",
-                        },
-                      ],
-                    },
-                    {
-                      key: "base_url",
-                      label: "Base URL (production: https://api.safaricom.co.ke)",
-                    },
-                  ]
-                : [
-                    {
-                      key: "adapter_url",
-                      label: "Certified gateway URL (https)",
-                      required: true,
-                    },
-                    {
-                      key: "adapter_token",
-                      label: "Gateway bearer token",
-                      type: "password",
-                      required: true,
-                    },
-                  ]) as any
-            }
-            value={setupValues}
-            onChange={setSetupValues}
-          />
-          <label className="check-field">
-            <input
-              type="checkbox"
-              checked={setupEnable}
-              onChange={(e) => setSetupEnable(e.target.checked)}
-            />
-            <span>Enable for this business (overrides the deployment default)</span>
-          </label>
-          <div className="form-actions">
-            <Button type="submit" busy={action.busy}>
-              Save configuration <Check size={16} />
-            </Button>
-          </div>
-        </form>
-      </Dialog>
     </>
   );
 }
 
+/** ------------------------------------------------------------------ */
+/*  Offline page (unchanged)                                            */
+/** ------------------------------------------------------------------ */
 export function OfflinePage() {
   const { meta, actor, online, notify } = useWorkspace();
-  // While the browser reports itself offline these requests can only fail:
-  // issuing them just spams the console and falsifies error banners.
   const devices = useQuery<any>(online ? "/offline/devices" : null);
   const syncRecords = useQuery<any>(online ? "/offline/sync?limit=100" : null);
   const [active, setActive] = useState<any>(null),
@@ -606,9 +856,7 @@ export function OfflinePage() {
       );
       if (!device)
         throw new Error("Select an active server-authorized device first.");
-      const register = meta.registers.find(
-        (r: any) => r.id === device.register_id,
-      );
+      const register = meta.registers.find((r: any) => r.id === device.register_id);
       const records: any[] = [];
       for (let page = 1; page <= 10; page++) {
         const r: any = await api(
@@ -730,10 +978,7 @@ export function OfflinePage() {
           </div>
           {cacheAction.error && <ErrorCard error={cacheAction.error} />}
           <FormField label="Authorized device">
-            <select
-              value={deviceId}
-              onChange={(e) => setDeviceId(e.target.value)}
-            >
+            <select value={deviceId} onChange={(e) => setDeviceId(e.target.value)}>
               <option value="">Select authorization</option>
               {devices.data?.items
                 ?.filter((d: any) => d.active)
@@ -867,7 +1112,7 @@ export function OfflinePage() {
                     View confirmed sale <ArrowRight size={15} />
                   </a>
                 ),
-            },
+          },
           ]}
         />
       </section>
@@ -957,7 +1202,6 @@ export function OfflinePage() {
           </div>
         </form>
       </Dialog>
-      
     </>
   );
 }
