@@ -6100,8 +6100,8 @@ hr {
     font-family: "Courier New", Courier, monospace;
     color: #000;
     background: #fff;
-    /* Base font weight — thermal printers need bold text for dark output */
-    font-weight: 700;
+    /* Base font weight — thermal printers need maximum bold for dark output */
+    font-weight: 900;
     font-size: 10pt;
     line-height: 1.35;
   }
@@ -6143,7 +6143,8 @@ hr {
   }
   .company-line {
     font-size: 8pt;
-    font-weight: 700;
+    font-weight: 900;
+    letter-spacing: 0.3px;
     margin-bottom: 0.5mm;
   }
   body[data-receipt-width="58"] .company-line {
@@ -6165,12 +6166,14 @@ hr {
   }
   .meta-label {
     font-size: 8.5pt;
-    font-weight: 700;
+    font-weight: 900;
+    letter-spacing: 0.3px;
   }
   .meta-value {
     text-align: right;
     font-size: 8.5pt;
-    font-weight: 700;
+    font-weight: 900;
+    letter-spacing: 0.3px;
   }
 
   .receipt-rule {
@@ -6197,7 +6200,8 @@ hr {
   .line-name {
     flex: 1;
     text-align: left;
-    font-weight: 700;
+    font-weight: 900;
+    letter-spacing: 0.3px;
   }
   body[data-receipt-width="58"] .line-name {
     /* On 58mm, item name takes full width so it can wrap */
@@ -6207,7 +6211,7 @@ hr {
     flex: 1;
     text-align: left;
     font-size: 8pt;
-    font-weight: 700;
+    font-weight: 900;
     margin-bottom: 0.4mm;
     display: block;
   }
@@ -6218,7 +6222,8 @@ hr {
   .line-amount {
     text-align: right;
     font-size: 10pt;
-    font-weight: 700;
+    font-weight: 900;
+    letter-spacing: 0.3px;
     /* On 58mm, amount goes on its own line below the name */
   }
   body[data-receipt-width="58"] .line-amount {
@@ -6252,17 +6257,19 @@ hr {
   }
   .total-label {
     flex: 1;
-    font-weight: 700;
+    font-weight: 900;
+    letter-spacing: 0.3px;
   }
   .total-value {
     text-align: right;
-    font-weight: 700;
+    font-weight: 900;
+    letter-spacing: 0.3px;
   }
 
   /* Notes */
   .receipt-notes {
     font-size: 8pt;
-    font-weight: 700;
+    font-weight: 900;
     margin-bottom: 1.5mm;
     white-space: pre-line;
   }
@@ -6286,13 +6293,13 @@ hr {
   .kra-label {
     width: 60%;
     font-size: 8pt;
-    font-weight: 700;
+    font-weight: 900;
   }
   .kra-value {
     text-align: right;
     width: 40%;
     font-size: 8pt;
-    font-weight: 700;
+    font-weight: 900;
   }
   body[data-receipt-width="58"] .kra-label,
   body[data-receipt-width="58"] .kra-value {
@@ -6302,7 +6309,7 @@ hr {
   /* Footer */
   .receipt-footer {
     font-size: 9pt;
-    font-weight: 700;
+    font-weight: 900;
     text-align: center;
     margin-bottom: 1mm;
   }
@@ -6311,7 +6318,7 @@ hr {
   }
   .receipt-footer-small {
     font-size: 7.5pt;
-    font-weight: 700;
+    font-weight: 900;
     text-align: center;
   }
   body[data-receipt-width="58"] .receipt-footer-small {
@@ -6320,11 +6327,11 @@ hr {
   .row-label {
     flex: 1;
     font-size: 8pt;
-    font-weight: 700;
+    font-weight: 900;
   }
   .row-value {
     text-align: right;
     font-size: 8pt;
-    font-weight: 700;
+    font-weight: 900;
   }
 }
