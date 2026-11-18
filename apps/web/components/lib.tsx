@@ -344,7 +344,7 @@ export async function printPdf(path: string) {
       border: "0",
       opacity: "1",
       pointerEvents: "none",
-      zIndex: "-1",
+      zIndex: "0",
     });
 
     const printFrame = () => {
