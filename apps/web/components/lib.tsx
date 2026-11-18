@@ -288,21 +288,20 @@ export function scopedQuery(params: Record<string, any>, branch: string) {
   return q.toString();
 }
 export async function printPdf(path: string) {
-  // Open a same-origin window synchronously from the click so popup blockers
-  // do not prevent the print flow.
-  const popup = window.open("about:blank", "_blank");
-  if (!popup) throw new Error("Allow pop-ups to print the receipt.");
-  popup.document.title = "Preparing receipt…";
-  popup.document.body.innerHTML =
-    "<p style='font:14px sans-serif;padding:24px'>Preparing receipt for printing…</p>";
-
   let objectUrl: string | null = null;
+  let frame: HTMLIFrameElement | null = null;
   let cleanedUp = false;
+  let fallbackTimer: number | undefined;
+
   const cleanup = () => {
     if (cleanedUp) return;
     cleanedUp = true;
+    if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer);
+    window.removeEventListener("afterprint", cleanup);
+    frame?.remove();
+    frame = null;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
-    if (!popup.closed) popup.close();
+    objectUrl = null;
   };
 
   try {
@@ -319,39 +318,51 @@ export async function printPdf(path: string) {
 
     const pdf = await res.blob();
     if (pdf.type && !pdf.type.toLowerCase().includes("pdf")) {
-      throw new Error("The server did not return a PDF receipt. Please refresh and try again.");
+      throw new Error(
+        "The server did not return a PDF receipt. Please refresh and try again.",
+      );
     }
-    objectUrl = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
-    popup.document.open();
-    popup.document.write(`<!doctype html>
-      <html>
-        <head><title>Receipt</title></head>
-        <body style="margin:0">
-          <iframe title="Receipt" style="border:0;width:100%;height:100vh"></iframe>
-        </body>
-      </html>`);
-    popup.document.close();
 
-    const frame = popup.document.querySelector("iframe");
-    if (!frame) throw new Error("Unable to open the receipt for printing.");
+    objectUrl = URL.createObjectURL(
+      new Blob([pdf], { type: "application/pdf" }),
+    );
+    frame = document.createElement("iframe");
+    frame.title = "Receipt print frame";
+    frame.setAttribute("aria-hidden", "true");
+    // Keep the PDF frame in the current document (not display:none), so
+    // Chromium's PDF viewer can render it, without opening another tab.
+    Object.assign(frame.style, {
+      position: "fixed",
+      left: "0",
+      bottom: "0",
+      width: "1px",
+      height: "1px",
+      border: "0",
+      opacity: "0",
+      pointerEvents: "none",
+    });
 
     const printFrame = () => {
-      if (popup.closed || !frame.contentWindow) return;
-      // Chromium's built-in PDF viewer can dispatch iframe load before the
-      // PDF plugin is ready. Give it a moment to finish rendering before
-      // opening the native print dialog.
-      popup.setTimeout(() => {
-        if (popup.closed || !frame.contentWindow) return;
-        frame.contentWindow.focus();
-        frame.contentWindow.print();
-      }, 800);
+      if (!frame?.contentWindow) {
+        cleanup();
+        throw new Error("Unable to load the receipt for printing.");
+      }
+      window.addEventListener("afterprint", cleanup, { once: true });
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+      // Some PDF viewers do not dispatch afterprint to the parent window.
+      fallbackTimer = window.setTimeout(cleanup, 120000);
     };
-    frame.addEventListener("load", printFrame, { once: true });
-    frame.contentWindow?.addEventListener("afterprint", cleanup, { once: true });
-    popup.addEventListener("afterprint", cleanup, { once: true });
-    popup.addEventListener("pagehide", () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    }, { once: true });
+
+    frame.addEventListener(
+      "load",
+      () => {
+        // Chromium may fire iframe load before its PDF viewer is ready.
+        window.setTimeout(printFrame, 800);
+      },
+      { once: true },
+    );
+    document.body.appendChild(frame);
     frame.src = objectUrl;
   } catch (error) {
     cleanup();
