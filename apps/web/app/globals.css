@@ -6064,3 +6064,169 @@ hr {
     grid-template-columns: 1fr;
   }
 }
+
+/* Thermal receipt printing — native print dialog, no new tab. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #duka-receipt-print,
+  #duka-receipt-print * {
+    visibility: visible;
+  }
+  #duka-receipt-print {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0;
+    padding: 0;
+  }
+  .receipt-print {
+    width: 80mm;
+    min-width: 80mm;
+    max-width: 80mm;
+    margin: 0;
+    padding: 4mm 2mm;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 9px;
+    line-height: 1.25;
+    color: #000;
+    background: #fff;
+  }
+  .receipt-print.receipt-narrow,
+  body[data-receipt-width="58"] .receipt-print {
+    width: 58mm;
+    min-width: 58mm;
+    max-width: 58mm;
+  }
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+  body[data-receipt-width="58"] @page {
+    size: 58mm auto;
+  }
+  .receipt-header {
+    text-align: center;
+    margin-bottom: 2mm;
+  }
+  .company-name {
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    margin-bottom: 1mm;
+  }
+  .company-line {
+    font-size: 7px;
+    margin-bottom: 0.5mm;
+  }
+  .receipt-meta {
+    font-size: 7px;
+    margin-bottom: 1.5mm;
+  }
+  .meta-label {
+    display: inline-block;
+    width: 40%;
+  }
+  .meta-value {
+    display: inline-block;
+    width: 55%;
+    text-align: right;
+  }
+  .receipt-rule {
+    border: none;
+    border-top: 0.8px solid #000;
+    margin: 1mm 0;
+  }
+  .receipt-items {
+    font-size: 8px;
+    margin-bottom: 1.5mm;
+  }
+  .receipt-line {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.8mm;
+  }
+  .line-name {
+    flex: 1;
+    text-align: left;
+  }
+  .line-calc {
+    flex: 1;
+    text-align: left;
+    font-size: 7px;
+    margin-bottom: 0.5mm;
+    display: block;
+  }
+  .line-amount {
+    text-align: right;
+  }
+  .receipt-totals {
+    font-size: 8px;
+    margin-bottom: 1.5mm;
+  }
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5mm;
+  }
+  .total-row.total-bold {
+    font-weight: bold;
+    font-size: 9px;
+    margin-top: 1mm;
+  }
+  .total-label {
+    flex: 1;
+  }
+  .total-value {
+    text-align: right;
+  }
+  .receipt-notes {
+    font-size: 7px;
+    margin-bottom: 1.5mm;
+    white-space: pre-line;
+  }
+  .receipt-kra {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7px;
+    margin-bottom: 1.5mm;
+  }
+  .receipt-kra td {
+    padding: 0.5mm 0;
+  }
+  .kra-label {
+    width: 60%;
+  }
+  .kra-value {
+    text-align: right;
+    width: 40%;
+  }
+  .receipt-footer {
+    font-size: 8px;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 1mm;
+  }
+  .receipt-footer-small {
+    font-size: 6.5px;
+    text-align: center;
+  }
+  .row-label {
+    flex: 1;
+    font-size: 7px;
+  }
+  .row-value {
+    text-align: right;
+    font-size: 7px;
+  }
+  body > :not(#duka-receipt-print) {
+    display: none !important;
+  }
+  #duka-receipt-print {
+    display: block !important;
+  }
+}

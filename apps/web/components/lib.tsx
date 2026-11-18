@@ -287,92 +287,184 @@ export function scopedQuery(params: Record<string, any>, branch: string) {
     if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
   return q.toString();
 }
-export async function printPdf(path: string) {
-  let objectUrl: string | null = null;
-  let frame: HTMLIFrameElement | null = null;
-  let cleanedUp = false;
-  let fallbackTimer: number | undefined;
+export async function printReceipt(receipt: any) {
+  const company = receipt.company ?? {};
+  const cur = company.currency ?? "KES";
+  const width = company.settings?.receiptWidth === 58 ? 58 : 80;
+  const confirmed = receipt.fiscal?.status === "successful";
+  const cashierName = receipt.cashierName ?? receipt.people?.cashier ?? "";
+  const paidMethods = receipt.payments?.map((p: any) => p.method);
+  const methodSummary = [...new Set(paidMethods)].join(" + ") || "—";
+  const receiptReference = receipt.payments?.find((p: any) => p.reference)
+    ?.reference;
+  const paidStamp = receipt.created_at ? new Date(receipt.created_at) : null;
+  const dateText = receipt.accounting_date
+    ? new Date(receipt.accounting_date).toISOString().slice(0, 10)
+    : paidStamp ? paidStamp.toISOString().slice(0, 10) : "";
+  const timeText = paidStamp
+    ? paidStamp.toLocaleTimeString("en-KE", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: company.timezone ?? "Africa/Nairobi",
+      })
+    : undefined;
 
-  const cleanup = () => {
-    if (cleanedUp) return;
-    cleanedUp = true;
-    if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer);
-    window.removeEventListener("afterprint", cleanup);
-    frame?.remove();
-    frame = null;
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-    objectUrl = null;
-  };
+  const linesHtml = (receipt.lines ?? [])
+    .map(
+      (l: any) => `
+    <div class="receipt-line">
+      <span class="line-name">${escapeHtml(
+        l.name ?? l.description ?? l.account ?? l.code ?? "Item",
+      )}</span>
+      ${
+        l.quantity !== undefined && l.unit_price !== undefined
+          ? `<span class="line-calc">${escapeHtml(
+              String(l.quantity).replace(/\.?0+$/, "") || "0",
+            )}${l.unit ? " " + escapeHtml(l.unit) : ""} × ${money(
+              l.unit_price,
+            )}</span>`
+          : l.unit_cost !== undefined
+            ? `<span class="line-calc">@ ${money(l.unit_cost)}</span>`
+            : ""
+      }
+      <span class="line-amount">${cur} ${money(
+        l.total ?? l.amount ?? l.value ?? l.revenue ?? l.balance ?? 0,
+      )}</span>
+    </div>
+  `,
+    )
+    .join("");
+
+  const notes = [
+    D(receipt.customer_credit_used ?? 0).gt(0)
+      ? `Customer account credit: ${receipt.customer_credit_used}`
+      : "",
+    company.settings?.returnPolicy ?? "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const kraRows: string[] = [];
+  if (receipt.etims_enabled) {
+    if (company.tax_pin)
+      kraRows.push(
+        `<tr><td class="kra-label">Business KRA PIN</td><td class="kra-value">${escapeHtml(company.tax_pin)}</td></tr>`,
+      );
+    if (confirmed && receipt.fiscal?.fiscal_id)
+      kraRows.push(
+        `<tr><td class="kra-label">${
+          width > 60 ? "eTIMS CU invoice number" : "eTIMS CU no."
+        }</td><td class="kra-value">${escapeHtml(receipt.fiscal.fiscal_id)}</td></tr>`,
+      );
+  }
+
+  let container = document.getElementById("duka-receipt-print");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "duka-receipt-print";
+    container.setAttribute("aria-hidden", "true");
+    container.style.position = "fixed";
+    container.style.left = "-10000px";
+    container.style.top = "0";
+    container.style.width = "0";
+    container.style.height = "0";
+    container.style.overflow = "hidden";
+    document.body.appendChild(container);
+  }
+
+  container.innerHTML = `
+    <div class="receipt-print">
+      <div class="receipt-header">
+        <div class="company-name">${escapeHtml(company.name ?? "").toUpperCase()}</div>
+        ${
+          company.address
+            ? `<div class="company-line">${escapeHtml(company.address)}</div>`
+            : ""
+        }
+        ${
+          company.phone || company.email
+            ? `<div class="company-line">${
+                [
+                  company.phone ? `+254 ${String(company.phone).replace(/^\+?254/, "")}` : null,
+                  company.email,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              }</div>`
+            : ""
+        }
+        ${
+          company.tax_pin && receipt.etims_enabled
+            ? `<div class="company-line">Tax PIN: ${escapeHtml(company.tax_pin)}</div>`
+            : ""
+        }
+      </div>
+      <div class="receipt-meta">
+        <div><span class="meta-label">Receipt no.</span> <span class="meta-value">${escapeHtml(receipt.number)}</span></div>
+        <div><span class="meta-label">Date</span> <span class="meta-value">${dateText}</span></div>
+        ${
+          timeText
+            ? `<div><span class="meta-label">Time</span> <span class="meta-value">${timeText}</span></div>`
+            : ""
+        }
+        <div><span class="meta-label">Served by</span> <span class="meta-value">${escapeHtml(cashierName)}</span></div>
+        <div><span class="meta-label">Payment</span> <span class="meta-value">${escapeHtml(methodSummary)}</span></div>
+      </div>
+      <hr class="receipt-rule" />
+      <div class="receipt-items">
+        ${linesHtml}
+      </div>
+      ${
+        receiptReference
+          ? `<div class="receipt-row"><span class="row-label">Reference</span> <span class="row-value">${escapeHtml(receiptReference)}</span></div>`
+          : ""
+      }
+      <hr class="receipt-rule" />
+      <div class="receipt-totals">
+        <div class="total-row"><span class="total-label">Subtotal</span> <span class="total-value">${cur} ${money(receipt.subtotal ?? 0)}</span></div>
+        ${
+          D(receipt.discount ?? 0).gt(0)
+            ? `<div class="total-row"><span class="total-label">Discount</span> <span class="total-value">${cur} ${money(receipt.discount)}</span></div>`
+            : ""
+        }
+        ${
+          receipt.etims_enabled
+            ? `<div class="total-row"><span class="total-label">VAT</span> <span class="total-value">${cur} ${money(receipt.tax ?? 0)}</span></div>`
+            : ""
+        }
+        <div class="total-row total-bold"><span class="total-label">Total</span> <span class="total-value">${cur} ${money(receipt.total ?? 0)}</span></div>
+        <div class="total-row"><span class="total-label">Paid at checkout</span> <span class="total-value">${cur} ${money(receipt.paid_at_sale ?? 0)}</span></div>
+        <div class="total-row"><span class="total-label">Balance due</span> <span class="total-value">${cur} ${money(receipt.outstanding ?? 0)}</span></div>
+      </div>
+      ${
+        notes
+          ? `<div class="receipt-notes">${escapeHtml(notes)}</div>`
+          : ""
+      }
+      ${
+        kraRows.length > 0
+          ? `<table class="receipt-kra">${kraRows.join("")}</table>`
+          : ""
+      }
+      <div class="receipt-footer">
+        ${escapeHtml(company.settings?.receiptFooter ?? "Thank you for your business!")}
+      </div>
+      <div class="receipt-footer-small">Please keep this receipt for your records.</div>
+    </div>
+  `;
 
   try {
-    const res = await fetch("/api/v1" + path, {
-      credentials: "same-origin",
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      const e = await res.json().catch(() => null);
-      throw new Error(
-        e?.error?.message ?? "Unable to prepare receipt for printing.",
-      );
-    }
-
-    const pdf = await res.blob();
-    // Validate the actual payload, not just the response Content-Type. This
-    // catches login/error HTML returned with HTTP 200 before opening print.
-    const signature = await pdf.slice(0, 5).text();
-    if (pdf.size < 5 || signature !== "%PDF-") {
-      throw new Error(
-        "The server response is not a valid PDF receipt. Refresh and try again.",
-      );
-    }
-
-    objectUrl = URL.createObjectURL(
-      new Blob([pdf], { type: "application/pdf" }),
-    );
-    frame = document.createElement("iframe");
-    frame.title = "Receipt print frame";
-    frame.setAttribute("aria-hidden", "true");
-    // Never reduce opacity or visibility on a PDF viewer used for printing:
-    // Chromium can include that compositing in the print output. Keep a
-    // normal opaque viewport, but move it outside the visible screen.
-    Object.assign(frame.style, {
-      position: "fixed",
-      left: "-10000px",
-      top: "0",
-      width: "100vw",
-      height: "100vh",
-      border: "0",
-      opacity: "1",
-      pointerEvents: "none",
-      zIndex: "0",
-    });
-
-    const printFrame = () => {
-      if (!frame?.contentWindow) {
-        cleanup();
-        throw new Error("Unable to load the receipt for printing.");
-      }
-      window.addEventListener("afterprint", cleanup, { once: true });
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
-      // Some PDF viewers do not dispatch afterprint to the parent window.
-      fallbackTimer = window.setTimeout(cleanup, 120000);
-    };
-
-    frame.addEventListener(
-      "load",
-      () => {
-        // Chromium may fire iframe load before its PDF viewer is ready.
-        window.setTimeout(printFrame, 800);
-      },
-      { once: true },
-    );
-    document.body.appendChild(frame);
-    frame.src = objectUrl;
+    window.print();
   } catch (error) {
-    cleanup();
-    throw error;
+    throw new Error("Unable to open the print dialog. Please try again.");
   }
+}
+
+function escapeHtml(text: string): string {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 export async function download(path: string, filename: string) {
