@@ -12,39 +12,6 @@
 }
 
 :8080 {
-	# E-commerce host (deploy/ecommerce). Host-matched first: shares this
-	# loopback listener with the ERP host but never shares routes or cookies.
-	#
-	# ONE MATCHER PER LINE. Do not collapse this into
-	# `@shop_api host … path /api/* /health/*`: Caddy puts a single matcher on a
-	# named-matcher line, so the `path` token and its values are swallowed as
-	# extra *host* values (`{"host":["shop…","path","/api/*","/health/*"]}`).
-	# The route then matches every path on the shop host and the storefront's
-	# `/` is answered by the API (a JSON 404) — verified with `caddy adapt`.
-	@shop_api {
-		host {$SHOP_PUBLIC_HOST:shop.invalid}
-		path /api/* /health/*
-	}
-	handle @shop_api {
-		reverse_proxy shop-api:4100 {
-			header_up X-Forwarded-Proto https
-			# Trust this only on the private, Tunnel-only origin.
-			header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
-		}
-	}
-	# Everything on the shop host that is NOT its API: the storefront itself.
-	# The `not path` is deliberate: it makes this route correct on its own terms,
-	# so ordering (or a reordered/legacy compiled config) can never send the
-	# storefront's `/` to the API, and the API paths stay with @shop_api above.
-	@shop {
-		host {$SHOP_PUBLIC_HOST:shop.invalid}
-		not path /api/* /health/*
-	}
-	handle @shop {
-		reverse_proxy shop-web:3100 {
-			header_up X-Forwarded-Proto https
-		}
-	}
 	@api path /api/* /health/*
 	handle @api {
 		reverse_proxy api:4000 {

@@ -14,24 +14,3 @@
 	# Access logging deliberately off: callback/reset URLs contain bearer material.
 	# Application JSON logs carry request IDs and redact callback tokens.
 }
-
-# E-commerce storefront + its API on a SEPARATE hostname (deploy/ecommerce).
-# When the shop is not provisioned, SHOP_PUBLIC_HOST is unset and this site
-# falls back to a loopback-only address inside the container: it is not
-# reachable from the internet and no certificate is requested.
-{$SHOP_PUBLIC_HOST:127.0.0.1:8081} {
-	@shop_api path /api/* /health/*
-	handle @shop_api {
-		reverse_proxy shop-api:4100
-	}
-	@shop {
-		not path /api/* /health/*
-	}
-	handle @shop {
-		reverse_proxy shop-web:3100
-	}
-	request_body {
-		max_size 4MB
-	}
-	header -Server
-}
