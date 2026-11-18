@@ -437,6 +437,11 @@ export async function getSale(ctx: Context, id: string, reprint = false) {
       [ctx.companyId, id],
     )
   ).rows[0];
+  const cashier = await one(
+    ctx,
+    "SELECT u.name AS cashier_name FROM identities u WHERE u.company_id=$1 AND u.id=$2",
+    [ctx.companyId, s.created_by],
+  );
   if (reprint) await audit(ctx, "reprint", "sale", id);
   return {
     ...redactCosts(ctx, s),
@@ -445,6 +450,7 @@ export async function getSale(ctx: Context, id: string, reprint = false) {
     company,
     branch,
     fiscal,
+    cashierName: cashier.cashier_name,
     etims_enabled: etims.mode === "adapter",
   };
 }
