@@ -734,6 +734,10 @@ endpoint(
     raw: await salePdf(ctx, idOf(req), q.thermal === "true"),
     contentType: "application/pdf",
     filename: `receipt-${idOf(req)}.pdf`,
+    // This PDF is consumed by the in-page print iframe. Attachment
+    // disposition makes Chromium download it instead of rendering it,
+    // leaving the iframe with a blank document to print.
+    inline: true,
   }),
 );
 endpoint(
