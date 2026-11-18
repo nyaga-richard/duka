@@ -101,9 +101,9 @@ if [[ -n "$SHOP_HOST" ]]; then
     routed_host=$(docker exec duka-proxy-1 printenv SHOP_PUBLIC_HOST 2>/dev/null | tr -d '\r')
     if [[ "$routed_host" != "$SHOP_HOST" ]]; then
       if [[ -n "$routed_host" ]]; then
-        bad "the running proxy routes '$routed_host', not $SHOP_HOST — recreate it: bash deploy/ecommerce/shop.sh proxy"
+        bad "the running proxy routes '$routed_host', not $SHOP_HOST — recreate it: bash <shop-repo>/deploy/shop.sh proxy"
       else
-        bad "the running proxy has no SHOP_PUBLIC_HOST — recreate it: bash deploy/ecommerce/shop.sh proxy"
+        bad "the running proxy has no SHOP_PUBLIC_HOST — recreate it: bash <shop-repo>/deploy/shop.sh proxy"
       fi
     else
       origin_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
@@ -117,8 +117,8 @@ if [[ -n "$SHOP_HOST" ]]; then
            if [[ "$origin_code" == 404 ]]; then
              echo "        the proxy routes this host, but not to shop-web:3100 (a JSON 404 here is the"
              echo "        shop API answering — a stale compiled config). Recreate it so Caddy re-reads"
-             echo "        the Caddyfile: bash deploy/ecommerce/shop.sh proxy"
-             echo "        if it survives that, run bash deploy/ecommerce/shop.sh diag (read-only)"
+             echo "        the Caddyfile: bash <shop-repo>/deploy/shop.sh proxy"
+             echo "        if it survives that, run bash <shop-repo>/deploy/shop.sh diag (read-only)"
            fi ;;
       esac
     fi

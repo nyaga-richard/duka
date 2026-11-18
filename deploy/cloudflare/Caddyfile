@@ -12,7 +12,7 @@
 }
 
 :8080 {
-	# E-commerce host (deploy/ecommerce). Host-matched first: shares this
+	# E-commerce host (the duka-ecommerce repository). Host-matched first: shares this
 	# loopback listener with the ERP host but never shares routes or cookies.
 	#
 	# ONE MATCHER PER LINE. Do not collapse this into

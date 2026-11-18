@@ -4,6 +4,8 @@ A connected POS and ERP-lite monorepo: **Next.js / React / TypeScript**, a versi
 
 **Status — 18 October 2026:** substantial, locally tested implementation; **not an assertion of production readiness, public deployment, tax certification or live payment verification**. Read the requirement-by-requirement [acceptance checklist](docs/ACCEPTANCE.md), [verification record](docs/VERIFICATION.md) and [remaining gaps](docs/KNOWN_GAPS.md) before operating a real business.
 
+The **storefront** is a separate repository — [nyaga-richard/duka-ecommerce](https://github.com/nyaga-richard/duka-ecommerce) — checked out beside this one when deployed. It has its own tests, database and release cadence, and runs in this Compose project behind the same proxy and Cloudflare Tunnel on its own hostname (`deploy/go-live.sh` provisions it from that checkout).
+
 ## What is connected
 
 - Server-side sessions, CSRF, Argon2id, TOTP, expiring password recovery with a durable SMTP queue, configurable roles, branch/warehouse membership and audit trails.

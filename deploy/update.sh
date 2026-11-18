@@ -26,7 +26,7 @@
 #   4. Tags the running images ':previous', builds new images.
 #   5. Applies reviewed forward-only migrations, then swaps ONLY api+web
 #      containers (db, volumes, proxy and the tunnel stay untouched).
-#   6. If the e-commerce overlay is provisioned (deploy/ecommerce/.env.shop),
+#   6. If the e-commerce overlay is provisioned (<shop-repo>/deploy/.env.shop),
 #      backs up the shop database, applies its forward-only migrations and
 #      swaps ONLY its api/worker/web containers, with the same ':previous'
 #      rollback stash and health gate.
@@ -56,9 +56,11 @@ done
 TARGET=$(cd "$(dirname "$0")/.." && pwd)
 DOCKER_DIR="$TARGET/deploy/docker"
 ENV_FILE="$DOCKER_DIR/.env.production"
-# E-commerce overlay: same Compose project, separate database and images.
-SHOP_ENV="$TARGET/deploy/ecommerce/.env.shop"
-SHOP_OVERLAY="$TARGET/deploy/ecommerce/compose.shop.yml"
+# E-commerce overlay: same Compose project, separate database and images, but a
+# SEPARATE repository (nyaga-richard/duka-ecommerce) checked out beside this one.
+SHOP_REPO_DIR="${SHOP_REPO_DIR:-$(dirname "$TARGET")/duka-ecommerce}"
+SHOP_ENV="$SHOP_REPO_DIR/deploy/.env.shop"
+SHOP_OVERLAY="$SHOP_REPO_DIR/deploy/compose.shop.yml"
 SHOP_ENV_ARGS=()
 SHOP_FILE_ARGS=()
 SHOP_ENABLED=0
@@ -88,7 +90,7 @@ shop_args() {
   if ! docker inspect duka-shop-db-1 >/dev/null 2>&1; then
     SHOP_STATE=pending
     echo "update: the storefront is configured ($SHOP_ENV) but its database container does not exist yet." >&2
-    echo "update: upgrading the ERP only. Finish the storefront with 'bash deploy/ecommerce/shop.sh up'." >&2
+    echo "update: upgrading the ERP only. Finish the storefront with 'bash $SHOP_REPO_DIR/deploy/shop.sh up'." >&2
     return 0
   fi
   SHOP_STATE=running
@@ -98,7 +100,7 @@ shop_args() {
 }
 shop_args
 dc() {
-  docker compose --env-file "$ENV_FILE" ${SHOP_ENV_ARGS[@]+"${SHOP_ENV_ARGS[@]}"} \
+  SHOP_REPO_DIR="$SHOP_REPO_DIR" docker compose --env-file "$ENV_FILE" ${SHOP_ENV_ARGS[@]+"${SHOP_ENV_ARGS[@]}"} \
     -p duka -f "$DOCKER_DIR/compose.yml" -f "$TARGET/deploy/cloudflare/compose.tunnel.yml" \
     ${SHOP_FILE_ARGS[@]+"${SHOP_FILE_ARGS[@]}"} "$@"
 }
@@ -142,6 +144,9 @@ else
   step "Refreshing source from $SRC (private config/secrets preserved)"
   [[ -d "$SRC/apps" && -d "$SRC/packages" && -e "$SRC/package.json" ]] || die "--src '$SRC' is not a Duka release checkout (expected apps/, packages/, package.json)"
   SRC=$(cd "$SRC" && pwd)
+  # The shop is a separate repository now, so a release no longer carries it. The
+  # deploy/ecommerce excludes below are kept only so an older host that still has
+  # that directory does not lose its generated configuration.
   if command -v rsync >/dev/null 2>&1; then
     rsync -a --exclude 'release' --exclude 'node_modules' --exclude '.cache' --exclude 'artifacts' \
       --exclude 'deploy/docker/.env.production' --exclude 'deploy/docker/secrets' \
@@ -172,7 +177,7 @@ if ((RUN_BACKUP)); then
   fi
   if shop_enabled; then
     echo "Backing up the e-commerce database too (separate key custody)."
-    if ! bash "$TARGET/deploy/ecommerce/shop.sh" backup; then
+    if ! ERP_DIR="$TARGET" bash "$SHOP_REPO_DIR/deploy/shop.sh" backup; then
       echo "update: the storefront backup FAILED. Refusing to migrate the shop without a verified dump." >&2
       die "re-run with --skip-backup only if a very recent verified storefront dump already exists"
     fi
@@ -283,8 +288,9 @@ REPORT
 if [[ "$SHOP_STATE" == pending ]]; then
   cat <<REPORT
  - Storefront: configured but NOT running. Finish it with:
-     sudo bash deploy/ecommerce/shop.sh up
-     sudo ADMIN_BOOTSTRAP_EMAIL=... ADMIN_BOOTSTRAP_PASSWORD=... bash deploy/ecommerce/shop.sh seed
+     cd $SHOP_REPO_DIR
+     sudo ERP_DIR=$TARGET bash deploy/shop.sh up
+     sudo ERP_DIR=$TARGET ADMIN_BOOTSTRAP_EMAIL=... ADMIN_BOOTSTRAP_PASSWORD=... bash deploy/shop.sh seed
 REPORT
 fi
 

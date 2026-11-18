@@ -15,7 +15,7 @@
 	# Application JSON logs carry request IDs and redact callback tokens.
 }
 
-# E-commerce storefront + its API on a SEPARATE hostname (deploy/ecommerce).
+# E-commerce storefront + its API on a SEPARATE hostname (the duka-ecommerce repository).
 # When the shop is not provisioned, SHOP_PUBLIC_HOST is unset and this site
 # falls back to a loopback-only address inside the container: it is not
 # reachable from the internet and no certificate is requested.

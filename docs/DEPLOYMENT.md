@@ -10,7 +10,7 @@ From the repository root on a fresh Ubuntu LTS host with Docker Engine + Compose
 bash deploy/go-live.sh pos.your-domain.example
 ```
 
-The orchestrator is idempotent at every guarded boundary: it refuses to overwrite an existing `deploy/docker/.env.production`/backup key, reuses an already-provisioned business (the server's `SETUP_IDENTITY_EXISTS` refusal), and can be re-run after failures (it resumes at the step that failed). It performs the Docker quick-start's init-env generation, secret capture with hidden prompts (tunnel token, company, owner email/password — never shell history), the combined `docker/compose.yml` + `cloudflare/compose.tunnel.yml` configuration check, the pinned image build, database boot and health gate, reviewed schema migrations, first-business provisioning, application boot, readiness verification and the post-boot operator report (Cloudflare public-hostname binding to `http://proxy:8080`, no-cache/no-Rocket-Loader rules, backup-key custody, restore rehearsal). It also provisions the **e-commerce storefront** in the same Compose project (own hostname, database, role, volume, images and backup key) — see `deploy/ecommerce/README.md` for what that adds and what it deliberately does not claim.
+The orchestrator is idempotent at every guarded boundary: it refuses to overwrite an existing `deploy/docker/.env.production`/backup key, reuses an already-provisioned business (the server's `SETUP_IDENTITY_EXISTS` refusal), and can be re-run after failures (it resumes at the step that failed). It performs the Docker quick-start's init-env generation, secret capture with hidden prompts (tunnel token, company, owner email/password — never shell history), the combined `docker/compose.yml` + `cloudflare/compose.tunnel.yml` configuration check, the pinned image build, database boot and health gate, reviewed schema migrations, first-business provisioning, application boot, readiness verification and the post-boot operator report (Cloudflare public-hostname binding to `http://proxy:8080`, no-cache/no-Rocket-Loader rules, backup-key custody, restore rehearsal). It also provisions the **e-commerce storefront** in the same Compose project (own hostname, database, role, volume, images and backup key) — see `deploy/README.md` in the shop repository for what that adds and what it deliberately does not claim.
 
 A verified-TLS relay (`SMTP_URL`, plus a sane `MAIL_FROM`) is mandatory: the production API hard-fails at boot without safe password-reset delivery, so the orchestrator refuses to continue until a real `smtp://`/`smtps://` URL is supplied. Everything else this runbook says about secrets custody, acceptance gates and non-public ports still applies — the one command covers mechanics, not the operator's host acceptance responsibility.
 
@@ -100,18 +100,32 @@ Bypass CDN caching for the entire application host/API/auth/documents and avoid 
 
 Systemd templates are not proof of host execution. Do a real non-root/read-only filesystem, startup, restart, SMTP, callback, printing, upload, period-lock and backup/restore acceptance run.
 
-## E-commerce storefront (same Compose project)
+## E-commerce storefront (separate repository, same Compose project)
 
-The storefront lives in `ecommerce/` and is deployed by the two scripts above —
-it is not a separate stack to install. The overlay is
-`deploy/ecommerce/compose.shop.yml`; its generated configuration is
-`deploy/ecommerce/.env.shop` (0600) plus `deploy/ecommerce/secrets/shop-backup.key`.
+The storefront is **its own repository**, `nyaga-richard/duka-ecommerce`, and it
+is deployed by the two scripts above — it is not a separate stack to install.
+Check it out beside this one:
+
+```bash
+cd /opt
+sudo git clone https://github.com/nyaga-richard/duka-ecommerce.git
+# /opt/duka (ERP) and /opt/duka-ecommerce (shop)
+```
+
+`go-live.sh` and `update.sh` find it at `../duka-ecommerce` or at `$SHOP_REPO_DIR`.
+The overlay and its operator scripts live in that checkout —
+`deploy/compose.shop.yml`, `deploy/shop.sh`, `deploy/init-shop-env.sh` — and its
+generated configuration is `deploy/.env.shop` (0600) plus
+`deploy/secrets/shop-backup.key`. The shop names this checkout to Compose as
+`SHOP_REPO_DIR` because a relative build context would otherwise resolve against
+the ERP's project directory.
 
 ```bash
 # created by go-live.sh; or reconcile it on an existing install
-bash deploy/ecommerce/shop.sh up
-bash deploy/ecommerce/shop.sh status
-bash deploy/ecommerce/shop.sh backup
+cd /opt/duka-ecommerce
+sudo ERP_DIR=/opt/duka bash deploy/shop.sh up
+sudo ERP_DIR=/opt/duka bash deploy/shop.sh status
+sudo ERP_DIR=/opt/duka bash deploy/shop.sh backup
 ```
 
 - `shop-db` is a **second PostgreSQL container with its own database, role and
@@ -121,6 +135,9 @@ bash deploy/ecommerce/shop.sh backup
 - The shop API reaches the ERP only as a read-only HTTP client over the private
   `edge` network. Enabling it needs an ERP user that can log in without an
   interactive MFA challenge; the catalogue stays empty until a pull is run.
+- The two repositories version independently: the shop's images are built from
+  its own checkout, so upgrading the ERP never requires a shop release and vice
+  versa (the ERP's `update.sh` does upgrade both when the overlay is provisioned).
 - `update.sh` backs the shop database up (encrypted, verified, separate key),
   tags `duka-shop-api:previous`/`duka-shop-web:previous`, applies only forward
   migrations, swaps only the shop's api/ worker/ web containers, and rolls back
@@ -137,7 +154,7 @@ the proxy routed that hostname to the **API** rather than to `shop-web:3100`.
 **The cause we hit in production was a one-line matcher with two matchers on it.**
 A named-matcher line holds exactly one matcher; `@shop_api host … path /api/* /health/*`
 compiles to `{"host":["shop…","path","/api/*","/health/*"]}` — the `path` token and
-its values become additional *host* values, so the route matches **every** path on
+its values become additional _host_ values, so the route matches **every** path on
 the storefront hostname and the API answers the storefront's `/`. The file looks
 right, `caddy adapt` succeeds, and recreating the proxy changes nothing because the
 bytes are already correct. Put each matcher on its own line inside a block:
@@ -164,13 +181,13 @@ curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: shop.example.com' \
 sudo docker logs duka-shop-api-1 --tail 5            # the GET / with status 404 is the proof
 
 # re-adapt deploy/cloudflare/Caddyfile inside the proxy (a restart is not always enough)
-bash deploy/ecommerce/shop.sh proxy
+bash <shop-repo>/deploy/shop.sh proxy
 ```
 
 `deploy/self-check.sh` performs both probes itself (proxy `SHOP_PUBLIC_HOST`,
 then the loopback request) and prints this remedy when the origin answers 404.
 
-If the 404 survives the recreate, `bash deploy/ecommerce/shop.sh diag` prints the
+If the 404 survives the recreate, `bash <shop-repo>/deploy/shop.sh diag` prints the
 facts needed to settle it in one pass, read-only: the sha256 of the Caddyfile on
 the host versus the one mounted in the proxy (a mismatch is the stale-inode
 bind-mount case), the **compiled** `:8080` routes with their matchers and
@@ -182,10 +199,10 @@ correctness does not depend on the order the `handle` blocks compile into.
 
 A **530** on the same hostname is unrelated to this: Cloudflare produced it, so
 the hostname is not bound to the running tunnel — add it as a Public Hostname on
-the *same* tunnel with service `http://proxy:8080`. Do not create a second
+the _same_ tunnel with service `http://proxy:8080`. Do not create a second
 tunnel/token, and do not hand-create a DNS record.
 
-`bash deploy/ecommerce/shop.sh tunnel` settles that question in one read-only
+`bash <shop-repo>/deploy/shop.sh tunnel` settles that question in one read-only
 pass and is the right first move when the storefront answers 530 publicly while
 the loopback probe says `ok`:
 

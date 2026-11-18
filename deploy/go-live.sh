@@ -16,7 +16,10 @@
 #      the first business, then starts web + api + loopback Caddy + the Tunnel.
 #   5. Provisions the e-commerce stack in the SAME Compose project: a dedicated
 #      shop database/role/volume, its own images, migrations, first storefront
-#      administrator and (optionally) read-only ERP integration.
+#      administrator and (optionally) read-only ERP integration. The shop is its
+#      own repository (nyaga-richard/duka-ecommerce); its overlay and operator
+#      scripts are read from that checkout, found at ../duka-ecommerce or at
+#      $SHOP_REPO_DIR.
 #   6. Waits for readiness (ERP and storefront) and prints the checklist.
 #
 # Email delivery: password resets, invitations and alerts REQUIRE a real
@@ -33,15 +36,22 @@ set -euo pipefail
 cd "$(dirname "$0")"
 DOCKER_DIR="docker"
 ENV_FILE="$DOCKER_DIR/.env.production"
-# The e-commerce overlay lives beside its own generated configuration.
-SHOP_DIR="ecommerce"
-SHOP_ENV="$SHOP_DIR/.env.shop"
-SHOP_OVERLAY="$SHOP_DIR/compose.shop.yml"
+# The shop is a separate repository: its overlay and its generated configuration
+# live in that checkout, not in this one.
+REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+SHOP_REPO_DIR="${SHOP_REPO_DIR:-$REPO_ROOT/../duka-ecommerce}"
+SHOP_ENV="$SHOP_REPO_DIR/deploy/.env.shop"
+SHOP_OVERLAY="$SHOP_REPO_DIR/deploy/compose.shop.yml"
 PUBLIC_HOST="${PUBLIC_HOST:-${1:-}}"
 
 env_get() { sed -n "s/^$2=//p" "$1" | head -n1; }
 
 die() { echo "go-live: $*" >&2; exit 1; }
+
+require_shop_checkout() {
+  [[ -f "$SHOP_OVERLAY" && -f "$SHOP_REPO_DIR/deploy/init-shop-env.sh" ]] ||
+    die "no shop checkout at $SHOP_REPO_DIR — clone nyaga-richard/duka-ecommerce beside this repo (or set SHOP_REPO_DIR to its path), then re-run. Nothing has been changed."
+}
 step() { printf '\n==> %s\n' "$*"; }
 
 [[ "$PUBLIC_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,63}$ ]] ||
@@ -115,12 +125,13 @@ fi
 chmod 600 "$ENV_FILE"
 
 step "Preparing the e-commerce stack (same Compose project, separate database)"
+require_shop_checkout
 SHOP_FIRST_RUN=0
 if [[ -e "$SHOP_ENV" ]]; then
   SHOP_PUBLIC_HOST=$(env_get "$SHOP_ENV" SHOP_PUBLIC_HOST)
   [[ -n "$SHOP_PUBLIC_HOST" ]] || die "$SHOP_ENV has no SHOP_PUBLIC_HOST; restore it or delete the file deliberately and re-run."
   echo "Using existing $SHOP_ENV (mode 0600) for $SHOP_PUBLIC_HOST."
-  echo "Storefront administrator and ERP credentials are not re-read on re-runs; see deploy/ecommerce/README.md to rotate them."
+  echo "Storefront administrator and ERP credentials are not re-read on re-runs; see $SHOP_REPO_DIR/deploy/README.md to rotate them."
 else
   SHOP_FIRST_RUN=1
   read_var SHOP_PUBLIC_HOST "Storefront hostname (a SECOND Cloudflare hostname, e.g. shop.$PUBLIC_HOST)" "shop.$PUBLIC_HOST"
@@ -151,14 +162,19 @@ else
   SHOP_PAYMENTS_MODE=manual SHOP_ERP_ENABLED="$SHOP_ERP_ENABLED" \
   SHOP_ERP_EMAIL="${SHOP_ERP_EMAIL:-}" SHOP_ERP_PASSWORD="${SHOP_ERP_PASSWORD:-}" \
   SHOP_ERP_BRANCH_ID="${SHOP_ERP_BRANCH_ID:-}" SHOP_ERP_WAREHOUSE_ID="${SHOP_ERP_WAREHOUSE_ID:-}" \
-    bash "$SHOP_DIR/init-shop-env.sh" "$SHOP_PUBLIC_HOST" "$PUBLIC_HOST"
+    ERP_DIR="$REPO_ROOT" bash "$SHOP_REPO_DIR/deploy/init-shop-env.sh" "$SHOP_PUBLIC_HOST" "$PUBLIC_HOST"
   chmod 600 "$SHOP_ENV"
 fi
 unset SHOP_ERP_PASSWORD 2>/dev/null || true
 SHOP_ADMIN_EMAIL="${SHOP_ADMIN_EMAIL:-}"
 
 step "Validating the combined stack"
-dc() { docker compose --env-file "$ENV_FILE" --env-file "$SHOP_ENV" -p duka -f "$DOCKER_DIR/compose.yml" -f "cloudflare/compose.tunnel.yml" -f "$SHOP_OVERLAY" "$@"; }
+# SHOP_REPO_DIR is what the shop's overlay resolves its build context from, so it
+# must be exported for every Compose call, not just the ones that build.
+dc() {
+  SHOP_REPO_DIR="$SHOP_REPO_DIR" docker compose --env-file "$ENV_FILE" --env-file "$SHOP_ENV" -p duka \
+    -f "$DOCKER_DIR/compose.yml" -f "cloudflare/compose.tunnel.yml" -f "$SHOP_OVERLAY" "$@"
+}
 PUBLIC_HOST="$PUBLIC_HOST" dc config --quiet
 
 step "Building pinned images (first run takes several minutes)"
@@ -278,13 +294,15 @@ cat <<REPORT
     stock and prices are read from the ERP, never written back.
  7. Payments stay manual in this release (no live Daraja provider); a
     captured payment must be recorded deliberately.
- 8. Store deploy/docker/secrets/backup.key, .env.production and
-    deploy/ecommerce/.env.shop independently offline; then run a backup +
-    RESTORE rehearsal:
-       dc() { docker compose --env-file deploy/docker/.env.production --env-file deploy/ecommerce/.env.shop -p duka -f deploy/docker/compose.yml -f deploy/cloudflare/compose.tunnel.yml -f deploy/ecommerce/compose.shop.yml "\$@"; }
+ 8. Store deploy/docker/secrets/backup.key, .env.production and the shop's
+    $SHOP_ENV independently offline; then run a backup + RESTORE rehearsal:
+       dc() { SHOP_REPO_DIR=$SHOP_REPO_DIR docker compose --env-file deploy/docker/.env.production --env-file $SHOP_ENV -p duka -f deploy/docker/compose.yml -f deploy/cloudflare/compose.tunnel.yml -f $SHOP_OVERLAY "\$@"; }
        dc logs tunnel   # confirms the tunnel is connected
        dc --profile ops run --rm ops artifacts/server/backup.mjs
        # The shop database is separate: back it up on its own schedule
        dc exec -T shop-db pg_dump -U shop_app ecommerce > shop-$(date +%F).sql
+ 9. The storefront is a separate repository ($SHOP_REPO_DIR). Update it on its
+    own cadence: git -C $SHOP_REPO_DIR pull && cd $SHOP_REPO_DIR &&
+    sudo ERP_DIR=$REPO_ROOT bash deploy/shop.sh up
 ==============================================================
 REPORT
