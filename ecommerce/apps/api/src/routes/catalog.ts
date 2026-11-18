@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import { endpoint } from "../http/route.ts";
+import { fail } from "../errors.ts";
 import {
   getProduct,
   listBrands,
   listCategories,
   listProducts,
 } from "../services/catalog.ts";
+import { loadProductImage } from "../services/product-images.ts";
 import {
   reviewSchema,
   createReview,
@@ -118,6 +120,35 @@ export function registerCatalogRoutes(router: Router) {
         ).rows,
       },
     }),
+  );
+
+  // The one non-JSON response in the API: a product's photo, proxied from the
+  // ERP attachment so the browser never talks to the ERP's private host.
+  endpoint(
+    router,
+    "get",
+    "/catalog/images/:attachmentId",
+    {
+      transactional: false,
+      summary: "Published product image, proxied from its ERP attachment",
+      tags: ["catalog"],
+    },
+    async ({ ctx }) => {
+      const attachmentId = String((ctx.req.params as any).attachmentId ?? "");
+      const image = /^[A-Za-z0-9-]{8,64}$/.test(attachmentId)
+        ? await loadProductImage(ctx.db, attachmentId)
+        : null;
+      if (!image) fail(404, "NOT_FOUND", "Image not found");
+      return {
+        data: null,
+        raw: {
+          bytes: image.bytes,
+          contentType: image.contentType,
+          cacheControl: image.cacheControl,
+          etag: image.etag,
+        },
+      };
+    },
   );
 
   endpoint(

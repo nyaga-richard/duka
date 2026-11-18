@@ -54,6 +54,8 @@ export interface FakeErpState {
   documents: Array<{ id: string; number: string; status: string; kind: string; total: string }>;
   sales: Array<{ id: string; number: string; total: string; status: string; customer_id: string | null }>;
   openShifts: Set<string>;
+  /** Product image attachments, keyed by ERP product id. */
+  attachments: Array<{ id: string; product_id: string; filename: string; mime_type: string; size: number; bytes: Uint8Array }>;
   sessions: Map<string, { csrf: string; email: string }>;
   idempotency: Map<string, { body: string; response: unknown; status: number }>;
   failNext: Array<{ status: number; code?: string; message?: string }>;
@@ -68,6 +70,11 @@ export interface FakeErp {
   state: FakeErpState;
   expireSessions: () => void;
   createProduct: (overrides: Partial<FakeErpProduct> & { sku: string; name: string; price: string }) => FakeErpProduct;
+  /** Attach an image to a product and point its `image_attachment_id` at it. */
+  attachImage: (
+    productId: string,
+    options?: { id?: string; filename?: string; mime_type?: string; size?: number; bytes?: Uint8Array },
+  ) => { id: string; product_id: string; filename: string; mime_type: string; size: number; bytes: Uint8Array };
 }
 
 const json = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
@@ -104,6 +111,7 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
     documents: seed.documents ?? [],
     sales: seed.sales ?? [],
     openShifts: seed.openShifts ?? new Set<string>(),
+    attachments: seed.attachments ?? [],
     sessions: new Map(),
     idempotency: new Map(),
     failNext: [],
@@ -343,6 +351,32 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
       return json(envelope(sale));
     }
 
+    const attachmentsMatch = path.match(/^\/api\/v1\/products\/([^/]+)\/attachments$/);
+    if (attachmentsMatch && method === "GET") {
+      const productId = decodeURIComponent(attachmentsMatch[1]!);
+      if (!state.products.some((product) => product.id === productId)) {
+        return json(errorBody("NOT_FOUND", "Record not found"), 404);
+      }
+      const items = state.attachments
+        .filter((entry) => entry.product_id === productId)
+        .map(({ id, filename, mime_type, size }) => ({ id, filename, mime_type, size }));
+      return json(envelope({ items }));
+    }
+
+    const attachmentMatch = path.match(/^\/api\/v1\/attachments\/([^/]+)$/);
+    if (attachmentMatch && method === "GET") {
+      const attachment = state.attachments.find((entry) => entry.id === decodeURIComponent(attachmentMatch[1]!));
+      if (!attachment) return json(errorBody("NOT_FOUND", "Record not found"), 404);
+      return new Response(attachment.bytes as unknown as ArrayBuffer, {
+        status: 200,
+        headers: {
+          "content-type": attachment.mime_type,
+          "content-disposition": `inline; filename="${attachment.filename}"`,
+          "content-length": String(attachment.bytes.byteLength),
+        },
+      });
+    }
+
     if (path === "/api/v1/customers/settlements" && method === "POST") {
       return remember(envelope({ id: `erp-receipt-${randomUUID().slice(0, 8)}` }), 200);
     }
@@ -358,6 +392,21 @@ export function createFakeErp(seed: Partial<FakeErpState> = {}): FakeErp {
     fetch: fakeFetch as unknown as typeof fetch,
     state,
     expireSessions: () => state.sessions.clear(),
+    attachImage: (productId, options = {}) => {
+      const size = options.size ?? 12;
+      const attachment = {
+        id: options.id ?? `erp-attachment-${state.attachments.length + 1}`,
+        product_id: productId,
+        filename: options.filename ?? "product.png",
+        mime_type: options.mime_type ?? "image/png",
+        size,
+        bytes: options.bytes ?? new Uint8Array(size).fill(7),
+      };
+      state.attachments.push(attachment);
+      const product = state.products.find((entry) => entry.id === productId);
+      if (product) product.image_attachment_id = attachment.id;
+      return attachment;
+    },
     createProduct: (overrides) => {
       const product: FakeErpProduct = {
         id: `erp-product-${state.products.length + 1}`,

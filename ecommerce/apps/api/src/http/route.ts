@@ -40,6 +40,12 @@ export interface RouteResult {
   status?: number;
   data: unknown;
   /**
+   * Non-JSON response body (product images). When present it is sent as-is with
+   * the given headers instead of the usual `{ data, meta }` envelope; the route
+   * is still registered, so it still appears in the generated API docs.
+   */
+  raw?: { bytes: Uint8Array; contentType: string; cacheControl?: string; etag?: string };
+  /**
    * Side effects that must happen after the database transaction commits:
    * provider calls, ERP queueing. Runs once, outside the transaction; mutating
    * `data` here updates the response (and the stored idempotency response).
@@ -178,6 +184,16 @@ export function endpoint(
             ],
           );
         }
+      }
+
+      if (result.raw) {
+        res.status(result.status ?? 200);
+        res.setHeader("content-type", result.raw.contentType);
+        res.setHeader("content-length", String(result.raw.bytes.byteLength));
+        res.setHeader("cache-control", result.raw.cacheControl ?? "public, max-age=300");
+        if (result.raw.etag) res.setHeader("etag", result.raw.etag);
+        res.end(Buffer.from(result.raw.bytes));
+        return;
       }
 
       sendData(res, ctx.requestId, result.data, result.status ?? options.status ?? 200);

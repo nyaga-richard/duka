@@ -37,6 +37,9 @@ lines.push("- Errors: `{ \"error\": { \"code\", \"message\", \"details?\", \"req
 lines.push("- Every state-changing request needs an `Origin` header from the allowlist **and** the `X-CSRF-Token` returned when the session was created (`/auth/me` returns the current token).");
 lines.push("- `Idempotency-Key` is mandatory where marked; reusing a key with a different body returns `409 IDEMPOTENCY_KEY_REUSED`.");
 lines.push("- Provider webhooks are exempt from CSRF/Origin and are authenticated by HMAC instead.");
+lines.push(
+  "- `GET /api/v1/catalog/images/:attachmentId` is the one binary response: raw image bytes, `cache-control: public, max-age=600`, and a 1×1 transparent PNG with `no-store` when the ERP cannot be reached.",
+);
 lines.push("");
 lines.push("| Method | Path | Auth | Permissions | Idempotent | Description |");
 lines.push("| --- | --- | --- | --- | --- | --- |");

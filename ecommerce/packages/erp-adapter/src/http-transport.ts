@@ -9,7 +9,7 @@
  *  - never logging or persisting credentials, cookies or CSRF tokens.
  */
 import { createHmac } from "node:crypto";
-import type { ErpTransport, ErpRequest, ErpResponse } from "./types.ts";
+import type { ErpBinary, ErpTransport, ErpRequest, ErpResponse } from "./types.ts";
 import { ErpError } from "./errors.ts";
 
 export interface HttpTransportOptions {
@@ -291,6 +291,55 @@ export class HttpErpTransport implements ErpTransport {
       }
 
       throw this.toError(response.status, erpCode, message, payload?.error?.details);
+    }
+  }
+
+  /**
+   * Binary read, used for product images.
+   *
+   * No CSRF (it is a GET) and no retries: a missing image must never hold up a
+   * page render, so one re-login attempt on 401 and then a typed error.
+   */
+  async download(path: string): Promise<ErpBinary> {
+    let relogged = false;
+    for (;;) {
+      const session = await this.activeSession();
+      let response: Response;
+      try {
+        response = await this.fetchImpl(this.buildUrl(path), {
+          headers: {
+            accept: "image/*,application/octet-stream",
+            cookie: session.cookie,
+            origin: this.options.origin,
+            "user-agent": "duka-ecommerce-erp-adapter/0.1",
+          },
+          signal: AbortSignal.timeout(this.timeoutMs),
+        });
+      } catch (error: any) {
+        const timedOut = error?.name === "AbortError" || error?.name === "TimeoutError";
+        throw new ErpError(
+          timedOut ? "ERP_TIMEOUT" : "ERP_UNAVAILABLE",
+          timedOut ? `ERP download ${path} timed out` : `ERP download ${path} failed: ${error?.message ?? "network error"}`,
+          undefined,
+          undefined,
+          true,
+        );
+      }
+
+      if (response.status === 401 && !relogged) {
+        relogged = true;
+        this.session = null;
+        continue;
+      }
+      if (!response.ok) {
+        throw this.toError(response.status, undefined, "attachment download rejected");
+      }
+
+      return {
+        bytes: new Uint8Array(await response.arrayBuffer()),
+        contentType: response.headers.get("content-type") ?? "application/octet-stream",
+        filename: response.headers.get("content-disposition")?.match(/filename="?([^";]+)"?/)?.[1],
+      };
     }
   }
 
