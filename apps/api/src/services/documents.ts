@@ -217,7 +217,7 @@ function renderPdf(input: {
         .text(String(input.company.name).toUpperCase(), { align: "center" });
       doc.fillColor(ink).font("Helvetica").fontSize(8);
       for (const t of companyLines) doc.text(t, { align: "center" });
-      if (input.company.tax_pin)
+      if (input.company.tax_pin && input.kra?.length)
         doc.text(`Tax PIN: ${input.company.tax_pin}`, { align: "center" });
       doc.moveDown(0.35);
       dashed();
@@ -1169,9 +1169,6 @@ export async function salePdf(ctx: Context, id: string, thermal: boolean) {
     D(s.customer_credit_used).gt(0)
       ? `Customer account credit: ${s.customer_credit_used}`
       : "",
-    confirmed
-      ? ""
-      : `NOT A KRA FISCAL INVOICE. Fiscal status: ${s.fiscal?.status ?? "not submitted"}.`,
     s.company.settings.returnPolicy ?? "",
   ]
     .filter(Boolean)
@@ -1192,7 +1189,7 @@ export async function salePdf(ctx: Context, id: string, thermal: boolean) {
     totals: {
       Subtotal: s.subtotal,
       ...(D(s.discount).gt(0) ? { Discount: s.discount } : {}),
-      VAT: s.tax,
+      ...(s.etims_enabled ? { VAT: s.tax } : {}),
       Total: s.total,
       "Paid at checkout": s.paid_at_sale,
       "Balance due": s.outstanding,
@@ -1208,18 +1205,14 @@ export async function salePdf(ctx: Context, id: string, thermal: boolean) {
       title: "Payment received",
       sub: D(s.outstanding).lte(0) ? "Paid in full" : "Balance outstanding",
     },
-    kra: [
-      ["Business KRA PIN", s.company.tax_pin ?? "—"],
-      [thermal ? "Tax invoice no." : "Tax invoice number", s.number],
-      ...(confirmed
-        ? [
-            [
-              thermal ? "eTIMS CU no." : "eTIMS CU invoice number",
-              s.fiscal.fiscal_id,
-            ] as [string, string],
-          ]
-        : []),
-    ],
+    kra: s.etims_enabled
+      ? [
+          ...(s.company.tax_pin ? [["Business KRA PIN", s.company.tax_pin] as [string, string]] : []),
+          ...(confirmed
+            ? [[thermal ? "eTIMS CU no." : "eTIMS CU invoice number", s.fiscal.fiscal_id] as [string, string]]
+            : []),
+        ]
+      : undefined,
     qr: `DUKA|${s.company_id}|sale|${id}`,
     thanks: s.company.settings?.receiptFooter ?? undefined,
   });
