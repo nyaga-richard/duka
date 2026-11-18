@@ -335,11 +335,13 @@ export async function printPdf(path: string) {
       position: "fixed",
       left: "0",
       bottom: "0",
-      width: "1px",
-      height: "1px",
+      // Give Chromium's PDF viewer a real viewport; a 1px frame can load but print blank.
+      width: "100vw",
+      height: "100vh",
       border: "0",
       opacity: "0",
       pointerEvents: "none",
+      zIndex: "-1",
     });
 
     const printFrame = () => {
