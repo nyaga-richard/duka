@@ -1954,12 +1954,11 @@ export default function POS() {
             <strong>Total</strong>
             <b>{currency(receipt?.total, meta.company.currency)}</b>
           </div>
-          <p className="fiscal-notice">
-            {receipt?.fiscal?.status === "successful"
-              ? `Fiscal reference: ${receipt.fiscal.fiscal_id}`
-              : "Not a KRA fiscal invoice. Fiscal status: " +
-                (receipt?.fiscal?.status ?? "disabled")}
-          </p>
+          {receipt?.etims_enabled && receipt?.fiscal?.status === "successful" && (
+            <p className="fiscal-notice">
+              eTIMS reference: {receipt.fiscal.fiscal_id}
+            </p>
+          )}
         </div>
         <div className="form-actions">
           <a
