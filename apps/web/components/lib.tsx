@@ -338,7 +338,7 @@ export async function printPdf(path: string) {
       width: "100vw",
       height: "100vh",
       border: "0",
-      opacity: "0.01",
+      opacity: "0",
       pointerEvents: "none",
       zIndex: "2147483647",
     });
@@ -349,6 +349,9 @@ export async function printPdf(path: string) {
         throw new Error("Unable to load the receipt for printing.");
       }
       window.addEventListener("afterprint", cleanup, { once: true });
+      // Keep the PDF viewer hidden while it loads, but never print it with
+      // reduced opacity: iframe opacity is applied to its printed contents.
+      frame.style.opacity = "1";
       frame.contentWindow.focus();
       frame.contentWindow.print();
       // Some PDF viewers do not dispatch afterprint to the parent window.
