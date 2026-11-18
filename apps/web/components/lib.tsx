@@ -423,14 +423,10 @@ export async function printReceipt(receipt: any) {
       <hr class="receipt-rule" />
       <div class="receipt-totals">
         <div class="total-row"><span class="total-label">Subtotal</span> <span class="total-value">${cur} ${money(receipt.subtotal ?? 0)}</span></div>
+        <div class="total-row"><span class="total-label">Tax</span> <span class="total-value">${cur} ${money(receipt.tax ?? 0)}</span></div>
         ${
           D(receipt.discount ?? 0).gt(0)
             ? `<div class="total-row"><span class="total-label">Discount</span> <span class="total-value">${cur} ${money(receipt.discount)}</span></div>`
-            : ""
-        }
-        ${
-          receipt.etims_enabled
-            ? `<div class="total-row"><span class="total-label">VAT</span> <span class="total-value">${cur} ${money(receipt.tax ?? 0)}</span></div>`
             : ""
         }
         <div class="total-row total-bold"><span class="total-label">Total</span> <span class="total-value">${cur} ${money(receipt.total ?? 0)}</span></div>
