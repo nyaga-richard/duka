@@ -1219,7 +1219,7 @@ export async function salePdf(ctx: Context, id: string, thermal: boolean) {
     thanks: s.company.settings?.receiptFooter ?? undefined,
   });
 }
-export async function businessPdf(ctx: Context, kind: string, id: string) {
+export async function getPrintData(ctx: Context, kind: string, id: string) {
   const company = await one(ctx, "SELECT * FROM companies WHERE id=$1", [
     ctx.companyId,
   ]);
@@ -1471,13 +1471,15 @@ export async function businessPdf(ctx: Context, kind: string, id: string) {
       fail(404, "NOT_FOUND", "Document type not found");
   }
   await audit(ctx, "print", kind, id);
-  return renderPdf({
+  return {
     company,
     title,
+    kind,
+    id,
     number: doc.number,
-    meta: doc.printMeta,
     date: (doc.accounting_date ?? doc.created_at)?.toISOString?.().slice(0, 10),
     lines,
+    meta: doc.printMeta,
     totals:
       doc.printTotals ??
       (doc.total
@@ -1485,24 +1487,22 @@ export async function businessPdf(ctx: Context, kind: string, id: string) {
         : doc.value
           ? { Value: doc.value }
           : undefined),
-    ...(doc.printParty
+    party: doc.printParty
       ? {
-          customer: doc.printParty.name,
-          customerSub: doc.printParty.sub,
-          customerLabel: doc.printParty.label,
+          name: doc.printParty.name,
+          sub: doc.printParty.sub,
+          label: doc.printParty.label,
         }
-      : {}),
-    ...(doc.printReference
+      : undefined,
+    reference: doc.printReference
       ? {
-          reference: doc.printReference.name,
-          referenceLabel: doc.printReference.label,
+          name: doc.printReference.name,
+          label: doc.printReference.label,
         }
-      : {}),
+      : undefined,
     notes:
-      doc.notes ??
-      doc.reason ??
-      (doc.status ? `Status: ${doc.status}` : undefined),
-  });
+      doc.notes ?? doc.reason ?? (doc.status ? `Status: ${doc.status}` : undefined),
+  };
 }
 export async function reportPdf(ctx: Context, name: string, q: any) {
   requirePermission(ctx, "accounting.read");

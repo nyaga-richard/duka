@@ -31,7 +31,7 @@ import {
   routeLedger,
   saveRoute,
 } from "../../apps/api/src/services/route-shifts.ts";
-import { businessPdf } from "../../apps/api/src/services/documents.ts";
+import { getPrintData } from "../../apps/api/src/services/documents.ts";
 
 after(() => pool.end());
 
@@ -253,10 +253,12 @@ test("route shift: guard enforces route customers, sheets and ledger are exact",
     assert.equal(delivery.customers[0].invoices.length, 2);
     assert.equal(delivery.totals.invoices, 2);
     // Printable document kinds render.
-    const pdf = await businessPdf(ctx, "route-loading", shift.id);
-    assert.ok(pdf.length > 500);
-    const pdf2 = await businessPdf(ctx, "route-delivery", shift.id);
-    assert.ok(pdf2.length > 500);
+    const data = await getPrintData(ctx, "route-loading", shift.id);
+    assert.equal(data.title, "Route loading sheet");
+    assert.ok(data.lines.length > 0);
+    const data2 = await getPrintData(ctx, "route-delivery", shift.id);
+    assert.equal(data2.title, "Route delivery sheet");
+    assert.ok(data2.lines.length > 0);
   });
 
   // Later payment clears the account: settle fully against both invoices.

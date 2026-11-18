@@ -23,7 +23,7 @@ import { openShift } from "../../apps/api/src/services/shifts.ts";
 import {
   salePdf,
   statementPdf,
-  businessPdf,
+  getPrintData,
 } from "../../apps/api/src/services/documents.ts";
 import { randomUUID } from "node:crypto";
 
@@ -136,16 +136,18 @@ test(
   );
   assertPdf(statement, 2000, "customer statement");
 
-  // a business document (goods received note) with the default meta grid
+  // a business document (goods received note) with print data
   const grn = await transaction(f.actor, async (ctx) => {
     const pkg: any = await one(
       ctx,
       "SELECT id FROM stock_documents WHERE company_id=$1 LIMIT 1",
       [f.companyId],
     );
-    return businessPdf(ctx, "stock-document", pkg.id);
+    return getPrintData(ctx, "stock-document", pkg.id);
   });
-  assertPdf(grn, 2000, "stock document");
+  assert.equal(grn.title, "Stock opening");
+  assert.ok(grn.lines.length > 0);
+  assert.ok(grn.company.name);
 
   // 58mm width respects company settings
   await pool.query(

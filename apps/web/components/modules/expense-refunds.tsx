@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
-import { api, useQuery, useWorkspace, currency, dateText, D } from "../lib";
+import { Printer } from "lucide-react";
+import { api, useQuery, useWorkspace, currency, dateText, D, printDocument } from "../lib";
 import { Button, Dialog, FormField, ErrorCard, DataTable, Badge } from "../ui";
 import { useAction } from "./common";
 export function ExpenseRefundPanel({
@@ -146,14 +147,12 @@ export function ExpenseRefundPanel({
                 key: "print",
                 title: "",
                 render: (r) => (
-                  <a
-                    className="btn secondary"
-                    href={`/api/v1/print/expense-refund/${r.id}`}
-                    target="_blank"
-                    rel="noreferrer"
+                  <Button
+                    variant="secondary"
+                    onClick={() => printDocument("expense-refund", r.id)}
                   >
-                    Print {r.number}
-                  </a>
+                    <Printer size={14} /> Print {r.number}
+                  </Button>
                 ),
               },
               {

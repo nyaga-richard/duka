@@ -22,6 +22,7 @@ import {
   money,
   useQuery,
   printReceipt,
+  printDocument,
 } from "../lib";
 import {
   Button,
@@ -292,16 +293,17 @@ export function SalesPage() {
                     title: "",
                     render: (r) => (
                       <div className="table-actions">
-                        <a
+                        <Button
+                          variant="secondary"
                           className="icon-btn"
                           aria-label={"Print credit note " + r.number}
-                          href={`/api/v1/print/credit-note/${r.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            printDocument("credit-note", r.id);
+                          }}
                         >
                           <Printer size={16} />
-                        </a>
+                        </Button>
                       </div>
                     ),
                   },

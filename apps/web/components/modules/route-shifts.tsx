@@ -23,6 +23,7 @@ import {
   D,
   money,
   ApiError,
+  printDocument,
 } from "../lib";
 import {
   PageHeading,
@@ -412,14 +413,14 @@ export function RouteSalesPage() {
               <div className="table-toolbar">
                 <h3>Consolidated loading sheet</h3>
                 {detail.data && (
-                  <a
+                  <Button
+                    variant="secondary"
                     className="icon-btn"
                     aria-label="Print loading sheet"
-                    target="_blank"
-                    href={`/api/v1/print/route-loading/${detail.data.id}`}
+                    onClick={() => printDocument("route-loading", detail.data.id)}
                   >
                     <Printer size={16} />
-                  </a>
+                  </Button>
                 )}
               </div>
               <DataTable
@@ -461,14 +462,14 @@ export function RouteSalesPage() {
               <div className="table-toolbar">
                 <h3>Delivery sheet</h3>
                 {detail.data && (
-                  <a
+                  <Button
+                    variant="secondary"
                     className="icon-btn"
                     aria-label="Print delivery sheet"
-                    target="_blank"
-                    href={`/api/v1/print/route-delivery/${detail.data.id}`}
+                    onClick={() => printDocument("route-delivery", detail.data.id)}
                   >
                     <Printer size={16} />
-                  </a>
+                  </Button>
                 )}
               </div>
               {(deliverySheet.data?.customers ?? []).map((c: any) => (
