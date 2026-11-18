@@ -5449,6 +5449,32 @@ hr {
     --danger: #ba534b;
   }
 }
+/* Print overlay — used by printOverlay() for all ERP document printing.
+ * body gets .duka-printing during window.print(); everything is hidden
+ * except #duka-print-overlay and its children. */
+@media print {
+  .duka-printing body * {
+    visibility: hidden !important;
+  }
+  .duka-printing #duka-print-overlay,
+  .duka-printing #duka-print-overlay * {
+    visibility: visible !important;
+  }
+  .duka-printing #duka-print-overlay {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+  .duka-printing body > :not(#duka-print-overlay) {
+    display: none !important;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

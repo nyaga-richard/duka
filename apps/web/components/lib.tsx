@@ -76,8 +76,6 @@ export async function api<T = any>(
 ): Promise<T> {
   const method = options.method ?? "GET";
   const headers: Record<string, string> = {};
-  // Keep the same key after a network/5xx uncertainty, including after reload.
-  // No passwords, CSRF secrets or command bodies are placed in session storage.
   const retained =
     !options.key &&
     ["POST", "PUT", "PATCH"].includes(method) &&
@@ -192,7 +190,6 @@ export function useQuery<T = any>(url: string | null) {
       });
     return () => controller.abort();
   }, [url, nonce]);
-  // Never render a response belonging to a previous resource, filter or branch.
   const current =
     result.key === url ? result : { data: null, loading: !!url, error: null };
   const setData = useCallback(
@@ -202,7 +199,6 @@ export function useQuery<T = any>(url: string | null) {
   );
   return { ...current, refresh, setData };
 }
-// Incomplete user input is allowed in a draft, never in a submitted command.
 export function draftDecimal(value: any) {
   try {
     const n = D(value || 0);
@@ -287,6 +283,26 @@ export function scopedQuery(params: Record<string, any>, branch: string) {
     if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
   return q.toString();
 }
+async function printOverlay(html: string) {
+  const overlayId = "duka-print-overlay";
+  let overlay = document.getElementById(overlayId);
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = overlayId;
+    overlay.setAttribute("aria-hidden", "true");
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = html;
+  document.body.classList.add("duka-printing");
+  try {
+    await new Promise((r) => setTimeout(r, 50));
+    window.print();
+  } finally {
+    document.body.classList.remove("duka-printing");
+    overlay.innerHTML = "";
+  }
+}
+
 export async function printReceipt(receipt: any) {
   const company = receipt.company ?? {};
   const cur = company.currency ?? "KES";
@@ -353,27 +369,11 @@ export async function printReceipt(receipt: any) {
       );
     if (confirmed && receipt.fiscal?.fiscal_id)
       kraRows.push(
-        `<tr><td class="kra-label">${
-          width > 60 ? "eTIMS CU invoice number" : "eTIMS CU no."
-        }</td><td class="kra-value">${escapeHtml(receipt.fiscal.fiscal_id)}</td></tr>`,
+        `<tr><td class="kra-label">${width > 60 ? "eTIMS CU invoice number" : "eTIMS CU no."}</td><td class="kra-value">${escapeHtml(receipt.fiscal.fiscal_id)}</td></tr>`,
       );
   }
 
-  let container = document.getElementById("duka-receipt-print");
-  if (!container) {
-    container = document.createElement("div");
-    container.id = "duka-receipt-print";
-    container.setAttribute("aria-hidden", "true");
-    container.style.position = "fixed";
-    container.style.left = "-10000px";
-    container.style.top = "0";
-    container.style.width = "0";
-    container.style.height = "0";
-    container.style.overflow = "hidden";
-    document.body.appendChild(container);
-  }
-
-  container.innerHTML = `
+  const html = `
     <div class="receipt-print">
       <div class="receipt-header">
         <div class="company-name">${escapeHtml(company.name ?? "").toUpperCase()}</div>
@@ -384,13 +384,12 @@ export async function printReceipt(receipt: any) {
         }
         ${
           company.phone || company.email
-            ? `<div class="company-line">${
-                [
-                  company.phone ? `+254 ${String(company.phone).replace(/^\+?254/, "")}` : null,
-                  company.email,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")
+            ? `<div class="company-line">${[
+                company.phone ? `+254 ${String(company.phone).replace(/^\+?254/, "")}` : null,
+                company.email,
+              ]
+                .filter(Boolean)
+                .join(" · ")
               }</div>`
             : ""
         }
@@ -450,11 +449,7 @@ export async function printReceipt(receipt: any) {
     </div>
   `;
 
-  try {
-    window.print();
-  } catch (error) {
-    throw new Error("Unable to open the print dialog. Please try again.");
-  }
+  await printOverlay(html);
 }
 
 export async function printDocument(kind: string, id: string) {
@@ -473,7 +468,7 @@ export async function printDocument(kind: string, id: string) {
   const metaHtml = (data.meta ?? [])
     .map(
       ([label, value]: [string, string]) => `
-    <div class="print-meta-row"><span class="print-meta-label">${escapeHtml(label)}</span> <span class="print-meta-value">${escapeHtml(String(value))}</span></div>
+    <div class="print-meta-row"><span class="print-meta-label">${escapeHtml(String(label))}</span> <span class="print-meta-value">${escapeHtml(String(value))}</span></div>
   `,
     )
     .join("");
@@ -518,11 +513,11 @@ export async function printDocument(kind: string, id: string) {
   const partyHtml = data.party
     ? `
     <div class="print-party">
-      <div class="print-party-label">${escapeHtml(data.party.label ?? "Party")}</div>
-      <div class="print-party-name">${escapeHtml(data.party.name ?? "")}</div>
+      <div class="print-party-label">${escapeHtml(String(data.party.label ?? "Party"))}</div>
+      <div class="print-party-name">${escapeHtml(String(data.party.name ?? ""))}</div>
       ${
         data.party.sub
-          ? `<div class="print-party-sub">${escapeHtml(data.party.sub)}</div>`
+          ? `<div class="print-party-sub">${escapeHtml(String(data.party.sub))}</div>`
           : ""
       }
     </div>
@@ -531,33 +526,18 @@ export async function printDocument(kind: string, id: string) {
 
   const referenceHtml = data.reference
     ? `
-    <div class="print-reference-row"><span class="print-reference-label">${escapeHtml(data.reference.label ?? "Reference")}</span> <span class="print-reference-value">${escapeHtml(data.reference.name ?? "")}</span></div>
+    <div class="print-reference-row"><span class="print-reference-label">${escapeHtml(String(data.reference.label ?? "Reference"))}</span> <span class="print-reference-value">${escapeHtml(String(data.reference.name ?? ""))}</span></div>
   `
     : "";
 
-  const containerId = "duka-document-print";
-  let container = document.getElementById(containerId);
-  if (!container) {
-    container = document.createElement("div");
-    container.id = containerId;
-    container.setAttribute("aria-hidden", "true");
-    container.style.position = "fixed";
-    container.style.left = "-10000px";
-    container.style.top = "0";
-    container.style.width = "0";
-    container.style.height = "0";
-    container.style.overflow = "hidden";
-    document.body.appendChild(container);
-  }
-
-  container.innerHTML = `
+  const html = `
     <div class="print-document">
       <div class="print-header">
-        <div class="print-title">${escapeHtml(data.title)}</div>
-        <div class="print-company">${escapeHtml(company.name ?? "")}</div>
+        <div class="print-title">${escapeHtml(String(data.title))}</div>
+        <div class="print-company">${escapeHtml(String(company.name ?? ""))}</div>
         ${
           company.address
-            ? `<div class="print-company-line">${escapeHtml(company.address)}</div>`
+            ? `<div class="print-company-line">${escapeHtml(String(company.address))}</div>`
             : ""
         }
       </div>
@@ -566,12 +546,12 @@ export async function printDocument(kind: string, id: string) {
       </div>
       ${
         data.number
-          ? `<div class="print-number-row"><span class="print-number-label">Document no.</span> <span class="print-number-value">${escapeHtml(data.number)}</span></div>`
+          ? `<div class="print-number-row"><span class="print-number-label">Document no.</span> <span class="print-number-value">${escapeHtml(String(data.number))}</span></div>`
           : ""
       }
       ${
         data.date
-          ? `<div class="print-date-row"><span class="print-date-label">Date</span> <span class="print-date-value">${escapeHtml(data.date)}</span></div>`
+          ? `<div class="print-date-row"><span class="print-date-label">Date</span> <span class="print-date-value">${escapeHtml(String(data.date))}</span></div>`
           : ""
       }
       <hr class="print-rule" />
@@ -587,20 +567,16 @@ export async function printDocument(kind: string, id: string) {
       </div>
       ${
         data.notes
-          ? `<div class="print-notes">${escapeHtml(data.notes)}</div>`
+          ? `<div class="print-notes">${escapeHtml(String(data.notes))}</div>`
           : ""
       }
       <div class="print-footer">
-        ${escapeHtml(company.settings?.receiptFooter ?? "Thank you for your business!")}
+        ${escapeHtml(String(company.settings?.receiptFooter ?? "Thank you for your business!"))}
       </div>
     </div>
   `;
 
-  try {
-    window.print();
-  } catch (error) {
-    throw new Error("Unable to open the print dialog. Please try again.");
-  }
+  await printOverlay(html);
 }
 
 export async function printStatement(
@@ -627,59 +603,42 @@ export async function printStatement(
     .map(
       (l: any) => `
     <div class="print-statement-line">
-      <span class="print-statement-date">${escapeHtml(
-        l.accounting_date ?? "",
-      )}</span>
-      <span class="print-statement-number">${escapeHtml(l.number ?? "")}</span>
-      <span class="print-statement-description">${escapeHtml(
-        l.description ?? "",
-      )}</span>
+      <span class="print-statement-date">${escapeHtml(String(l.accounting_date ?? ""))}</span>
+      <span class="print-statement-number">${escapeHtml(String(l.number ?? ""))}</span>
+      <span class="print-statement-description">${escapeHtml(String(l.description ?? ""))}</span>
       <span class="print-statement-debit">${
         l.debit !== undefined && l.debit !== "—"
-          ? cur + money(l.debit)
+          ? cur + money(String(l.debit))
           : ""
       }</span>
       <span class="print-statement-credit">${
         l.credit !== undefined && l.credit !== "—"
-          ? cur + money(l.credit)
+          ? cur + money(String(l.credit))
           : ""
       }</span>
-      <span class="print-statement-balance">${cur} ${money(l.balance ?? 0)}</span>
+      <span class="print-statement-balance">${cur} ${money(String(l.balance ?? 0))}</span>
     </div>
   `,
     )
     .join("");
 
-  const containerId = "duka-statement-print";
-  let container = document.getElementById(containerId);
-  if (!container) {
-    container = document.createElement("div");
-    container.id = containerId;
-    container.setAttribute("aria-hidden", "true");
-    container.style.position = "fixed";
-    container.style.left = "-10000px";
-    container.style.top = "0";
-    container.style.width = "0";
-    container.style.height = "0";
-    container.style.overflow = "hidden";
-    document.body.appendChild(container);
-  }
-
-  container.innerHTML = `
+  const html = `
     <div class="print-statement">
       <div class="print-header">
         <div class="print-title">${kind === "customer" ? "Customer" : "Supplier"} Statement</div>
-        <div class="print-company">${escapeHtml(company.name ?? "")}</div>
-        <div class="print-company-line">${escapeHtml(data.contact?.name ?? "")}</div>
+        <div class="print-company">${escapeHtml(String(company.name ?? ""))}</div>
+        <div class="print-company-line">${escapeHtml(String(data.contact?.name ?? ""))}</div>
         <div class="print-company-line">${escapeHtml(
-          [data.contact?.phone, data.contact?.email]
-            .filter(Boolean)
-            .join(" · ") || data.contact?.address || "",
+          String(
+            [data.contact?.phone, data.contact?.email]
+              .filter(Boolean)
+              .join(" · ") || data.contact?.address || "",
+          ),
         )}</div>
       </div>
       <div class="print-statement-meta">
-        <div class="print-statement-meta-row"><span class="print-statement-meta-label">Statement no.</span> <span class="print-statement-meta-value">${escapeHtml(data.contact?.code ?? "")}</span></div>
-        <div class="print-statement-meta-row"><span class="print-statement-meta-label">Period</span> <span class="print-statement-meta-value">${escapeHtml(q.from ?? "")} – ${escapeHtml(q.to ?? "")}</span></div>
+        <div class="print-statement-meta-row"><span class="print-statement-meta-label">Statement no.</span> <span class="print-statement-meta-value">${escapeHtml(String(data.contact?.code ?? ""))}</span></div>
+        <div class="print-statement-meta-row"><span class="print-statement-meta-label">Period</span> <span class="print-statement-meta-value">${escapeHtml(String(q.from ?? ""))} – ${escapeHtml(String(q.to ?? ""))}</span></div>
         <div class="print-statement-meta-row"><span class="print-statement-meta-label">Date issued</span> <span class="print-statement-meta-value">${new Date().toISOString().slice(0, 10)}</span></div>
       </div>
       <hr class="print-rule" />
@@ -691,13 +650,13 @@ export async function printStatement(
       </div>
       <hr class="print-rule" />
       <div class="print-totals">
-        <div class="print-total-row"><span class="print-total-label">Opening balance</span> <span class="print-total-value">${cur} ${money(data.opening ?? 0)}</span></div>
-        <div class="print-total-row print-total-bold"><span class="print-total-label">Closing balance</span> <span class="print-total-value">${cur} ${money(
-          data.items?.[data.items.length - 1]?.balance ?? data.opening ?? 0,
-        )}</span></div>
+        <div class="print-total-row"><span class="print-total-label">Opening balance</span> <span class="print-total-value">${cur} ${money(String(data.opening ?? 0))}</span></div>
+        <div class="print-total-row print-total-bold"><span class="print-total-label">Closing balance</span> <span class="print-total-value">${cur} ${money(String(data.items?.[data.items.length - 1]?.balance ?? data.opening ?? 0))}</span></div>
       </div>
       <div class="print-notes">${escapeHtml(
-        `Convention: ${data.convention ?? ""}. Balances are ${kind === "customer" ? "customer advances/AR" : "supplier advances/AP"} control accounts only.`,
+        `Convention: ${String(data.convention ?? "")}. Balances are ${
+          kind === "customer" ? "customer advances/AR" : "supplier advances/AP"
+        } control accounts only.`,
       )}</div>
       <div class="print-footer">
         This statement is a statement of account, not a fiscal invoice.
@@ -705,11 +664,7 @@ export async function printStatement(
     </div>
   `;
 
-  try {
-    window.print();
-  } catch (error) {
-    throw new Error("Unable to open the print dialog. Please try again.");
-  }
+  await printOverlay(html);
 }
 
 function escapeHtml(text: string): string {
@@ -762,16 +717,6 @@ export async function privateStore<T = any>(
         db.close();
         resolve(result);
       };
-      tx.onabort = () => {
-        db.close();
-        reject(
-          tx.error ??
-            new Error(
-              "Local storage transaction aborted. The capture was not saved.",
-            ),
-        );
-      };
-      tx.onerror = () => reject(tx.error);
     };
   });
 }
