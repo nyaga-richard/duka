@@ -43,7 +43,7 @@ import {
   money,
   privateStore,
   updatePrivateStore,
-  printPdf,
+  printReceipt,
   ApiError,
 } from "./lib";
 import {
@@ -1974,11 +1974,14 @@ export default function POS() {
           </a>
           <Button
             variant="secondary"
-            onClick={() =>
-              printPdf(`/sales/${receipt?.id}/receipt?thermal=true`).catch((e) =>
-                notify(e.message, "error"),
-              )
-            }
+            onClick={() => {
+              if (!receipt) return;
+              document.body.setAttribute(
+                "data-receipt-width",
+                receipt.company?.settings?.receiptWidth === 58 ? "58" : "80",
+              );
+              printReceipt(receipt).catch((e) => notify(e.message, "error"));
+            }}
           >
             <Printer size={16} /> Print thermal receipt
           </Button>

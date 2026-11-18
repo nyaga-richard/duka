@@ -21,7 +21,7 @@ import {
   D,
   money,
   useQuery,
-  printPdf,
+  printReceipt,
 } from "../lib";
 import {
   Button,
@@ -415,11 +415,16 @@ export function SalesPage() {
               </a>
               <Button
                 variant="secondary"
-                onClick={() =>
-                  printPdf(`/sales/${invoice.id}/receipt?thermal=true`).catch((e) =>
-                    action.setError(e),
-                  )
-                }
+                onClick={() => {
+                  if (!invoice) return;
+                  document.body.setAttribute(
+                    "data-receipt-width",
+                    invoice.company?.settings?.receiptWidth === 58
+                      ? "58"
+                      : "80",
+                  );
+                  printReceipt(invoice).catch((e) => action.setError(e));
+                }}
               >
                 <Printer size={16} /> Print thermal receipt
               </Button>
