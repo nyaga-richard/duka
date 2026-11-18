@@ -83,6 +83,7 @@ import {
   integrationConfigStatus,
   saveIntegrationConfig,
   setIntegrationEnabled,
+  mpesaConfigSchema,
 } from "../services/integrations-config.ts";
 import {
   createProduct,
@@ -186,6 +187,7 @@ import {
   mockComplete,
   receiveCallback,
   processMpesaEvent,
+  testDarajaConnection,
 } from "../integrations/mpesa.ts";
 import { verifyIntegrity } from "../services/integrity.ts";
 import { retryFiscal } from "../integrations/fiscal.ts";
@@ -2662,6 +2664,26 @@ endpoint(
       [ctx.companyId, ctx.actor.branch_ids, ctx.actor.warehouse_ids],
       q,
     ),
+);
+endpoint(
+  "post",
+  "/integrations/mpesa/test",
+  "integrations.manage",
+  z.object({ config: z.record(z.string(), z.string()) }).strict(),
+  "Test Safaricom Daraja OAuth credentials from the API server",
+  async (_ctx, i) => {
+    const config = mpesaConfigSchema.parse(i.config);
+    await testDarajaConnection({
+      base_url: config.base_url ?? "https://sandbox.safaricom.co.ke",
+      consumer_key: config.consumer_key,
+      consumer_secret: config.consumer_secret,
+      shortcode: config.shortcode,
+      passkey: config.passkey,
+      callback_secret: config.callback_secret,
+      transaction_type: config.transaction_type ?? "CustomerPayBillOnline",
+    });
+    return { ok: true, message: "Credentials validated with Safaricom Daraja." };
+  },
 );
 endpoint(
   "get",
