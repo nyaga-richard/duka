@@ -43,7 +43,7 @@ import {
   money,
   privateStore,
   updatePrivateStore,
-  download,
+  printPdf,
   ApiError,
 } from "./lib";
 import {
@@ -1973,14 +1973,16 @@ export default function POS() {
               ? "Print sales invoice (A4)"
               : "Print invoice (A4)"}
           </a>
-          <a
-            className="btn secondary"
-            href={`/api/v1/sales/${receipt?.id}/receipt?thermal=true`}
-            target="_blank"
-            rel="noreferrer"
+          <Button
+            variant="secondary"
+            onClick={() =>
+              printPdf(`/sales/${receipt?.id}/receipt?thermal=true`).catch((e) =>
+                notify(e.message, "error"),
+              )
+            }
           >
-            <Printer size={16} /> Print receipt
-          </a>
+            <Printer size={16} /> Print thermal receipt
+          </Button>
           <Button
             onClick={() => {
               setReceipt(null);
