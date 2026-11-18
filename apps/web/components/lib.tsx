@@ -317,9 +317,12 @@ export async function printPdf(path: string) {
     }
 
     const pdf = await res.blob();
-    if (pdf.type && !pdf.type.toLowerCase().includes("pdf")) {
+    // Validate the actual payload, not just the response Content-Type. This
+    // catches login/error HTML returned with HTTP 200 before opening print.
+    const signature = await pdf.slice(0, 5).text();
+    if (pdf.size < 5 || signature !== "%PDF-") {
       throw new Error(
-        "The server did not return a PDF receipt. Please refresh and try again.",
+        "The server response is not a valid PDF receipt. Refresh and try again.",
       );
     }
 
@@ -329,18 +332,19 @@ export async function printPdf(path: string) {
     frame = document.createElement("iframe");
     frame.title = "Receipt print frame";
     frame.setAttribute("aria-hidden", "true");
-    // Keep a real, full-size PDF viewer surface for Chromium to print,
-    // but make it effectively invisible so the user sees only the native
-    // print dialog, not a receipt preview or a new tab.
+    // Never reduce opacity or visibility on a PDF viewer used for printing:
+    // Chromium can include that compositing in the print output. Keep a
+    // normal opaque viewport, but move it outside the visible screen.
     Object.assign(frame.style, {
       position: "fixed",
-      inset: "0",
+      left: "-10000px",
+      top: "0",
       width: "100vw",
       height: "100vh",
       border: "0",
-      opacity: "0.01",
+      opacity: "1",
       pointerEvents: "none",
-      zIndex: "2147483647",
+      zIndex: "-1",
     });
 
     const printFrame = () => {
